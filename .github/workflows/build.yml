@@ -118,10 +118,12 @@ jobs:
       - name: Install Capacitor
         working-directory: mobile
         run: |
+          set -o pipefail
           trap 'bash ../scripts/ci-fail.sh /tmp/npm.log "mobile-npm"' ERR
           npm install --no-audit --no-fund 2>&1 | tee /tmp/npm.log
       - name: Copy the shared UI into the Android project
         run: |
+          set -o pipefail
           trap 'bash scripts/ci-fail.sh /tmp/sync.log "cap-sync"' ERR
           (node scripts/sync-mobile.js && cd mobile && npx cap sync android) 2>&1 | tee /tmp/sync.log
       - name: Create signing key
@@ -138,6 +140,7 @@ jobs:
       - name: Build release APK
         working-directory: mobile/android
         run: |
+          set -o pipefail
           trap 'bash ../../scripts/ci-fail.sh /tmp/gradle.log "gradle"' ERR
           chmod +x gradlew
           ./gradlew assembleRelease --no-daemon --stacktrace 2>&1 | tee /tmp/gradle.log
@@ -171,11 +174,13 @@ jobs:
       - name: Build
         working-directory: firmware
         run: |
+          set -o pipefail
           trap 'bash ../scripts/ci-fail.sh /tmp/pio.log "firmware"' ERR
           pio run -e esp32dev 2>&1 | tee /tmp/pio.log
       - name: Collect the binary
         working-directory: firmware
         run: |
+          set -o pipefail
           trap 'bash ../scripts/ci-fail.sh /tmp/fw.log "firmware-collect"' ERR
           {
             echo "── build log tail ──"
