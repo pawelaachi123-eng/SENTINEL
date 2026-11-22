@@ -176,12 +176,23 @@ jobs:
       - name: Collect the binary
         working-directory: firmware
         run: |
+          trap 'bash ../scripts/ci-fail.sh /tmp/fw.log "firmware-collect"' ERR
+          {
+            echo "── .pio/build tree ──"
+            find .pio/build -maxdepth 2 -type f \( -name '*.bin' -o -name '*.elf' \) | sort
+            echo "── directories ──"
+            ls -la .pio/build || true
+          } 2>&1 | tee /tmp/fw.log
+          # .pio is a hidden directory that upload-artifact skips by default,
+          # so the artefacts are copied somewhere visible and asserted.
           mkdir -p out
-          # .pio is a hidden directory, which upload-artifact skips by default —
-          # so copy the artefacts somewhere visible and assert they exist.
-          cp .pio/build/esp32dev/firmware.bin out/firmware.bin
-          cp .pio/build/esp32dev/firmware.elf out/firmware.elf || true
-          ls -lh out
+          BIN="$(find .pio/build -type f -name 'firmware.bin' | head -1)"
+          echo "firmware: ${BIN:-<not found>}" | tee -a /tmp/fw.log
+          test -n "$BIN"
+          cp "$BIN" out/firmware.bin
+          ELF="$(find .pio/build -type f -name 'firmware.elf' | head -1)"
+          if [ -n "$ELF" ]; then cp "$ELF" out/firmware.elf; fi
+          ls -lh out | tee -a /tmp/fw.log
       - uses: actions/upload-artifact@v4
         with:
           name: sentinel-firmware
