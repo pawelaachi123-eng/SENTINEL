@@ -178,6 +178,8 @@ jobs:
         run: |
           trap 'bash ../scripts/ci-fail.sh /tmp/fw.log "firmware-collect"' ERR
           {
+            echo "── build log tail ──"
+            tail -n 120 /tmp/pio.log 2>/dev/null || echo "(no build log found)"
             echo "── .pio/build tree ──"
             find .pio/build -maxdepth 2 -type f \( -name '*.bin' -o -name '*.elf' \) | sort
             echo "── directories ──"
