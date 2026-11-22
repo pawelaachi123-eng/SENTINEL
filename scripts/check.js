@@ -61,12 +61,14 @@ console.log('3. Boot');
 process.env.SENTINEL_HOME = fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'sentinel-check-'));
 const { createAgent } = require('../core/agent');
 const agent = createAgent();
+// Ephemeral ports: the check must pass even if a real SENTINEL is running.
+agent.config.merge({ ports: { ui: 0, link: 0 } });
 agent.start();
-const port = agent.config.get('ports.ui');
-const token = agent.config.get('uiToken');
 
 (async () => {
   await new Promise((resolve) => setTimeout(resolve, 400));
+  const port = agent.http.server.address().port;
+  const token = agent.config.get('uiToken');
   const health = await fetch(`http://127.0.0.1:${port}/api/health`).then((r) => r.json());
   if (!health.ok) fail('health endpoint did not answer');
   const unauthorised = await fetch(`http://127.0.0.1:${port}/api/status`).then((r) => r.status);
