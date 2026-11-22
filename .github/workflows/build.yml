@@ -58,6 +58,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { ./scripts/ci-fail.ps1 -LogFile eb.log -Label electron-builder }
       - name: Smoke-test the packaged agent
         shell: pwsh
+        continue-on-error: false
         run: |
           $env:SENTINEL_HOME = "$env:RUNNER_TEMP\sentinel-smoke"
           $p = Start-Process -FilePath "dist\SENTINEL-Agent.exe" -PassThru -WindowStyle Hidden
@@ -99,12 +100,12 @@ jobs:
       - name: Install Capacitor
         working-directory: mobile
         run: |
-          npm install --no-audit --no-fund 2>&1 | tee /tmp/npm.log \
-            || bash ../scripts/ci-fail.sh /tmp/npm.log "mobile-npm"
+          trap 'bash ../scripts/ci-fail.sh /tmp/npm.log "mobile-npm"' ERR
+          npm install --no-audit --no-fund 2>&1 | tee /tmp/npm.log
       - name: Copy the shared UI into the Android project
         run: |
-          (node scripts/sync-mobile.js && cd mobile && npx cap sync android) 2>&1 | tee /tmp/sync.log \
-            || bash scripts/ci-fail.sh /tmp/sync.log "cap-sync"
+          trap 'bash scripts/ci-fail.sh /tmp/sync.log "cap-sync"' ERR
+          (node scripts/sync-mobile.js && cd mobile && npx cap sync android) 2>&1 | tee /tmp/sync.log
       - name: Create signing key
         working-directory: mobile/android
         run: |
@@ -119,10 +120,16 @@ jobs:
       - name: Build release APK
         working-directory: mobile/android
         run: |
+          trap 'bash ../../scripts/ci-fail.sh /tmp/gradle.log "gradle"' ERR
           chmod +x gradlew
-          ./gradlew assembleRelease --no-daemon --stacktrace 2>&1 | tee /tmp/gradle.log \
-            || bash ../../scripts/ci-fail.sh /tmp/gradle.log "gradle"
-          cp app/build/outputs/apk/release/app-release.apk "$GITHUB_WORKSPACE/SENTINEL-android.apk"
+          ./gradlew assembleRelease --no-daemon --stacktrace 2>&1 | tee /tmp/gradle.log
+          echo "── output tree ──" | tee -a /tmp/gradle.log
+          find app/build/outputs -maxdepth 4 -type f 2>&1 | tee -a /tmp/gradle.log
+          APK="$(find app/build/outputs -name '*.apk' | head -1)"
+          echo "picked: $APK" | tee -a /tmp/gradle.log
+          test -n "$APK"
+          cp "$APK" "$GITHUB_WORKSPACE/SENTINEL-android.apk"
+          ls -lh "$GITHUB_WORKSPACE/SENTINEL-android.apk"
       - uses: actions/upload-artifact@v4
         with:
           name: sentinel-android
@@ -146,8 +153,8 @@ jobs:
       - name: Build
         working-directory: firmware
         run: |
-          pio run -e esp32dev 2>&1 | tee /tmp/pio.log \
-            || bash ../scripts/ci-fail.sh /tmp/pio.log "firmware"
+          trap 'bash ../scripts/ci-fail.sh /tmp/pio.log "firmware"' ERR
+          pio run -e esp32dev 2>&1 | tee /tmp/pio.log
       - uses: actions/upload-artifact@v4
         with:
           name: sentinel-firmware
