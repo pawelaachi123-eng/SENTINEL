@@ -116,7 +116,7 @@ jobs:
             -alias sentinel \
             -keyalg RSA -keysize 2048 -validity 10950 \
             -dname "CN=SENTINEL, OU=Personal, O=SENTINEL, L=Wilamowice, C=PL"
-          printf 'storeFile=sentinel-release.jks\nstorePassword=sentinel\nkeyAlias=sentinel\nkeyPassword=sentinel\n' > keystore.properties
+          printf 'storeFile=%s/sentinel-release.jks\nstorePassword=sentinel\nkeyAlias=sentinel\nkeyPassword=sentinel\n' "$(pwd)" > keystore.properties
       - name: Build release APK
         working-directory: mobile/android
         run: |

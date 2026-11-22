@@ -40,7 +40,12 @@ android {
         release {
             if (hasKeystore) {
                 def storePath = keystoreProperties['storeFile']
-                if (storePath) { storeFile file(storePath) }
+                if (storePath) {
+                    // Relative paths are resolved against the android project root,
+                    // not this module, so `keystore.properties` stays portable.
+                    def candidate = new File(storePath)
+                    storeFile candidate.isAbsolute() ? candidate : rootProject.file(storePath)
+                }
                 if (keystoreProperties['storePassword']) { storePassword keystoreProperties['storePassword'] }
                 if (keystoreProperties['keyAlias']) { keyAlias keystoreProperties['keyAlias'] }
                 if (keystoreProperties['keyPassword']) { keyPassword keystoreProperties['keyPassword'] }
