@@ -144,6 +144,14 @@
   async function run(cmd, args = {}, { quiet = false } = {}) {
     try {
       const result = await api('/api/command', { method: 'POST', body: { cmd, args } });
+      if (!result.ok && result.code === 'CONFIRM_REQUIRED' && args.confirm !== true) {
+        // The agent refused a destructive command: ask for the hold-to-confirm
+        // gesture here instead of leaving the button silently dead.
+        const [title, text] = HOLD_COPY[cmd] || [`Run ${cmd}?`, 'This changes the state of your PC.'];
+        const confirmed = await confirmHold({ title, text });
+        if (!confirmed) return result;
+        return run(cmd, { ...args, confirm: true }, { quiet });
+      }
       if (!result.ok) {
         toast(result.message || `${cmd} failed`, 'err', 5200);
         return result;
@@ -392,7 +400,7 @@
     renderChips(status.apps || []);
     renderConnection(status);
 
-    $('#set-name').value = status.name || '';
+    if (document.activeElement !== $('#set-name')) $('#set-name').value = status.name || '';
     $('#latency').textContent = state.latency == null ? '—' : `${state.latency} ms`;
     $('#latency-pill').className = `pill${state.latency != null && state.latency < 250 ? ' is-good' : state.latency != null ? ' is-bad' : ''}`;
 
@@ -488,6 +496,9 @@
 
   function renderSafety(policy) {
     if (!policy) return;
+    // Re-rendering while the owner is editing a field would steal their input.
+    const list = $('#safety-list');
+    if (list.contains(document.activeElement)) return;
     const quiet = policy.quietHours || { enabled: false, from: '23:00', to: '07:00' };
     $('#safety-list').innerHTML = `
       <div class="switch-row">
@@ -762,13 +773,20 @@
       }
       const data = result.data;
       pre.dataset.raw = [
-        `wifi_ssid   = <your 2.4 GHz SSID>`,
-        `agent_host  = ${data.agent_host}`,
-        `agent_port  = ${data.agent_port}`,
-        `psk         = ${data.psk}`,
-        `power_pin   = ${data.power_pin}`,
-        `reset_pin   = ${data.reset_pin}`,
-        `device_id   = ${data.device_id}`,
+        '# ── ESP32 setup portal ─────────────────────',
+        `wifi_ssid    = <your 2.4 GHz SSID>`,
+        `agent_host   = ${data.agent_host}`,
+        `agent_port   = ${data.agent_port}`,
+        `psk          = ${data.psk}`,
+        `power_pin    = ${data.power_pin}`,
+        `reset_pin    = ${data.reset_pin}`,
+        `device_id    = ${data.device_id}`,
+        '',
+        '# ── phone app ──────────────────────────────',
+        `agent_url    = ${data.ui_url || ''}`,
+        `access_token = ${data.token || ''}`,
+        `esp32_url    = http://<esp32-ip>`,
+        `power_token  = ${data.esp_power_token || ''}`,
       ].join('\n');
       pre.textContent = pre.dataset.raw;
       $('#pair-port').textContent = data.agent_port;
@@ -1015,6 +1033,7 @@
 
   function handleAuthFailure(err) {
     state.connected = false;
+    state.sseOpen = false;
     localStorage.removeItem(STORE_TOKEN);
     showSetup(err.message);
   }
@@ -1054,7 +1073,8 @@
   }
 
   function startSse() {
-    if (state.demo || !window.EventSource) return;
+    if (state.demo || !window.EventSource || state.sseOpen) return;
+    state.sseOpen = true;
     try {
       const source = new EventSource(`${state.base}/api/events?t=${encodeURIComponent(state.token)}`);
       source.addEventListener('log', (event) => {
@@ -1084,6 +1104,7 @@
         // EventSource retries by itself; only surface a hint.
         banner('Live updates paused — reconnecting…');
       };
+      window.addEventListener('beforeunload', () => source.close());
     } catch {
       /* older WebView without EventSource: polling still works */
     }
@@ -1101,21 +1122,18 @@
 
     state.token = localStorage.getItem(STORE_TOKEN) || '';
     state.base = (localStorage.getItem(STORE_BASE) || (isNative() ? '' : location.origin)).replace(/\/+$/, '');
-    state.demo = localStorage.getItem(STORE_DEMO) === '1' || !state.token;
+    // Demo data is opt-in only. A missing token means "show the connect screen".
+    state.demo = localStorage.getItem(STORE_DEMO) === '1';
 
-    if (!state.base || (!state.token && !state.demo)) {
-      if (state.demo) {
-        await enterApp();
-        return;
-      }
-      return showSetup();
-    }
+    if (!state.token && !state.demo) return showSetup();
+    if (!state.base && !state.demo) return showSetup();
     await enterApp();
   }
 
   async function enterApp() {
     if (state.demo) {
       localStorage.setItem(STORE_DEMO, '1');
+      banner('Demo data — no PC is connected. Enter a server to control a real machine.');
       const status = demoStatus();
       state.log = demoLog();
       state.catalogue = status.catalogue;
@@ -1316,6 +1334,7 @@
 
     // palette
     $('#palette-open').addEventListener('click', openPalette);
+    $('#palette-btn').addEventListener('click', openPalette);
     $('#palette-field').addEventListener('input', (event) => {
       state.paletteIndex = 0;
       renderPalette(event.target.value);

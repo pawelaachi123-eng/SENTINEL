@@ -165,7 +165,7 @@ jobs:
   # ── publish: rolling "latest" pre-release so the phone can download the APK ──
   publish:
     name: Publish latest builds
-    needs: [windows, android]
+    needs: [windows, android, firmware]
     if: always() && needs.windows.result == 'success' && needs.android.result == 'success'
     runs-on: ubuntu-latest
     steps:
@@ -178,12 +178,27 @@ jobs:
           mkdir -p out
           find artifacts -type f \( -name '*.exe' -o -name '*.apk' -o -name '*.bin' \) -exec cp {} out/ \;
           ls -lh out
-      - name: Publish rolling pre-release
+      - name: Publish release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
         run: |
-          gh release view latest >/dev/null 2>&1 || \
-            gh release create latest --prerelease --title "SENTINEL latest build" \
-              --notes "Automatically built from ${{ github.sha }} on ${{ github.ref_name }}. Download the installer, the portable exe or the APK below."
-          gh release upload latest out/* --clobber
-          gh release view latest --json assets -q '.assets[] | "\(.name) \(.size)"'
+          if [ "$REF_TYPE" = "tag" ]; then
+            TAG="$REF_NAME"
+            gh release view "$TAG" >/dev/null 2>&1 || \
+              gh release create "$TAG" --title "SENTINEL $TAG" \
+                --notes "Built from $SHA.
+
+          **Windows** — \`SENTINEL-Setup-*.exe\` (installer, starts with Windows), \`SENTINEL-Portable-*.exe\` (no install), \`SENTINEL-Agent.exe\` (headless, single file).
+          **Android** — \`SENTINEL-android.apk\` (sideload; signed with a build keystore).
+          **ESP32** — \`firmware.bin\` (esptool / PlatformIO)."
+          else
+            TAG="latest"
+            gh release view "$TAG" >/dev/null 2>&1 || \
+              gh release create "$TAG" --prerelease --title "SENTINEL latest build" \
+                --notes "Rolling build from $REF_NAME ($SHA). Download the installer, the portable exe, the APK or the ESP32 firmware below."
+          fi
+          gh release upload "$TAG" out/* --clobber
+          gh release view "$TAG" --json assets -q '.assets[] | "\(.name) \(.size)"'

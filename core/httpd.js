@@ -177,7 +177,7 @@ class HttpApi {
         return await this.api(req, res, route, url);
       }
 
-      if (this.autoLogin && route === '/' && this.isLoopback(req)) {
+      if (this.autoLogin && route === '/' && this.isLoopback(req) && !url.searchParams.has('t')) {
         res.writeHead(302, { location: `/?t=${this.config.get('uiToken')}` });
         return res.end();
       }
