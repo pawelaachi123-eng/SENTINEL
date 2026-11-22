@@ -24,6 +24,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Behaviour tests (signatures, replay, policy, secrets)
+        run: node test/run.js
       - name: Syntax, assets and boot test
         run: node scripts/check.js
 
@@ -97,14 +99,12 @@ jobs:
       - name: Install Capacitor
         working-directory: mobile
         run: |
-          set -o pipefail
-          npm install --no-audit --no-fund 2>&1 | tee /tmp/npm.log
-          [ ${PIPESTATUS[0]} -eq 0 ] || bash ../scripts/ci-fail.sh /tmp/npm.log "mobile-npm"
+          npm install --no-audit --no-fund 2>&1 | tee /tmp/npm.log \
+            || bash ../scripts/ci-fail.sh /tmp/npm.log "mobile-npm"
       - name: Copy the shared UI into the Android project
         run: |
-          set -o pipefail
-          (node scripts/sync-mobile.js && cd mobile && npx cap sync android) 2>&1 | tee /tmp/sync.log
-          [ ${PIPESTATUS[0]} -eq 0 ] || bash scripts/ci-fail.sh /tmp/sync.log "cap-sync"
+          (node scripts/sync-mobile.js && cd mobile && npx cap sync android) 2>&1 | tee /tmp/sync.log \
+            || bash scripts/ci-fail.sh /tmp/sync.log "cap-sync"
       - name: Create signing key
         working-directory: mobile/android
         run: |
@@ -119,10 +119,9 @@ jobs:
       - name: Build release APK
         working-directory: mobile/android
         run: |
-          set -o pipefail
           chmod +x gradlew
-          ./gradlew assembleRelease --no-daemon --stacktrace 2>&1 | tee /tmp/gradle.log
-          [ ${PIPESTATUS[0]} -eq 0 ] || bash ../../scripts/ci-fail.sh /tmp/gradle.log "gradle"
+          ./gradlew assembleRelease --no-daemon --stacktrace 2>&1 | tee /tmp/gradle.log \
+            || bash ../../scripts/ci-fail.sh /tmp/gradle.log "gradle"
           cp app/build/outputs/apk/release/app-release.apk "$GITHUB_WORKSPACE/SENTINEL-android.apk"
       - uses: actions/upload-artifact@v4
         with:
@@ -147,9 +146,8 @@ jobs:
       - name: Build
         working-directory: firmware
         run: |
-          set -o pipefail
-          pio run -e esp32dev 2>&1 | tee /tmp/pio.log
-          [ ${PIPESTATUS[0]} -eq 0 ] || bash ../scripts/ci-fail.sh /tmp/pio.log "firmware"
+          pio run -e esp32dev 2>&1 | tee /tmp/pio.log \
+            || bash ../scripts/ci-fail.sh /tmp/pio.log "firmware"
       - uses: actions/upload-artifact@v4
         with:
           name: sentinel-firmware
