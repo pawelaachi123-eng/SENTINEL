@@ -17,6 +17,13 @@ A headless `SENTINEL-Agent.exe` (or a second copy of the app) already owns 7878.
 close it, or just use the browser at `http://127.0.0.1:7878/`. The desktop app refuses to
 start a second listener on purpose — two agents would both answer and log.
 
+## The desktop window is blank or refuses to open
+
+The agent is independent of the window. Open <http://127.0.0.1:7878/> in any browser on
+that PC — you will get the same interface. If the window stays blank but the browser
+works, the Electron shell failed to attach (usually a GPU driver issue); quit it from the
+tray and use the browser, or run `SENTINEL-Agent.exe` and open the UI yourself.
+
 ## ESP32 never turns green
 
 | Symptom | Likely cause |
