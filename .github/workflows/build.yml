@@ -66,7 +66,25 @@ jobs:
           try {
             $health = Invoke-RestMethod -Uri "http://127.0.0.1:7878/api/health" -TimeoutSec 15
             if (-not $health.ok) { throw "agent did not report healthy" }
-            Write-Host "agent healthy on port 7878 ($($health.name))"
+            Write-Host "health ok: $($health.name) $($health.version)"
+
+            # The packaged exe must actually ship the UI, not just the API.
+            $page = Invoke-WebRequest -Uri "http://127.0.0.1:7878/" -UseBasicParsing -TimeoutSec 15
+            if ($page.Content -notmatch 'SENTINEL') { throw "UI assets missing from the packaged exe" }
+            Write-Host "UI served: $($page.Content.Length) bytes"
+
+            # Authenticated call using the token the exe just generated.
+            $cfg = Get-Content "$env:SENTINEL_HOME\config.json" -Raw | ConvertFrom-Json
+            $status = Invoke-RestMethod -Uri "http://127.0.0.1:7878/api/status?t=$($cfg.uiToken)" -TimeoutSec 15
+            if (-not $status.data.hostname) { throw "authorised status call failed" }
+            Write-Host "status ok for $($status.data.hostname)"
+
+            # And a request without the token must be refused.
+            $refused = $false
+            try { Invoke-RestMethod -Uri "http://127.0.0.1:7878/api/status" -TimeoutSec 10 | Out-Null }
+            catch { $refused = $true }
+            if (-not $refused) { throw "unauthenticated request was not rejected" }
+            Write-Host "unauthenticated request correctly rejected"
           } catch {
             Write-Output "::error file=smoke::$_"
             exit 1
