@@ -1,0 +1,160 @@
+name: build
+
+on:
+  push:
+    branches: ['**']
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ── fast feedback: does the agent boot, answer, and refuse bad input? ────
+  check:
+    name: Agent checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Syntax, assets and boot test
+        run: node scripts/check.js
+
+  # ── Windows executables: headless agent + desktop console ───────────────
+  windows:
+    name: Windows executables
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install build tools
+        run: npm install --no-audit --no-fund
+      - name: Build SENTINEL-Agent.exe (single file, no installer)
+        run: npx @yao-pkg/pkg bin/sentinel-agent.js --targets node22-win-x64 --compress GZip --output dist/SENTINEL-Agent.exe
+      - name: Build desktop app (installer + portable)
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EP_PRE_RELEASE: 'true'
+        run: npx electron-builder --win --x64 --publish never
+      - name: Smoke-test the packaged agent
+        shell: pwsh
+        run: |
+          $env:SENTINEL_HOME = "$env:RUNNER_TEMP\sentinel-smoke"
+          $p = Start-Process -FilePath "dist\SENTINEL-Agent.exe" -PassThru -WindowStyle Hidden
+          Start-Sleep -Seconds 8
+          try {
+            $health = Invoke-RestMethod -Uri "http://127.0.0.1:7878/api/health" -TimeoutSec 15
+            if (-not $health.ok) { throw "agent did not report healthy" }
+            Write-Host "agent healthy on port 7878 ($($health.name))"
+          } finally {
+            Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+          }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sentinel-windows
+          path: |
+            dist/SENTINEL-Agent.exe
+            dist/SENTINEL-Setup-*.exe
+            dist/SENTINEL-Portable-*.exe
+          if-no-files-found: error
+          retention-days: 30
+
+  # ── Android APK, signed with a keystore generated during the build ───────
+  android:
+    name: Android APK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install Capacitor
+        working-directory: mobile
+        run: npm install --no-audit --no-fund
+      - name: Copy the shared UI into the Android project
+        run: |
+          node scripts/sync-mobile.js
+          cd mobile && npx cap sync android
+      - name: Create signing key
+        working-directory: mobile/android
+        run: |
+          keytool -genkeypair -v \
+            -keystore sentinel-release.jks \
+            -storepass sentinel \
+            -keypass sentinel \
+            -alias sentinel \
+            -keyalg RSA -keysize 2048 -validity 10950 \
+            -dname "CN=SENTINEL, OU=Personal, O=SENTINEL, L=Wilamowice, C=PL"
+          cat > keystore.properties <<'EOF'
+          storeFile=sentinel-release.jks
+          storePassword=sentinel
+          keyAlias=sentinel
+          keyPassword=sentinel
+          EOF
+      - name: Build release APK
+        working-directory: mobile/android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon --stacktrace
+          cp app/build/outputs/apk/release/app-release.apk "$GITHUB_WORKSPACE/SENTINEL-android.apk"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sentinel-android
+          path: SENTINEL-android.apk
+          if-no-files-found: error
+          retention-days: 30
+
+  # ── ESP32 firmware ───────────────────────────────────────────────────────
+  firmware:
+    name: ESP32 firmware
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install PlatformIO
+        run: |
+          python -m pip install --upgrade platformio
+          pio --version
+      - name: Build
+        working-directory: firmware
+        run: pio run -e esp32dev
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sentinel-firmware
+          path: firmware/.pio/build/esp32dev/firmware.bin
+          if-no-files-found: warn
+          retention-days: 30
+
+  # ── collect everything into one download on tags / manual runs ────────────
+  bundle:
+    name: Bundle release files
+    needs: [windows, android, firmware]
+    if: always() && (startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Show what was produced
+        run: find artifacts -type f -printf '%p (%s bytes)\n' | sort
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SENTINEL-all
+          path: artifacts/**/*
+          retention-days: 30
