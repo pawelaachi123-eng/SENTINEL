@@ -462,6 +462,9 @@ input:focus, textarea:focus, .select:focus { border-color: rgba(60, 224, 255, 0.
 .catalogue button:hover { background: rgba(60, 224, 255, 0.08); color: var(--text); }
 .catalogue code { font-family: var(--mono); font-size: 11px; color: var(--text-faint); }
 
+.catalogue-group { display: flex; flex-direction: column; gap: 2px; margin-bottom: 10px; }
+.catalogue-group > .muted { padding: 2px 10px 4px; letter-spacing: 0.1em; text-transform: uppercase; font-size: 10.5px; }
+
 /* terminal */
 .terminal {
   font-family: var(--mono); font-size: 12px; line-height: 1.65;

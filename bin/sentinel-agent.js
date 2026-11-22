@@ -100,8 +100,7 @@ if (args.linkPort) agent.config.merge({ ports: { link: args.linkPort } });
 agent.start();
 
 const token = agent.config.get('uiToken');
-const psk = agent.config.get('psk');
-const host = require('../core/httpd') && agent.http.primaryAddress();
+const host = agent.http.primaryAddress();
 
 if (args.pair) {
   const snippet = agent.config.pairingSnippet(host);

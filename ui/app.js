@@ -356,8 +356,8 @@
     $('#avatar').textContent = (name || 'PC').slice(0, 2).toUpperCase();
 
     const statePill = $('#hero-state');
-    statePill.classList.toggle('is-down', !state.connected);
-    statePill.querySelector('span:last-child').textContent = 'Online';
+    statePill.classList.toggle('is-down', !state.connected && !state.demo);
+    statePill.querySelector('span:last-child').textContent = state.demo ? 'Demo' : 'Online';
     $('#set-system').innerHTML = `
       <div><span>Host</span><strong>${esc(status.hostname || '—')}</strong></div>
       <div><span>OS</span><strong>${esc(status.platformLabel || status.platform)} ${esc(status.release || '')}</strong></div>
@@ -1145,6 +1145,7 @@
       $('#app').classList.remove('hidden');
       $('#boot').classList.add('done');
       setInterval(() => {
+        if (!state.demo) return;
         const status2 = demoStatus();
         status2.cpuPercent = Math.max(6, Math.min(96, (state.status ? state.status.cpuPercent : 40) + (Math.random() * 18 - 9)));
         render(status2);

@@ -38,6 +38,7 @@
       "desktop/**/*",
       "core/**/*",
       "ui/**/*",
+      "build/*.png",
       "bin/**/*",
       "package.json"
     ],
