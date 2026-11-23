@@ -1160,6 +1160,71 @@
     );
   }
 
+  function renderInsights() {
+    const host = $('#insights');
+    if (!host) return;
+    host.innerHTML = '';
+    const insights = (S.snap && S.snap.insights) || [];
+    if (!insights.length) {
+      host.append(
+        el('div', { class: 'insight-empty' }, [
+          el('span', { html: svgIcon(ICONS.brain, 16) }),
+          el('span', { text: 'Nothing needs attention. The brain checks CPU, memory, the ESP32 link and command failures every 15 seconds.' }),
+        ]),
+      );
+      return;
+    }
+    for (const insight of insights) {
+      const actions = el('div', { class: 'i-actions' });
+      if (insight.action && insight.action.cmd) {
+        actions.append(
+          el('button', {
+            class: 'action-btn primary',
+            type: 'button',
+            text: insight.action.label || 'Fix it',
+            onclick: () => runCommand(insight.action.cmd, insight.action.args || {}),
+          }),
+        );
+      }
+      actions.append(
+        el('button', {
+          class: 'action-btn',
+          type: 'button',
+          text: 'Dismiss',
+          onclick: () => dismissInsight(insight.id),
+        }),
+      );
+      host.append(
+        el('div', { class: `insight ${insight.level || 'info'}` }, [
+          el('div', { class: 'i-body' }, [
+            el('span', { class: 'i-title', text: insight.title }),
+            el('span', { class: 'i-detail', text: insight.detail }),
+            actions,
+          ]),
+          el('button', {
+            class: 'i-dismiss',
+            type: 'button',
+            'aria-label': 'Dismiss',
+            text: '×',
+            onclick: () => dismissInsight(insight.id),
+          }),
+        ]),
+      );
+    }
+  }
+
+  async function dismissInsight(id) {
+    S.snap = S.snap ? { ...S.snap, insights: (S.snap.insights || []).filter((item) => item.id !== id) } : S.snap;
+    renderInsights();
+    if (S.demo) return;
+    try {
+      await S.link.request('brain.dismiss', { id });
+    } catch (err) {
+      toast('Could not dismiss', { sub: err.message, tone: 'warn' });
+    }
+    refresh().catch(() => {});
+  }
+
   function renderQuickActions() {
     const host = $('#quick-actions');
     host.innerHTML = '';
@@ -1249,6 +1314,7 @@
     if (S.tab !== 'home' && S.tab !== undefined) return;
     renderHero();
     renderMetrics();
+    renderInsights();
     renderQuickActions();
     renderHardware();
   }
@@ -1436,6 +1502,7 @@
     if (S.tab === 'home') {
       renderHero();
       renderMetrics();
+      renderInsights();
       renderQuickActions();
       renderHardware();
       renderCatalogue();
@@ -1497,6 +1564,21 @@
         rateLimitPerMinute: 40,
         quietHours: { enabled: false, from: '23:00', to: '07:00' },
       },
+      insights: [
+        {
+          id: 'demo-esp',
+          level: 'info',
+          title: 'The ESP32 link is healthy',
+          detail: 'Last state 4 s ago, chip at 47 °C, relay idle.',
+        },
+        {
+          id: 'demo-quiet',
+          level: 'warn',
+          title: 'Quiet hours start in 25 minutes',
+          detail: 'Power commands will be refused between 23:00 and 07:00 unless you change the policy.',
+          action: { label: 'See the policy', cmd: 'agent.status' },
+        },
+      ],
       catalogue: [
         { group: 'Power', cmd: 'system.shutdown', label: 'Shut down' },
         { group: 'Power', cmd: 'system.reboot', label: 'Restart' },

@@ -21,13 +21,14 @@ class CmdError extends Error {
 const sleepMs = (ms) => new Promise((r) => setTimeout(r, clamp(ms, 0, 2500)));
 
 class Commander {
-  constructor({ config, log, limiter, link, state, stats }) {
+  constructor({ config, log, limiter, link, state, stats, brain }) {
     this.config = config;
     this.log = log;
     this.limiter = limiter;
     this.link = link;
     this.state = state;
     this.stats = stats || null;
+    this.brain = brain || null;
     this.capsCache = null;
     this.capsAt = 0;
     this.handlers = this.buildHandlers();
@@ -70,6 +71,7 @@ class Commander {
       { group: 'Automation', cmd: 'macro.run', label: 'Run macro', args: { name: { type: 'string' } } },
       { group: 'Automation', cmd: 'files.list', label: 'List files', args: { path: { type: 'string', default: '~' } } },
       { group: 'System', cmd: 'system.snapshot', label: 'Everything at once' },
+      { group: 'System', cmd: 'brain.insights', label: 'What the brain noticed' },
       { group: 'System', cmd: 'system.info', label: 'System info' },
       { group: 'System', cmd: 'agent.status', label: 'Agent status' },
       { group: 'System', cmd: 'esp.status', label: 'ESP32 status' },
@@ -138,8 +140,17 @@ class Commander {
           apps: Object.keys(this.config.get('apps', {})),
           macros: Object.keys(this.config.get('macros', {})),
           catalogue: this.catalogue(),
+          insights: this.brain ? this.brain.list() : [],
           serverTime: new Date().toISOString(),
         };
+      },
+
+      'brain.insights': () => (this.brain ? this.brain.list() : []),
+
+      'brain.dismiss': (args) => {
+        const id = String((args && args.id) || '');
+        if (!id) throw new CmdError('BAD_ARGS', 'id is required');
+        return { dismissed: this.brain ? this.brain.dismiss(id) : false, insights: this.brain ? this.brain.list() : [] };
       },
 
       'agent.policy.get': () => this.config.get('policy'),
@@ -371,6 +382,11 @@ class Commander {
       const code = err.code || (err instanceof PlatformError ? err.code : 'FAILED');
       this.state.counters.errors++;
       this.log.error('command', `${cmd} → ${code}: ${err.message}`, err.detail ? { detail: String(err.detail).slice(0, 300) } : undefined);
+      // Platform failures (missing tool, blocked policy, offline device) are
+      // what the advisory layer watches for; refusals are not failures.
+      if (!['POLICY_DENIED', 'CONFIRM_REQUIRED', 'QUIET_HOURS', 'RATE_LIMITED'].includes(code) && this.brain) {
+        this.brain.observe(null, { commandFailed: `${cmd} → ${code}` });
+      }
       const wrapped = new CmdError(code, err.message || 'Command failed', err.detail);
       wrapped.ms = ms;
       throw wrapped;

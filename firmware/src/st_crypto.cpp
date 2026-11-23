@@ -234,16 +234,18 @@ bool StEcKey::agree(const uint8_t peerPublic[ST_P256_PUB_LEN], uint8_t sharedOut
   if (!ready_ || peerPublic[0] != 0x04) return false;
   mbedtls_ecp_point peer;
   mbedtls_ecp_point_init(&peer);
-  mbedtls_mpi shared;
-  mbedtls_mpi_init(&shared);
+  // mbedtls_ecp_mul() returns a point; the shared secret is its X coordinate,
+  // which is exactly what node:crypto and WebCrypto hand back too.
+  mbedtls_ecp_point sharedPoint;
+  mbedtls_ecp_point_init(&sharedPoint);
   bool ok = false;
   if (mbedtls_ecp_point_read_binary(&grp_, &peer, peerPublic, ST_P256_PUB_LEN) == 0 &&
       mbedtls_ecp_check_pubkey(&grp_, &peer) == 0 &&
-      mbedtls_ecp_mul(&grp_, &shared, &d_, &peer, stRng, nullptr) == 0 &&
-      mbedtls_mpi_write_binary(&shared, sharedOut, ST_KEY_LEN) == 0) {
+      mbedtls_ecp_mul(&grp_, &sharedPoint, &d_, &peer, stRng, nullptr) == 0 &&
+      mbedtls_mpi_write_binary(&sharedPoint.X, sharedOut, ST_KEY_LEN) == 0) {
     ok = true;
   }
-  mbedtls_mpi_free(&shared);
+  mbedtls_ecp_point_free(&sharedPoint);
   mbedtls_ecp_point_free(&peer);
   return ok;
 }

@@ -169,6 +169,8 @@ class TunnelServer {
     if (!safeEqual(expected, String(body.mac || ''))) {
       this.pending.delete(sid);
       this.fail(half.ip);
+      this.stats.rejected++;
+      if (this.onKeyMismatch) this.onKeyMismatch();
       return { status: 403, body: { error: 'pairing key mismatch' } };
     }
 

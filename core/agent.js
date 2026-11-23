@@ -10,6 +10,7 @@ const { HttpApi } = require('./httpd');
 const { Stats } = require('./stats');
 const { RateLimiter } = require('./policy');
 const { TunnelServer } = require('./tunnel');
+const { Brain } = require('./brain');
 const { uiDir } = require('./paths');
 
 /**
@@ -31,6 +32,7 @@ class Agent extends EventEmitter {
       lastCommand: null,
     };
     this.limiter = new RateLimiter(this.config.get('policy.rateLimitPerMinute', 40));
+    this.brain = new Brain({ config: this.config, log: this.log });
     this.link = new EspLink({ config: this.config, log: this.log });
     this.commander = new Commander({
       config: this.config,
@@ -39,6 +41,7 @@ class Agent extends EventEmitter {
       link: this.link,
       state: this.state,
       stats: this.stats,
+      brain: this.brain,
     });
     // Our own encrypted channel: the phone talks to this without any VPN.
     this.tunnel = new TunnelServer({
@@ -47,6 +50,7 @@ class Agent extends EventEmitter {
       commander: this.commander,
       pskBytes: Buffer.from(this.config.get('psk'), 'hex'),
     });
+    this.tunnel.onKeyMismatch = () => this.brain.observe(null, { keyMismatch: true });
     this.http = new HttpApi({
       config: this.config,
       log: this.log,
@@ -55,6 +59,8 @@ class Agent extends EventEmitter {
       stats: this.stats,
       state: this.state,
       tunnel: this.tunnel,
+      brain: this.brain,
+      think: () => this.think(),
     });
     this.link.on('connected', (status) => {
       this.emit('esp', status);
@@ -70,6 +76,17 @@ class Agent extends EventEmitter {
       this.http.broadcast('log', entry);
       // Tunnel clients get the same feed, delivered with their next frame.
       this.tunnel.pushEvent({ event: 'log', data: entry });
+    });
+
+    this.brainSignature = '';
+    this.brainTimer = setInterval(() => this.think(), 15000);
+    this.brainTimer.unref?.();
+
+    this.on('command-failed', (detail) => {
+      this.brain.observe(null, { commandFailed: detail });
+    });
+    this.on('key-mismatch', () => {
+      this.brain.observe(null, { keyMismatch: true });
     });
 
     /**
@@ -119,7 +136,26 @@ class Agent extends EventEmitter {
     return this;
   }
 
+  /** One pass of the advisory engine; only broadcasts when something changed. */
+  async think() {
+    try {
+      const snapshot = await this.commander.handlers['system.snapshot']();
+      const insights = this.brain.observe(snapshot, { lastCommand: this.state.lastCommand });
+      const signature = this.brain.signature();
+      if (signature !== this.brainSignature) {
+        this.brainSignature = signature;
+        this.http.broadcast('insights', insights);
+        this.tunnel.pushEvent({ event: 'insights', data: insights });
+      }
+      return insights;
+    } catch (err) {
+      this.log.debug('brain', `pass failed: ${err.message}`);
+      return this.brain.list();
+    }
+  }
+
   stop() {
+    clearInterval(this.brainTimer);
     this.tunnel.stop();
     this.http.stop();
     this.link.stop();

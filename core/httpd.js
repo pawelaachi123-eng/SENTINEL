@@ -29,7 +29,7 @@ const MAX_BODY = 256 * 1024;
  * SSE (not WebSocket) keeps the agent dependency-free while still being live.
  */
 class HttpApi {
-  constructor({ config, log, commander, link, stats, state, tunnel }) {
+  constructor({ config, log, commander, link, stats, state, tunnel, brain, think }) {
     this.config = config;
     this.log = log;
     this.commander = commander;
@@ -37,6 +37,8 @@ class HttpApi {
     this.stats = stats;
     this.state = state;
     this.tunnel = tunnel || null;
+    this.brain = brain || null;
+    this.think = think || (async () => (this.brain ? this.brain.list() : []));
     this.server = null;
     this.clients = new Set();
     this.failures = new Map();
@@ -289,6 +291,22 @@ class HttpApi {
 
     if (route === '/api/tunnel/sessions' && req.method === 'GET') {
       return this.json(res, 200, { ok: true, data: this.tunnel ? this.tunnel.liveSessions() : [] });
+    }
+
+    if (route === '/api/insights' && req.method === 'GET') {
+      return this.json(res, 200, { ok: true, data: this.brain ? this.brain.list() : [] });
+    }
+
+    if (route === '/api/brain/think' && req.method === 'POST') {
+      // Force one pass — handy from the desktop tray menu and for tests.
+      const insights = await this.think();
+      return this.json(res, 200, { ok: true, data: insights });
+    }
+
+    if (route === '/api/insights/dismiss' && req.method === 'POST') {
+      const body = await this.body(req);
+      const dismissed = this.brain ? this.brain.dismiss(String(body.id || '')) : false;
+      return this.json(res, 200, { ok: dismissed, data: this.brain ? this.brain.list() : [] });
     }
 
     if (route === '/api/log' && req.method === 'GET') {

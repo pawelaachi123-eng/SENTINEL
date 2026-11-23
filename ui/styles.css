@@ -396,6 +396,33 @@ a { color: var(--mint); }
 }
 .qa.off { opacity: 0.45; pointer-events: none; }
 
+/* ── insights ("the brain") ─────────────────────────────────────────────── */
+
+.insights { display: flex; flex-direction: column; gap: 9px; }
+.insight {
+  display: flex; gap: 12px; align-items: flex-start;
+  background: var(--panel); border: 1px solid var(--stroke); border-left: 3px solid var(--blue);
+  border-radius: 14px; padding: 13px 14px; box-shadow: var(--shadow);
+  animation: rise 0.28s var(--ease);
+}
+.insight.warn { border-left-color: var(--amber); }
+.insight.error { border-left-color: var(--red); }
+.insight.info { border-left-color: var(--blue); }
+.insight .i-body { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
+.insight .i-title { font-size: 0.86rem; font-weight: 580; }
+.insight .i-detail { font-size: 0.78rem; color: var(--text-dim); }
+.insight .i-actions { display: flex; gap: 7px; margin-top: 7px; flex-wrap: wrap; }
+.insight .i-actions .action-btn { padding: 7px 12px; font-size: 0.78rem; }
+.insight .i-dismiss {
+  border: 0; background: none; color: var(--text-faint); cursor: pointer; padding: 2px 4px;
+  font-size: 1rem; line-height: 1; border-radius: 6px;
+}
+.insight .i-dismiss:hover { color: var(--text); background: rgba(255, 255, 255, 0.06); }
+.insight-empty {
+  display: flex; align-items: center; gap: 10px; padding: 14px 15px; border-radius: 14px;
+  border: 1px dashed rgba(255, 255, 255, 0.1); color: var(--text-faint); font-size: 0.82rem;
+}
+
 /* ── hardware ───────────────────────────────────────────────────────────── */
 
 .hw-card { display: flex; flex-direction: column; gap: 14px; }

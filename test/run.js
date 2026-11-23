@@ -150,6 +150,84 @@ test('broken config is quarantined, not deleted', () => {
   assert.equal(backups.length, 1, 'the damaged file should be kept for forensics');
 });
 
+/* ── the advisory brain (pure logic, so it runs without a PC) ──────────── */
+
+const { Brain, minutesUntil } = require('../core/brain');
+
+function fakeConfig(policy = {}) {
+  return { get: (key, fallback) => (key === 'policy' ? policy : fallback) };
+}
+
+function snapshot(overrides = {}) {
+  return {
+    cpuPercent: 10,
+    cpuModel: 'test cpu',
+    memoryDetail: { total: 16 * 1024 ** 3, used: 2 * 1024 ** 3, percent: 12 },
+    esp: { connected: true, link: 'up' },
+    policy: { quietHours: { enabled: false, from: '23:00', to: '07:00' } },
+    agent: { uptimeSec: 4000 },
+    ...overrides,
+  };
+}
+
+test('brain: a single CPU spike is not an insight, a sustained one is', () => {
+  let clock = Date.now();
+  const brain = new Brain({ config: fakeConfig(), now: () => clock });
+  brain.observe(snapshot({ cpuPercent: 99 }));
+  assert.equal(brain.list().length, 0, 'one hot sample must not raise anything');
+  for (let i = 0; i < 5; i += 1) {
+    clock += 15000;
+    brain.observe(snapshot({ cpuPercent: 91 }));
+  }
+  const found = brain.list().find((insight) => insight.id === 'cpu-sustained');
+  assert.ok(found, 'sustained load should produce an insight');
+  assert.match(found.detail, /91%|90%/, 'the insight must quote the numbers');
+});
+
+test('brain: an insight clears when the condition goes away, and does not nag', () => {
+  let clock = Date.now();
+  const brain = new Brain({ config: fakeConfig(), now: () => clock });
+  brain.observe(snapshot({ memoryDetail: { total: 16 * 1024 ** 3, used: 15 * 1024 ** 3, percent: 96 } }));
+  assert.equal(brain.list().filter((i) => i.id === 'memory-tight').length, 1);
+  brain.observe(snapshot());
+  assert.equal(brain.list().filter((i) => i.id === 'memory-tight').length, 0, 'must clear');
+  clock += 60000;
+  brain.observe(snapshot({ memoryDetail: { total: 16 * 1024 ** 3, used: 15 * 1024 ** 3, percent: 96 } }));
+  assert.equal(brain.list().filter((i) => i.id === 'memory-tight').length, 0, 'cooldown must suppress the repeat');
+});
+
+test('brain: ESP32 flapping is counted, and dismissing silences it', () => {
+  let clock = Date.now();
+  const brain = new Brain({ config: fakeConfig(), now: () => clock });
+  for (let i = 0; i < 4; i += 1) {
+    brain.observe(snapshot({ esp: { connected: false } }));
+    clock += 20000;
+    brain.observe(snapshot({ esp: { connected: true, link: 'up' } }));
+    clock += 20000;
+  }
+  const flapping = brain.list().find((insight) => insight.id === 'esp-flapping');
+  assert.ok(flapping, 'three or more drops should be noticed');
+  assert.equal(brain.dismiss('esp-flapping'), true);
+  assert.equal(brain.list().some((insight) => insight.id === 'esp-flapping'), false);
+});
+
+test('brain: a pending shutdown offers a cancel action', () => {
+  const clock = Date.now();
+  const brain = new Brain({ config: fakeConfig(), now: () => clock });
+  brain.observe(snapshot(), { lastCommand: { cmd: 'system.shutdown', ok: true, at: clock } });
+  const pending = brain.list().find((insight) => insight.id === 'shutdown-pending');
+  assert.ok(pending, 'a scheduled shutdown should be surfaced');
+  assert.equal(pending.action.cmd, 'system.cancel_shutdown');
+});
+
+test('brain: quiet-hours helper handles windows that cross midnight', () => {
+  const at = (hour, minute) => new Date(2026, 0, 1, hour, minute).getTime();
+  const quiet = { enabled: true, from: '23:00', to: '07:00' };
+  assert.equal(minutesUntil(quiet, at(22, 30)), 30, '30 minutes before midnight');
+  assert.equal(minutesUntil(quiet, at(2, 0)), null, 'already inside the window');
+  assert.equal(minutesUntil({ enabled: false }, at(22, 30)), null);
+});
+
 /* ── integration: the encrypted tunnel and the ESP32 relay ─────────────── */
 
 test('tunnel: handshake, encrypted command, replay refused', async () => {
