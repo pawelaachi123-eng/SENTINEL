@@ -50,6 +50,31 @@ The ESP32 speaks the same protocol on `/t/*` and relays anything it cannot do
 itself over the authenticated `7879` link, which keeps one code path for
 commands and one place for policy.
 
+## The advisory layer (`core/brain.js`)
+
+The agent samples itself every 15 seconds and runs a short list of explicit
+rules. Each rule either returns nothing or returns a statement with the numbers
+that produced it:
+
+```
+"CPU has been pinned for a while"
+  91% average over the last 5 samples (AMD Ryzen 7 5800X)
+```
+
+The rules cover sustained CPU, memory pressure, ESP32 link flapping, a device
+presenting the wrong key, repeated command failures, quiet hours approaching and
+a scheduled shutdown that can still be cancelled.
+
+It is deliberately not an autonomous agent: **it never executes anything**. An
+insight may carry one suggested command, and a person taps it. Insights have
+cooldowns (a condition cannot nag), disappear when the condition clears, and can
+be dismissed for 30 minutes.
+
+Because the module takes snapshots and a clock as arguments, the rules are
+unit-tested without a PC, a phone or a network (`test/run.js`). The same list is
+attached to `system.snapshot`, so the phone gets it over the tunnel in the same
+round trip that renders the rest of the screen.
+
 ## Why these choices
 
 **SSE instead of WebSocket.** The live feed is one-directional (log lines, 2-second

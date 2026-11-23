@@ -121,6 +121,11 @@ and tested against itself:
   latency), the PC's policy, and honest answers about the app.
 - **Installable** — the console is a PWA with a service worker, so it can live on
   the home screen next to the APK.
+- **A brain that explains itself** — the agent samples CPU, memory, the ESP32
+  link, failed commands and the policy clock every 15 seconds and turns them
+  into plain statements with the numbers attached ("CPU 91% for five samples",
+  "the ESP32 dropped four times in ten minutes"). It suggests one command; it
+  never runs anything on its own.
 
 ---
 

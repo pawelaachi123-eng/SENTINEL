@@ -115,6 +115,9 @@ function makePage(url) {
     check('the catalogue renders', doc.querySelectorAll('.cmd-chip').length >= 20, String(doc.querySelectorAll('.cmd-chip').length));
     check('the hero shows the machine', doc.getElementById('hero-host').textContent === hostname);
 
+    check('the brain area renders something honest', doc.querySelectorAll('#insights .insight, #insights .insight-empty').length === 1,
+      doc.getElementById('insights').textContent.replace(/\s+/g, ' ').slice(0, 50));
+
     doc.querySelector('[data-quick="system.shutdown"]').click();
     await sleep(120);
     check(

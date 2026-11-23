@@ -3,7 +3,9 @@
    frames must always hit the device. */
 
 const VERSION = 'sentinel-2.1.0';
-const SHELL = ['/', '/index.html', '/styles.css', '/app.js', '/transport.js', '/manifest.webmanifest', '/assets/icon-192.png', '/assets/icon-512.png'];
+// '/' redirects to '/?t=…' when the agent wants a token, so it is not precached;
+// navigations are network-first anyway and fall back to /index.html.
+const SHELL = ['/index.html', '/styles.css', '/app.js', '/transport.js', '/manifest.webmanifest', '/assets/icon-192.png', '/assets/icon-512.png'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(

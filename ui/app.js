@@ -416,17 +416,19 @@
   }
 
   async function attemptConnect({ address, key, token, onStep = () => {} }) {
-    if (token && (!address || address === 'self')) {
-      onStep([{ text: 'Using this computer', detail: location.host }], 0);
-      const link = new T.PlainLink({ base: location.origin, token });
+    if (token && !key) {
+      // Token mode: no key needed, the console token is the credential.
+      const origin = address && address !== 'self' ? new URL(T.normaliseAddress(address)).origin : location.origin;
+      onStep([{ text: 'Using the console token', detail: origin }], 0);
+      const link = new T.PlainLink({ base: origin, token });
       const result = await link.connect((list) =>
         onStep(
-          [{ text: 'Using this computer', detail: location.host }].concat(list.map((step) => ({ text: step.text, detail: step.detail }))),
+          [{ text: 'Using the console token', detail: origin }].concat(list.map((step) => ({ text: step.text, detail: step.detail }))),
           list.length,
         ),
       );
       return {
-        pairing: { kind: 'plain', base: location.origin, token, label: location.host, name: 'This computer', addedAt: new Date().toISOString() },
+        pairing: { kind: 'plain', base: origin, token, label: origin.replace(/^https?:\/\//, ''), name: 'This computer', addedAt: new Date().toISOString() },
         link,
         result,
       };
