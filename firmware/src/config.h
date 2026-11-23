@@ -6,7 +6,7 @@
 #pragma once
 
 #ifndef SENTINEL_FW_VERSION
-#define SENTINEL_FW_VERSION "2.0.0"
+#define SENTINEL_FW_VERSION "2.1.0"
 #endif
 
 // WireGuard is used when your phone reaches the house through your own tunnel.

@@ -1,5 +1,34 @@
 # Troubleshooting
 
+## I tap Connect on the phone and nothing happens
+
+Fixed in 2.1: Connect now always shows the handshake, step by step, and every
+failure ends in a message with a next action. If you are on an older build, the
+symptoms below are what you saw.
+
+| What you see | What it means |
+| --- | --- |
+| the button does nothing at all | the old form used `type="url"` and refused `192.168.1.50:7878` without telling you. Type the address with `http://`, or update. |
+| "Enter an address first" | both fields were empty — the old build returned silently |
+| "The pairing key does not match" | the key is from a different machine, or has a trailing space / a changed letter |
+| "Nothing answered at that address" | wrong IP, phone on mobile data, or the agent is not running. Tap **Test the address**. |
+| "That address is not a SENTINEL device" | port 80 answered with something else; the agent is on `7878`, the ESP32 on `80` |
+| "The device stopped answering" | it answered once and then went quiet — restart the agent or power-cycle the ESP32 |
+
+Fastest way to find the truth: on the phone open **Diagnostics**. It lists every
+attempt with the URL, the HTTP status and the exact error. Copy it if you need to
+ask for help.
+
+Things worth checking, in order:
+
+1. The phone and the device are on the **same Wi-Fi** (not guest, not mobile data).
+2. The PC has a firewall rule for TCP `7878` — on Windows the first run asks; if
+   it was dismissed, allow `SENTINEL` in *Windows Defender Firewall → Allowed apps*.
+3. The address is the PC's **local** IP (`ipconfig` → IPv4), not `127.0.0.1` and
+   not the public one.
+4. The pairing key is the same one the console shows right now — rotating keys
+   invalidates it.
+
 ## The app cannot reach the agent
 
 1. Is the agent running? `http://127.0.0.1:7878/api/health` on the PC itself.
@@ -80,6 +109,18 @@ allowed on purpose; toggle quiet hours in *Settings → Safety*.
 ## "Rate limited"
 
 40 commands per minute per client by default (Settings → Safety). Macros count per step.
+
+## The phone works only while it is near the PC
+
+Both devices are on Wi-Fi, so "near" is not the limit — the network is. If it
+drops when you leave the house, that is expected: ST1 is a direct channel, not a
+VPN. See `docs/vpn.md` for the optional WireGuard layout.
+
+## The tunnel says "session expired — pair again"
+
+A session ends after 15 minutes without traffic. The app reconnects on its own;
+if it keeps happening, something is dropping the connection — check the agent log
+for `tunnel` lines.
 
 ## The APK will not install
 

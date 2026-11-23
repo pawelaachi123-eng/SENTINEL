@@ -32,6 +32,24 @@ frame around the agent's own UI. The phone loads the same files from the agent. 
 is why there is exactly one UI to maintain, and why a feature added once works on
 both.
 
+## The tunnel layer
+
+`core/tunnel.js` sits between the phone and the command executor. It owns an
+ephemeral ECDH handshake, per-session AES-256-GCM state and the sequence-number
+replay guard, and it calls `Commander.execute()` exactly like the HTTP API does —
+so policy, rate limits and the audit log apply identically no matter how a
+command arrives.
+
+```
+phone ─┐                        ┌─► /api/command (token) ─┐
+       ├─ ST1 ─► core/tunnel ───┤                          ├─► Commander ─► policy ─► platform
+ESP32 ─┘                        └─► /api/tunnel/msg ──────┘
+```
+
+The ESP32 speaks the same protocol on `/t/*` and relays anything it cannot do
+itself over the authenticated `7879` link, which keeps one code path for
+commands and one place for policy.
+
 ## Why these choices
 
 **SSE instead of WebSocket.** The live feed is one-directional (log lines, 2-second

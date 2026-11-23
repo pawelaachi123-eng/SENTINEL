@@ -1,1466 +1,1812 @@
-/* ============================================================
-   SENTINEL control surface — plain ES2020, no framework, no build
-   step so the exact same file runs in the desktop window and in
-   the Android WebView.
-   ============================================================ */
-(() => {
+/* ============================================================================
+   SENTINEL console — application controller.
+
+   Everything the phone does lives here:
+     • pairing (with visible progress and real error messages)
+     • the encrypted link, polling, reconnection
+     • rendering the control surface from a single snapshot command
+     • policy-aware command execution
+
+   No frameworks, no build step: this file is shipped as-is to the phone.
+   ========================================================================== */
+(function () {
   'use strict';
+
+  const T = window.SentinelTransport;
+  const APP_VERSION = '2.1.0';
+  const STORE = {
+    pairing: 'sentinel.pairing.v2',
+    demo: 'sentinel.demo.v2',
+    activity: 'sentinel.activity.v2',
+  };
 
   const $ = (sel, root = document) => root.querySelector(sel);
   const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
-  const icon = (name) => `<svg class="icon"><use href="#i-${name}"/></svg>`;
-  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-  const STORE_BASE = 'sentinel.base';
-  const STORE_TOKEN = 'sentinel.token';
-  const STORE_DEMO = 'sentinel.demo';
-  const STORE_ESP_BASE = 'sentinel.esp.base';
-  const STORE_ESP_TOKEN = 'sentinel.esp.token';
+  /* ── tiny helpers ──────────────────────────────────────────────────────── */
 
-  const state = {
-    base: '',
-    token: '',
-    demo: false,
-    connected: false,
-    status: null,
-    log: [],
-    macros: {},
-    catalogue: [],
-    view: 'dashboard',
-    level: 'all',
-    latency: null,
-    pendingMacroSteps: [],
-    paletteIndex: 0,
-    paletteItems: [],
+  const el = (tag, attrs = {}, children = []) => {
+    const node = document.createElement(tag);
+    for (const [key, value] of Object.entries(attrs)) {
+      if (value === undefined || value === null || value === false) continue;
+      if (key === 'class') node.className = value;
+      else if (key === 'html') node.innerHTML = value;
+      else if (key === 'text') node.textContent = value;
+      else if (key.startsWith('on') && typeof value === 'function') node.addEventListener(key.slice(2), value);
+      else if (key === 'dataset') Object.assign(node.dataset, value);
+      else node.setAttribute(key, value === true ? '' : String(value));
+    }
+    for (const child of [].concat(children)) {
+      if (child === null || child === undefined || child === false) continue;
+      node.append(child instanceof Node ? child : document.createTextNode(String(child)));
+    }
+    return node;
   };
 
-  /* ─────────────────────────── utilities ─────────────────────────── */
+  const svgIcon = (path, size = 18) =>
+    `<svg viewBox="0 0 24 24" width="${size}" height="${size}" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">${path}</svg>`;
 
-  const isNative = () =>
-    Boolean(window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform());
+  const ICONS = {
+    lock: '<rect x="4.5" y="10.5" width="15" height="10" rx="2.2"/><path d="M8 10.5V7.8a4 4 0 0 1 8 0v2.7"/>',
+    sleep: '<path d="M20 14.3A7.6 7.6 0 0 1 9.7 4a7.8 7.8 0 1 0 10.3 10.3Z"/>',
+    restart: '<path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 5v6h-6"/>',
+    power: '<path d="M12 3.5v7.8"/><path d="M6.8 6.6a8 8 0 1 0 10.4 0"/>',
+    cancel: '<circle cx="12" cy="12" r="8"/><path d="M8.6 8.6l6.8 6.8"/>',
+    wake: '<rect x="3" y="5" width="18" height="12" rx="2"/><path d="M8 20h8"/><path d="M12 17v3"/>',
+    shot: '<rect x="3" y="6" width="18" height="13" rx="2.4"/><circle cx="12" cy="12.5" r="3.4"/>',
+    play: '<path d="M8 5.6 18.5 12 8 18.4Z"/>',
+    next: '<path d="M6 5.8 15 12 6 18.2Z"/><path d="M18 5.5v13"/>',
+    volup: '<path d="M4 10h3l4-3.4v10.8L7 14H4Z"/><path d="M15.5 9a4 4 0 0 1 0 6"/><path d="M18 6.6a7.4 7.4 0 0 1 0 10.8"/>',
+    voldown: '<path d="M4 10h3l4-3.4v10.8L7 14H4Z"/><path d="M15.5 9a4 4 0 0 1 0 6"/>',
+    mute: '<path d="M4 10h3l4-3.4v10.8L7 14H4Z"/><path d="M16 9.5l5 5M21 9.5l-5 5"/>',
+    bolt: '<path d="M13.5 3 6 13.4h4.6L9.8 21l7.6-10.6h-4.7Z"/>',
+    chip: '<rect x="7" y="7" width="10" height="10" rx="2"/><path d="M10 3.6v3M14 3.6v3M10 17.4v3M14 17.4v3M3.6 10h3M3.6 14h3M17.4 10h3M17.4 14h3"/>',
+    info: '<circle cx="12" cy="12" r="8.5"/><path d="M12 11v5.5"/><circle cx="12" cy="8.2" r="0.9" fill="currentColor" stroke="none"/>',
+    brain: '<path d="M9 4.5a3 3 0 0 0-3 3 3 3 0 0 0-1.4 5.6A3 3 0 0 0 7 19h2V4.5Z"/><path d="M15 4.5a3 3 0 0 1 3 3 3 3 0 0 1 1.4 5.6A3 3 0 0 1 17 19h-2V4.5Z"/>',
+  };
 
   const fmtBytes = (bytes) => {
-    if (!bytes && bytes !== 0) return '—';
-    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-    let value = bytes;
+    const value = Number(bytes) || 0;
+    if (value < 1024) return `${value} B`;
+    const units = ['KB', 'MB', 'GB', 'TB'];
+    let size = value / 1024;
     let unit = 0;
-    while (value >= 1024 && unit < units.length - 1) {
-      value /= 1024;
-      unit++;
+    while (size >= 1024 && unit < units.length - 1) {
+      size /= 1024;
+      unit += 1;
     }
-    return `${value >= 10 || unit === 0 ? Math.round(value) : value.toFixed(1)} ${units[unit]}`;
+    return `${size < 10 ? size.toFixed(1) : Math.round(size)} ${units[unit]}`;
   };
 
-  const fmtUptime = (seconds) => {
-    const s = Math.max(0, Math.floor(seconds || 0));
-    const d = Math.floor(s / 86400);
-    const h = Math.floor((s % 86400) / 3600);
-    const m = Math.floor((s % 3600) / 60);
-    if (d) return `${d}d ${h}h`;
-    if (h) return `${h}h ${m}m`;
-    return `${m}m ${s % 60}s`;
+  const fmtDuration = (seconds) => {
+    const total = Math.max(0, Math.round(Number(seconds) || 0));
+    const days = Math.floor(total / 86400);
+    const hours = Math.floor((total % 86400) / 3600);
+    const minutes = Math.floor((total % 3600) / 60);
+    if (days) return `${days}d ${hours}h`;
+    if (hours) return `${hours}h ${minutes}m`;
+    if (minutes) return `${minutes}m`;
+    return `${total}s`;
   };
 
-  const timeOf = (iso) => {
-    const date = new Date(iso);
-    if (Number.isNaN(date.getTime())) return '--:--:--';
-    return date.toLocaleTimeString(undefined, { hour12: false });
+  const fmtClock = (iso) => {
+    const date = iso ? new Date(iso) : new Date();
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   };
 
-  const esc = (text) =>
-    String(text == null ? '' : text).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+  const timeAgo = (iso) => {
+    if (!iso) return '—';
+    const delta = Math.round((Date.now() - new Date(iso).getTime()) / 1000);
+    if (delta < 5) return 'just now';
+    if (delta < 60) return `${delta}s ago`;
+    if (delta < 3600) return `${Math.floor(delta / 60)}m ago`;
+    if (delta < 86400) return `${Math.floor(delta / 3600)}h ago`;
+    return `${Math.floor(delta / 86400)}d ago`;
+  };
 
-  const copyText = async (text) => {
+  const maskKey = (key) => (key ? `${key.slice(0, 6)}…${key.slice(-4)}` : '—');
+
+  async function copyText(text) {
     try {
-      if (navigator.clipboard && window.isSecureContext) {
-        await navigator.clipboard.writeText(text);
-        return true;
-      }
+      await navigator.clipboard.writeText(text);
+      return true;
     } catch {
-      /* fall through to the legacy path */
-    }
-    const area = document.createElement('textarea');
-    area.value = text;
-    area.style.position = 'fixed';
-    area.style.opacity = '0';
-    document.body.appendChild(area);
-    area.select();
-    let ok = false;
-    try {
-      ok = document.execCommand('copy');
-    } catch {
-      ok = false;
-    }
-    area.remove();
-    return ok;
-  };
-
-  const toast = (message, kind = 'info', ms = 3800) => {
-    const node = document.createElement('div');
-    node.className = `toast is-${kind}`;
-    node.innerHTML = `${icon(kind === 'ok' ? 'check' : kind === 'err' ? 'x' : 'activity')}<p>${esc(message)}</p>`;
-    $('#toasts').appendChild(node);
-    setTimeout(() => {
-      node.classList.add('is-leaving');
-      setTimeout(() => node.remove(), 220);
-    }, ms);
-  };
-
-  const banner = (message, kind = 'warn') => {
-    const node = $('#banner');
-    if (!message) {
-      node.classList.add('hidden');
-      return;
-    }
-    node.className = `banner${kind === 'error' ? ' is-error' : ''}`;
-    node.innerHTML = `${icon(kind === 'error' ? 'x' : 'shield')}<span>${esc(message)}</span>`;
-  };
-
-  /* ─────────────────────────── transport ─────────────────────────── */
-
-  const apiUrl = (path) => `${state.base}${path}${path.includes('?') ? '&' : '?'}t=${encodeURIComponent(state.token)}`;
-
-  async function api(path, { method = 'GET', body = null } = {}) {
-    if (state.demo) return demoApi(path, method, body);
-    const started = performance.now();
-    const res = await fetch(apiUrl(path), {
-      method,
-      headers: {
-        'content-type': 'application/json',
-        authorization: `Bearer ${state.token}`,
-      },
-      body: body ? JSON.stringify(body) : undefined,
-      cache: 'no-store',
-    });
-    state.latency = Math.round(performance.now() - started);
-    if (res.status === 401) {
-      throw Object.assign(new Error('Rejected: the access token is not valid'), { code: 'UNAUTHORISED' });
-    }
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok && !data.message) throw new Error(`Agent returned HTTP ${res.status}`);
-    return data;
-  }
-
-  async function run(cmd, args = {}, { quiet = false } = {}) {
-    try {
-      const result = await api('/api/command', { method: 'POST', body: { cmd, args } });
-      if (!result.ok && result.code === 'CONFIRM_REQUIRED' && args.confirm !== true) {
-        // The agent refused a destructive command: ask for the hold-to-confirm
-        // gesture here instead of leaving the button silently dead.
-        const [title, text] = HOLD_COPY[cmd] || [`Run ${cmd}?`, 'This changes the state of your PC.'];
-        const confirmed = await confirmHold({ title, text });
-        if (!confirmed) return result;
-        return run(cmd, { ...args, confirm: true }, { quiet });
-      }
-      if (!result.ok) {
-        toast(result.message || `${cmd} failed`, 'err', 5200);
-        return result;
-      }
-      if (!quiet) toast(describeSuccess(cmd, result.data), 'ok', 2400);
-      if (cmd === 'system.screenshot' && result.data && result.data.data) showShot(result.data);
-      refreshStatus();
-      return result;
-    } catch (err) {
-      if (err.code === 'UNAUTHORISED') handleAuthFailure(err);
-      else toast(err.message || 'Network error', 'err', 5200);
-      return { ok: false, message: err.message };
+      const area = el('textarea', { style: 'position:fixed;opacity:0' });
+      area.value = text;
+      document.body.append(area);
+      area.select();
+      const ok = document.execCommand && document.execCommand('copy');
+      area.remove();
+      return Boolean(ok);
     }
   }
 
-  function describeSuccess(cmd, data) {
-    const map = {
-      'system.shutdown': `Shutdown scheduled${data && data.scheduledInSec ? ` in ${data.scheduledInSec}s` : ''}`,
-      'system.reboot': `Restart scheduled${data && data.scheduledInSec ? ` in ${data.scheduledInSec}s` : ''}`,
-      'system.cancel_shutdown': 'Shutdown cancelled',
-      'system.lock': 'Workstation locked',
-      'system.sleep': 'Going to sleep',
-      'system.logout': 'Logging out',
-      'screen.wake': 'Display woken',
-      'screen.screenshot': 'Screenshot captured',
-      'media.play_pause': 'Play / pause sent',
-      'media.next': 'Next track',
-      'media.previous': 'Previous track',
-      'volume.up': 'Volume up',
-      'volume.down': 'Volume down',
-      'volume.mute': 'Mute toggled',
-      'input.type': 'Text typed',
-      'input.key': 'Key sent',
-      'esp.power': `Relay: ${data && data.action ? data.action : 'pulse'} complete`,
-      'esp.reset': 'Reset pulse sent',
-      'macro.run': 'Macro finished',
-      'app.launch': 'Application started',
-      'script.run': 'Script finished',
-    };
-    return map[cmd] || `${cmd} · ok`;
-  }
+  /* ── diagnostics ───────────────────────────────────────────────────────── */
 
-  function showShot(payload) {
-    const url = `data:${payload.mime || 'image/png'};base64,${payload.data}`;
-    $('#shot-img').src = url;
-    $('#shot-download').href = url;
-    $('#shot-modal').classList.remove('hidden');
-    const preview = $('#shot-preview');
-    preview.innerHTML = `<img src="${url}" alt="Latest screenshot" />`;
-  }
-
-  /* ─────────────────────────── demo mode ─────────────────────────── */
-
-  function demoStatus() {
-    const now = new Date();
-    return {
-      name: 'STUDIO-PC',
-      hostname: 'studio-pc',
-      platform: 'win32',
-      platformLabel: 'Windows',
-      release: '10.0.26100',
-      arch: 'x64',
-      cpuModel: 'AMD Ryzen 7 7800X3D',
-      cpuCount: 16,
-      cpuPercent: 37,
-      memory: { total: 34359738368, used: 18575733555, free: 15784004813, percent: 54 },
-      uptime: 239472,
-      uptimeLabel: '2d 18h',
-      user: 'pawel',
-      agentVersion: '2.0.0',
-      node: 'v22',
-      capabilities: { shutdown: true, reboot: true, sleep: true, lock: true, logout: true, media: true, volume: true, screenshot: true, wake: true, input: true, apps: true },
-      policy: {
-        allowShutdown: true, allowReboot: true, allowSleep: true, allowLock: true, allowLogout: true,
-        allowMedia: true, allowVolume: true, allowScreenshot: true, allowWake: true, allowAppLaunch: true,
-        allowAppKill: false, allowInput: true, allowScripts: false, allowFileList: false,
-        allowEspPower: true, requireConfirm: true, rateLimitPerMinute: 40,
-        quietHours: { enabled: false, from: '23:00', to: '07:00' },
-      },
-      esp: {
-        connected: true, deviceId: 'esp32-sentinel', transport: 'tcp', ip: '10.8.0.7',
-        rssi: -54, tempC: 42.5, fw: '2.0.0', pcState: 'on', deviceUptime: 86400, wg: true, gpio: { relay: false },
-      },
-      agent: { version: '2.0.0', counters: { commands: 128, errors: 1 }, lastCommand: { cmd: 'system.lock', at: now.toISOString(), ms: 42 } },
-      apps: ['Spotify', 'Steam', 'OBS'],
-      appList: [
-        { name: 'Spotify', path: 'C:\\Users\\pawel\\AppData\\Roaming\\Spotify\\Spotify.exe' },
-        { name: 'Steam', path: 'C:\\Program Files (x86)\\Steam\\steam.exe' },
-        { name: 'OBS', path: 'C:\\Program Files\\obs-studio\\bin\\64bit\\obs64.exe' },
-      ],
-      catalogue: demoCatalogue(),
-      macros: ['Morning setup', 'Cinema mode'],
-      serverTime: now.toISOString(),
-      capabilitiesLabel: 'demo',
-    };
-  }
-
-  function demoCatalogue() {
-    return [
-      { group: 'Power', cmd: 'system.shutdown', label: 'Shut down' },
-      { group: 'Power', cmd: 'system.reboot', label: 'Restart' },
-      { group: 'Power', cmd: 'system.sleep', label: 'Sleep' },
-      { group: 'Power', cmd: 'esp.power', label: 'Hard power (relay)' },
-      { group: 'Session', cmd: 'system.lock', label: 'Lock screen' },
-      { group: 'Session', cmd: 'system.logout', label: 'Log out' },
-      { group: 'Session', cmd: 'screen.screenshot', label: 'Screenshot' },
-      { group: 'Session', cmd: 'screen.wake', label: 'Wake display' },
-      { group: 'Media', cmd: 'media.play_pause', label: 'Play / pause' },
-      { group: 'Media', cmd: 'media.next', label: 'Next track' },
-      { group: 'Media', cmd: 'media.previous', label: 'Previous track' },
-      { group: 'Media', cmd: 'volume.up', label: 'Volume up' },
-      { group: 'Media', cmd: 'volume.down', label: 'Volume down' },
-      { group: 'Media', cmd: 'volume.mute', label: 'Mute' },
-      { group: 'Input', cmd: 'input.type', label: 'Type text' },
-      { group: 'Apps', cmd: 'app.launch', label: 'Launch app' },
-    ];
-  }
-
-  const demoMacros = {
-    'Morning setup': { description: 'Wake, unlock, open mail', steps: [{ cmd: 'screen.wake' }, { cmd: 'app.launch', args: { name: 'Spotify' } }] },
-    'Cinema mode': { description: 'Dim, mute notifications', steps: [{ cmd: 'volume.down' }, { cmd: 'system.lock' }] },
-  };
-
-  async function demoApi(path, method, body) {
-    await sleep(120 + Math.random() * 180);
-    state.latency = Math.round(90 + Math.random() * 60);
-    if (path.startsWith('/api/status')) return { ok: true, data: demoStatus() };
-    if (path.startsWith('/api/macros') && method === 'GET') return { ok: true, data: demoMacros };
-    if (path.startsWith('/api/pairing')) {
-      return {
-        ok: true,
-        data: {
-          agent_host: '10.8.0.5',
-          agent_port: 7879,
-          psk: 'demo0000demo0000demo0000demo0000demo0000demo0000demo0000demo0000',
-          power_pin: 25,
-          reset_pin: 26,
-          device_id: 'esp32-sentinel',
-          ui_url: 'http://10.8.0.5:7878',
-          token: 'demo-token-not-a-real-secret',
-        },
+  const Diag = {
+    entries: [],
+    add(level, message, extra) {
+      const entry = {
+        at: new Date().toISOString().slice(11, 23),
+        level: level || 'info',
+        message: String(message || ''),
+        extra: extra === undefined ? null : extra,
       };
+      this.entries.push(entry);
+      if (this.entries.length > 200) this.entries.shift();
+      const panel = document.getElementById('diag-log');
+      if (panel && panel.offsetParent !== null) renderDiag();
+    },
+    clear() {
+      this.entries = [];
+      renderDiag();
+    },
+  };
+
+  function renderDiag() {
+    const panel = $('#diag-log');
+    if (panel) {
+      panel.textContent = Diag.entries.length
+        ? Diag.entries.map((entry) => `${entry.at} ${entry.level.toUpperCase().padEnd(5)} ${entry.message}`).join('\n')
+        : '(nothing yet — the app logs every attempt here)';
     }
-    if (path.startsWith('/api/log')) return { ok: true, data: demoLog() };
-    if (path.startsWith('/api/command')) {
-      const cmd = body && body.cmd;
-      const data = cmd === 'system.shutdown' || cmd === 'system.reboot' ? { scheduledInSec: 30 } : {};
-      return { ok: true, cmd, data, ms: 40 };
+    const meta = $('#diag-meta');
+    if (meta) {
+      meta.innerHTML = '';
+      const rows = [
+        ['Page origin', location.origin],
+        ['Secure context', String(window.isSecureContext)],
+        ['Web Crypto', String(Boolean(window.crypto && crypto.subtle))],
+        ['Connection', S.pairing ? `${S.pairing.kind} · ${S.pairing.base}` : 'not paired'],
+        ['Round trip', S.link && S.link.rtt != null ? `${S.link.rtt} ms` : '—'],
+        ['Online', String(S.online)],
+        ['User agent', navigator.userAgent],
+      ];
+      for (const [key, value] of rows) {
+        meta.append(el('dt', { text: key }));
+        meta.append(el('dd', { text: value }));
+      }
     }
-    if (path.startsWith('/api/keys')) return { ok: true, data: { psk: 'rotated-demo-key', uiToken: 'rotated-token' } };
-    return { ok: true, data: {} };
+    const settingsPanel = $('#settings-diag');
+    if (settingsPanel && !settingsPanel.hidden) settingsPanel.textContent = diagText();
   }
 
-  function demoLog() {
-    const now = Date.now();
-    return [
-      { at: new Date(now - 120000).toISOString(), level: 'info', source: 'agent', message: 'SENTINEL 2.0.0 ready' },
-      { at: new Date(now - 100000).toISOString(), level: 'info', source: 'link', message: 'ESP32 "esp32-sentinel" linked over tcp' },
-      { at: new Date(now - 74000).toISOString(), level: 'info', source: 'command', message: 'system.lock → ok (38ms)' },
-      { at: new Date(now - 41000).toISOString(), level: 'warn', source: 'esp', message: 'Relay cycle (hold 600ms)' },
-      { at: new Date(now - 9000).toISOString(), level: 'info', source: 'command', message: 'media.play_pause → ok (61ms)' },
-    ];
-  }
+  /* ── storage ───────────────────────────────────────────────────────────── */
 
-  /* ─────────────────────────── rendering ─────────────────────────── */
+  const store = {
+    get(key, soft) {
+      try {
+        const raw = localStorage.getItem(key);
+        return raw ? JSON.parse(raw) : soft;
+      } catch {
+        return soft;
+      }
+    },
+    set(key, value) {
+      try {
+        localStorage.setItem(key, JSON.stringify(value));
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    drop(key) {
+      try {
+        localStorage.removeItem(key);
+      } catch {
+        /* private mode — nothing to do */
+      }
+    },
+  };
 
-  function setView(view) {
-    state.view = view;
-    $$('.view').forEach((section) => section.classList.toggle('is-active', section.dataset.view === view));
-    $$('.nav-item').forEach((item) => item.classList.toggle('is-active', item.dataset.view === view));
-    const titles = {
-      dashboard: ['Overview', 'Your machine at a glance'],
-      control: ['Control', 'Media, keyboard and capabilities'],
-      automation: ['Automation', 'Macros and the command catalogue'],
-      devices: ['Devices', 'The ESP32 bridge and pairing'],
-      activity: ['Activity', 'Everything that has happened, live'],
-      settings: ['Settings', 'Safety, apps and connection'],
+  /* ── state ─────────────────────────────────────────────────────────────── */
+
+  const S = {
+    pairing: null,
+    link: null,
+    snap: null,
+    espRaw: null,
+    hardwareOnly: false,
+    online: false,
+    reconnecting: false,
+    demo: false,
+    demoRelay: false,
+    tab: 'home',
+    filter: 'all',
+    events: store.get(STORE.activity, []),
+    lastError: null,
+    busyCommands: new Set(),
+    pollTimer: null,
+    eventTimer: null,
+    failures: 0,
+    token: null,
+    deferredInstall: null,
+  };
+
+  /* ── toasts ────────────────────────────────────────────────────────────── */
+
+  function toast(title, { sub = '', tone = 'ok', ttl = 4200 } = {}) {
+    const host = $('#toasts');
+    if (!host) return;
+    const node = el('div', { class: `toast ${tone === 'ok' ? '' : tone}`.trim(), role: 'status' }, [
+      el('span', { class: 't-dot' }),
+      el('div', { class: 't-body' }, [
+        el('span', { class: 't-title', text: title }),
+        sub ? el('span', { class: 't-sub', text: sub }) : null,
+      ]),
+    ]);
+    host.append(node);
+    const remove = () => {
+      node.classList.add('out');
+      setTimeout(() => node.remove(), 260);
     };
-    const [title, sub] = titles[view] || ['SENTINEL', ''];
-    $('#view-title').textContent = title;
-    $('#view-sub').textContent = sub;
-    if (view === 'activity') renderLog();
-    if (view === 'devices') loadPairing();
-    if (view === 'automation') loadMacros();
-    if (window.innerWidth < 900) window.scrollTo({ top: 0, behavior: 'smooth' });
+    setTimeout(remove, ttl);
+    node.addEventListener('click', remove);
   }
 
-  function render(status) {
-    state.status = status;
-    state.connected = true;
-    state.catalogue = status.catalogue || state.catalogue;
+  /* ── sheet ─────────────────────────────────────────────────────────────── */
 
-    const name = status.name || status.hostname || 'This PC';
-    const memory = status.memory || { used: 0, total: 0, percent: 0 };
-    const cpu = Math.max(0, Math.min(100, Math.round(status.cpuPercent || 0)));
-
-    $('#hero-name').textContent = name;
-    $('#hero-platform').textContent = status.platformLabel || status.platform || 'PC';
-    $('#hero-arch').textContent = status.arch || '';
-    $('#hero-sub').textContent = `${status.cpuModel || 'CPU'} · ${status.cpuCount || '?'} threads · ${status.user || ''}`;
-    $('#hero-ip').textContent = state.base.replace(/^https?:\/\//, '') || location.host;
-    $('#avatar').textContent = (name || 'PC').slice(0, 2).toUpperCase();
-
-    const statePill = $('#hero-state');
-    statePill.classList.toggle('is-down', !state.connected && !state.demo);
-    statePill.querySelector('span:last-child').textContent = state.demo ? 'Demo' : 'Online';
-    $('#set-system').innerHTML = `
-      <div><span>Host</span><strong>${esc(status.hostname || '—')}</strong></div>
-      <div><span>OS</span><strong>${esc(status.platformLabel || status.platform)} ${esc(status.release || '')}</strong></div>
-      <div><span>User</span><strong>${esc(status.user || '—')}</strong></div>
-      <div><span>Agent</span><strong>v${esc(status.agentVersion || '—')}</strong></div>
-      <div><span>ESP32</span><strong>${esc(status.esp && status.esp.deviceId ? status.esp.deviceId : 'not linked')}</strong></div>`;
-
-    // CPU gauge
-    const gauge = $('#gauge');
-    const circumference = 2 * Math.PI * 52;
-    const arc = circumference * 0.75;
-    const value = $('.gauge-value');
-    value.style.strokeDasharray = `${arc} ${circumference}`;
-    value.style.strokeDashoffset = String(arc - (arc * cpu) / 100);
-    $('#gauge-cpu').textContent = String(cpu);
-    gauge.classList.toggle('is-hot', cpu >= 70 && cpu < 90);
-    gauge.classList.toggle('is-critical', cpu >= 90);
-
-    // memory
-    $('#mem-used').textContent = fmtBytes(memory.used);
-    $('#mem-total').textContent = `/ ${fmtBytes(memory.total)}`;
-    $('#mem-meter').style.width = `${memory.percent || 0}%`;
-    $('#mem-percent').textContent = `${memory.percent || 0}% in use`;
-    $('#mem-meter').parentElement.classList.toggle('is-hot', (memory.percent || 0) > 85);
-
-    $('#up-value').textContent = fmtUptime(status.uptime);
-    $('#up-foot').textContent = `host ${status.hostname || ''}`;
-
-    const counters = (status.agent && status.agent.counters) || {};
-    $('#cmd-count').textContent = String(counters.commands || 0);
-    const last = status.agent && status.agent.lastCommand;
-    $('#cmd-last').textContent = last ? `${last.cmd} · ${timeOf(last.at)}` : 'no commands yet';
-
-    renderEsp(status.esp);
-    renderPolicy(status.policy);
-    renderCapsGrid(status.policy, status.capabilities);
-    renderSafety(status.policy);
-    renderApps(status.appList || []);
-    renderCatalogue(status.catalogue || []);
-    renderChips(status.apps || []);
-    renderConnection(status);
-
-    if (document.activeElement !== $('#set-name')) $('#set-name').value = status.name || '';
-    $('#latency').textContent = state.latency == null ? '—' : `${state.latency} ms`;
-    $('#latency-pill').className = `pill${state.latency != null && state.latency < 250 ? ' is-good' : state.latency != null ? ' is-bad' : ''}`;
-
-    document.title = `SENTINEL · ${name}`;
-  }
-
-  function renderEsp(esp) {
-    const connected = Boolean(esp && esp.connected);
-    const badge = $('#esp-badge');
-    if (badge) {
-      badge.textContent = connected ? 'linked' : 'offline';
-      badge.className = `badge ${connected ? 'is-on' : 'is-off'}`;
-    }
-    const badge2 = $('#esp-badge-2');
-    if (badge2) {
-      badge2.textContent = connected ? `linked · ${esp.transport || 'tcp'}` : 'offline';
-      badge2.className = `badge ${connected ? 'is-on' : 'is-off'}`;
-    }
-
-    const chip = $('#link-chip');
-    chip.className = `link-chip ${connected ? 'is-on' : 'is-off'}`;
-    $('#link-label').textContent = connected ? 'ESP32 linked' : 'ESP32 offline';
-    $('#link-detail').textContent = connected
-      ? `${esp.transport === 'usb' ? 'USB serial' : esp.ip || 'tcp'}${esp.rssi ? ` · ${esp.rssi} dBm` : ''}`
-      : 'no bridge connected';
-
-    const pairs = [
-      ['Transport', connected ? (esp.transport === 'usb' ? 'USB serial' : 'TCP / VPN') : '—'],
-      ['Wi-Fi', esp && esp.rssi ? `${esp.rssi} dBm` : '—'],
-      ['Chip temp', esp && esp.tempC != null ? `${esp.tempC.toFixed(1)} °C` : '—'],
-      ['PC sense', esp && esp.pcState && esp.pcState !== 'unknown' ? esp.pcState.toUpperCase() : '—'],
-      ['Firmware', (esp && esp.fw) || '—'],
-      ['Tunnel', esp && esp.wg ? 'WireGuard up' : connected ? 'direct' : '—'],
-    ];
-    const html = pairs.map(([k, v]) => `<div><span>${k}</span><strong>${esc(v)}</strong></div>`).join('');
-    $('#esp-kv').innerHTML = html;
-    const kv2 = $('#esp-kv-2');
-    if (kv2) kv2.innerHTML = html;
-  }
-
-  const POLICY_FLAGS = [
-    ['allowShutdown', 'Shut down', 'Power the PC off cleanly'],
-    ['allowReboot', 'Restart', 'Reboot the PC'],
-    ['allowSleep', 'Sleep', 'Suspend the machine'],
-    ['allowLock', 'Lock screen', 'Lock the workstation'],
-    ['allowLogout', 'Log out', 'End the user session'],
-    ['allowScreenshot', 'Screenshot', 'Capture the screen'],
-    ['allowWake', 'Wake display', 'Wake the monitor'],
-    ['allowMedia', 'Media keys', 'Play, pause, skip'],
-    ['allowVolume', 'Volume', 'Change system volume'],
-    ['allowEspPower', 'Hard power relay', 'Cut/return mains through the ESP32'],
-    ['allowAppLaunch', 'Launch apps', 'Only allow-listed apps'],
-    ['allowInput', 'Keyboard input', 'Type and press keys on the PC'],
-    ['allowAppKill', 'Kill processes', 'Force-quit allow-listed apps'],
-    ['allowScripts', 'Run scripts', 'Execute configured scripts'],
-  ];
-
-  function renderCapsGrid(policy, capabilities) {
-    const grid = $('#caps-grid');
-    if (!grid || !policy) return;
-    grid.innerHTML = POLICY_FLAGS.map(([flag, label, desc]) => {
-      const on = policy[flag] !== false;
-      const unsupported =
-        capabilities &&
-        ((flag === 'allowInput' && capabilities.input === false) ||
-          (flag === 'allowScreenshot' && capabilities.screenshot === false) ||
-          (flag === 'allowMedia' && capabilities.media === false) ||
-          (flag === 'allowVolume' && capabilities.volume === false));
-      return `<div class="cap ${on ? '' : 'is-off'}">
-        <div class="cap-body">
-          <strong>${label}</strong>
-          <span>${unsupported ? 'not available on this OS' : desc}</span>
-        </div>
-        <button class="switch ${on ? 'is-on' : ''}" role="switch" aria-checked="${on}" data-policy="${flag}" title="Toggle ${label}"></button>
-      </div>`;
-    }).join('');
-
-    const inputOn = policy.allowInput !== false && (!capabilities || capabilities.input !== false);
-    const badge = $('#input-badge');
-    badge.textContent = inputOn ? 'enabled' : 'locked';
-    badge.className = `badge ${inputOn ? 'is-on' : 'badge-warn'}`;
-    $('#type-form').querySelector('button[type="submit"]').disabled = !inputOn;
-  }
-
-  function renderPolicy(policy) {
-    if (!policy) return;
-    $$('[data-policy]').forEach((btn) => {
-      const on = policy[btn.dataset.policy] !== false;
-      btn.classList.toggle('is-on', on);
-      btn.setAttribute('aria-checked', String(on));
-    });
-  }
-
-  function renderSafety(policy) {
-    if (!policy) return;
-    // Re-rendering while the owner is editing a field would steal their input.
-    const list = $('#safety-list');
-    if (list.contains(document.activeElement)) return;
-    const quiet = policy.quietHours || { enabled: false, from: '23:00', to: '07:00' };
-    $('#safety-list').innerHTML = `
-      <div class="switch-row">
-        <div><strong>Ask before destructive actions</strong><span>Shutdown, restart, killing apps and relays need a hold-to-confirm.</span></div>
-        <button class="switch ${policy.requireConfirm !== false ? 'is-on' : ''}" role="switch" aria-checked="${policy.requireConfirm !== false}" data-policy="requireConfirm"></button>
-      </div>
-      <div class="switch-row">
-        <div><strong>Quiet hours</strong><span>Block power actions overnight unless you cancel the shutdown.</span></div>
-        <button class="switch ${quiet.enabled ? 'is-on' : ''}" role="switch" aria-checked="${quiet.enabled}" data-quiet="1"></button>
-      </div>
-      <div class="switch-row">
-        <div><strong>Window</strong><span>From / to, local time on the PC.</span></div>
-        <div class="row-buttons">
-          <input class="select" id="quiet-from" type="time" value="${esc(quiet.from)}" style="width:112px" />
-          <input class="select" id="quiet-to" type="time" value="${esc(quiet.to)}" style="width:112px" />
-        </div>
-      </div>
-      <div class="switch-row">
-        <div><strong>Rate limit</strong><span>Commands per minute from any one client.</span></div>
-        <input class="select" id="rate-limit" type="number" min="5" max="240" value="${Number(policy.rateLimitPerMinute) || 40}" style="width:92px" />
-      </div>`;
-    $('#quiet-from').addEventListener('change', saveQuietHours);
-    $('#quiet-to').addEventListener('change', saveQuietHours);
-    $('#rate-limit').addEventListener('change', (e) => {
-      patchPolicy({ rateLimitPerMinute: Math.max(5, Math.min(240, Number(e.target.value) || 40)) });
-    });
-    $$('[data-quiet]').forEach((btn) =>
-      btn.addEventListener('click', () => {
-        if (!state.status) return;
-        const current = (state.status.policy.quietHours || {}).enabled;
-        patchPolicy({ quietHours: { ...(state.status.policy.quietHours || {}), enabled: !current } });
-      }),
-    );
-  }
-
-  function saveQuietHours() {
-    patchPolicy({
-      quietHours: {
-        ...((state.status && state.status.policy.quietHours) || {}),
-        enabled: true,
-        from: $('#quiet-from').value || '23:00',
-        to: $('#quiet-to').value || '07:00',
-      },
-    });
-  }
-
-  function renderApps(appList) {
-    const list = $('#app-list');
-    if (!list) return;
-    if (!appList.length) {
-      list.innerHTML = '<li><span class="grow">No apps allow-listed yet</span></li>';
-      return;
-    }
-    list.innerHTML = appList
-      .map(
-        (app) => `<li><strong>${esc(app.label || app.name)}</strong><span class="grow">${esc(app.path || '')}</span>
-        <button class="mini-x" data-app-remove="${esc(app.name)}" title="Remove">${icon('x')}</button></li>`,
-      )
-      .join('');
-    $$('[data-app-remove]').forEach((btn) =>
-      btn.addEventListener('click', async () => {
-        const name = btn.dataset.appRemove;
-        if (state.demo) return toast(`Removed ${name} (demo)`, 'ok');
-        const result = await api(`/api/apps/${encodeURIComponent(name)}`, { method: 'DELETE' });
-        if (result.ok) {
-          toast(`Removed ${name}`, 'ok');
-          refreshStatus();
-        }
-      }),
-    );
-  }
-
-  function renderChips(apps) {
-    const chips = $('#apps-chips');
-    if (!chips) return;
-    if (!apps.length) {
-      chips.innerHTML = '<span class="muted small">No apps allow-listed yet — add one in Settings.</span>';
-      return;
-    }
-    chips.innerHTML = apps.map((name) => `<button class="chip" data-run-app="${esc(name)}">${esc(name)}</button>`).join('');
-    $$('[data-run-app]').forEach((chip) =>
-      chip.addEventListener('click', () => run('app.launch', { name: chip.dataset.runApp })),
-    );
-  }
-
-  function renderCatalogue(catalogue) {
-    if (!catalogue || !catalogue.length) return;
-    state.catalogue = catalogue;
-    const wrap = $('#catalogue');
-    if (wrap) {
-      const groups = {};
-      for (const item of catalogue) (groups[item.group] = groups[item.group] || []).push(item);
-      wrap.innerHTML = Object.entries(groups)
-        .map(([group, items]) => {
-          const rows = items
-            .map(
-              (item) =>
-                `<button data-catalogue="${esc(item.cmd)}"><span>${esc(item.label || item.cmd)}</span><code>${esc(item.cmd)}</code></button>`,
-            )
-            .join('');
-          return `<div class="catalogue-group"><span class="muted small">${esc(group)}</span>${rows}</div>`;
-        })
-        .join('');
-      $$('[data-catalogue]').forEach((button) =>
-        button.addEventListener('click', () =>
-          triggerCommand(button.dataset.catalogue, {}, { hold: /shutdown|reboot|logout|esp\.|kill/.test(button.dataset.catalogue) }),
+  function openSheet({ title, body, actions = [] }) {
+    const sheet = $('#sheet');
+    $('#sheet-title').textContent = title;
+    const bodyHost = $('#sheet-body');
+    bodyHost.innerHTML = '';
+    for (const node of [].concat(body)) bodyHost.append(node instanceof Node ? node : el('p', { text: String(node) }));
+    const foot = $('#sheet-foot');
+    foot.innerHTML = '';
+    for (const action of actions) {
+      foot.append(
+        el(
+          'button',
+          {
+            class: `action-btn ${action.tone || ''}`.trim(),
+            type: 'button',
+            onclick: () => {
+              closeSheet();
+              if (action.run) action.run();
+            },
+          },
+          action.label,
         ),
       );
     }
-    const count = $('#catalogue-count');
-    if (count) count.textContent = `${catalogue.length} commands`;
+    $('#sheet-backdrop').hidden = false;
+    sheet.hidden = false;
+    const first = foot.querySelector('button');
+    if (first) first.focus();
   }
 
-  function renderConnection(status) {
-    const box = $('#set-connection');
-    if (!box) return;
-    box.innerHTML = `
-      <div><span>Server</span><strong>${esc(state.base.replace(/^https?:\/\//, '') || location.host)}</strong></div>
-      <div><span>Token</span><strong>${state.token ? `${state.token.slice(0, 6)}…` : 'none'}</strong></div>
-      <div><span>Round trip</span><strong>${state.latency == null ? '—' : `${state.latency} ms`}</strong></div>
-      <div><span>Mode</span><strong>${state.demo ? 'demo' : isNative() ? 'mobile' : 'desktop'}</strong></div>
-      <div><span>ESP32 fallback</span><strong>${espConfig().base ? esc(espConfig().base.replace(/^https?:\/\//, '')) : 'not set'}</strong></div>
-      <div><span>Agent uptime</span><strong>${status.agent && status.agent.startedAt ? fmtUptime((Date.now() - new Date(status.agent.startedAt).getTime()) / 1000) : '—'}</strong></div>`;
+  function closeSheet() {
+    $('#sheet').hidden = true;
+    $('#sheet-backdrop').hidden = true;
   }
 
-  /* ─────────────────────────── activity ─────────────────────────── */
-
-  function pushLog(entry) {
-    state.log.push(entry);
-    if (state.log.length > 500) state.log.splice(0, state.log.length - 500);
-    appendLogLine(entry);
-    renderFeed();
-  }
-
-  function appendLogLine(entry) {
-    const term = $('#terminal');
-    if (!term) return;
-    if (state.level !== 'all' && entry.level !== state.level) return;
-    const empty = term.querySelector('.terminal-empty');
-    if (empty) empty.remove();
-    const line = document.createElement('div');
-    line.className = `line is-${entry.level}`;
-    line.dataset.level = entry.level;
-    line.innerHTML = `<time>${timeOf(entry.at)}</time><span class="src">${esc(entry.source)}</span><span class="txt">${esc(entry.message)}</span>`;
-    term.appendChild(line);
-    while (term.children.length > 400) term.removeChild(term.firstChild);
-    if (state.view === 'activity' || term.scrollHeight - term.scrollTop - term.clientHeight < 120) {
-      term.scrollTop = term.scrollHeight;
-    }
-  }
-
-  function renderLog() {
-    const term = $('#terminal');
-    if (!term) return;
-    term.innerHTML = '';
-    const items = state.log.filter((entry) => state.level === 'all' || entry.level === state.level);
-    if (!items.length) {
-      term.innerHTML = '<div class="terminal-empty">Nothing here yet.</div>';
-      return;
-    }
-    for (const entry of items) appendLogLine(entry);
-    term.scrollTop = term.scrollHeight;
-  }
-
-  function renderFeed() {
-    const feed = $('#feed-mini');
-    if (!feed) return;
-    const items = state.log.slice(-8).reverse();
-    if (!items.length) {
-      feed.innerHTML = '<li><span class="msg">No activity yet.</span></li>';
-      return;
-    }
-    feed.innerHTML = items
-      .map(
-        (entry) =>
-          `<li class="${entry.level === 'warn' ? 'is-warn' : entry.level === 'error' ? 'is-error' : ''}">
-            <span class="lvl"></span><time>${timeOf(entry.at)}</time><span class="msg">${esc(entry.message)}</span></li>`,
-      )
-      .join('');
-  }
-
-  /* ─────────────────────────── macros ─────────────────────────── */
-
-  async function loadMacros() {
-    try {
-      const result = await api('/api/macros');
-      if (!result.ok) return;
-      state.macros = result.data || {};
-      const list = $('#macro-list');
-      if (!list) return;
-      const names = Object.keys(state.macros);
-      if (!names.length) {
-        list.innerHTML = '<li class="macro-empty">No macros yet. Chain commands into one tap — e.g. “Wake, unlock, open Spotify”.</li>';
-        return;
-      }
-      list.innerHTML = names
-        .map(
-          (name) => `<li class="macro">
-            <div class="macro-info"><strong>${esc(name)}</strong><span>${esc(state.macros[name].description || `${(state.macros[name].steps || []).length} steps`)}</span></div>
-            <button class="btn btn-sm btn-primary" data-macro-run="${esc(name)}">Run</button>
-            <button class="mini-x" data-macro-del="${esc(name)}" title="Delete">${icon('trash')}</button>
-          </li>`,
-        )
-        .join('');
-      $$('[data-macro-run]').forEach((btn) =>
-        btn.addEventListener('click', () => {
-          btn.classList.add('is-busy');
-          run('macro.run', { name: btn.dataset.macroRun }).finally(() => btn.classList.remove('is-busy'));
-        }),
-      );
-      $$('[data-macro-del]').forEach((btn) =>
-        btn.addEventListener('click', async () => {
-          const name = btn.dataset.macroDel;
-          if (state.demo) {
-            toast('Demo mode: macros are read-only', 'info');
-            return;
-          }
-          await api(`/api/macros/${encodeURIComponent(name)}`, { method: 'DELETE' });
-          toast(`Deleted ${name}`, 'ok');
-          loadMacros();
-        }),
-      );
-    } catch {
-      /* offline — keep what we have */
-    }
-  }
-
-  function openMacroBuilder() {
-    state.pendingMacroSteps = [];
-    $('#macro-name').value = '';
-    $('#macro-desc').value = '';
-    const select = $('#macro-cmd');
-    select.innerHTML = (state.catalogue || [])
-      .map((item) => `<option value="${esc(item.cmd)}">${esc(item.group)} · ${esc(item.label || item.cmd)}</option>`)
-      .join('');
-    renderMacroSteps();
-    $('#macro-modal').classList.remove('hidden');
-  }
-
-  function renderMacroSteps() {
-    const box = $('#macro-steps');
-    if (!state.pendingMacroSteps.length) {
-      box.innerHTML = '<div class="macro-empty small">Add the commands to run, in order.</div>';
-      return;
-    }
-    box.innerHTML = state.pendingMacroSteps
-      .map(
-        (step, index) =>
-          `<div class="macro-step"><span class="mono">${index + 1}. ${esc(step.cmd)}</span>
-            <span class="grow"></span>
-            <button class="mini-x" data-step-remove="${index}">${icon('x')}</button></div>`,
-      )
-      .join('');
-    $$('[data-step-remove]').forEach((btn) =>
-      btn.addEventListener('click', () => {
-        state.pendingMacroSteps.splice(Number(btn.dataset.stepRemove), 1);
-        renderMacroSteps();
-      }),
-    );
-  }
-
-  /* ─────────────────────────── pairing ─────────────────────────── */
-
-  async function loadPairing() {
-    const pre = $('#pair-code');
-    if (!pre) return;
-    try {
-      const result = await api('/api/pairing');
-      if (!result.ok) {
-        pre.textContent = 'Unavailable';
-        return;
-      }
-      const data = result.data;
-      pre.dataset.raw = [
-        '# ── ESP32 setup portal ─────────────────────',
-        `wifi_ssid    = <your 2.4 GHz SSID>`,
-        `agent_host   = ${data.agent_host}`,
-        `agent_port   = ${data.agent_port}`,
-        `psk          = ${data.psk}`,
-        `power_pin    = ${data.power_pin}`,
-        `reset_pin    = ${data.reset_pin}`,
-        `device_id    = ${data.device_id}`,
-        '',
-        '# ── phone app ──────────────────────────────',
-        `agent_url    = ${data.ui_url || ''}`,
-        `access_token = ${data.token || ''}`,
-        `esp32_url    = http://<esp32-ip>`,
-        `power_token  = ${data.esp_power_token || ''}`,
-      ].join('\n');
-      pre.textContent = pre.dataset.raw;
-      $('#pair-port').textContent = data.agent_port;
-    } catch {
-      pre.textContent = 'Could not load pairing info';
-    }
-  }
-
-  /* ─────────────────────────── actions ─────────────────────────── */
-
-  async function patchPolicy(patch) {
-    if (state.demo) {
-      state.status.policy = { ...state.status.policy, ...patch };
-      render(state.status);
-      toast('Policy updated (demo)', 'ok', 1800);
-      return;
-    }
-    const result = await api('/api/policy', { method: 'POST', body: { patch } });
-    if (result.ok) {
-      state.status.policy = result.data;
-      render(state.status);
-      toast('Saved', 'ok', 1600);
-    } else {
-      toast(result.message || 'Could not save policy', 'err');
-    }
-  }
-
-  /** Hold-to-confirm: 1.1 s of continuous press, cancellable any time. */
-  function confirmHold({ title, text }) {
-    return new Promise((resolve) => {
-      const modal = $('#confirm-modal');
-      const button = $('#confirm-hold');
-      const fill = button.querySelector('i');
-      $('#confirm-title').textContent = title;
-      $('#confirm-text').textContent = text;
-      fill.style.width = '0%';
-      modal.classList.remove('hidden');
-      let raf = null;
-      let startedAt = 0;
-      let done = false;
-
-      const cleanup = () => {
-        cancelAnimationFrame(raf);
-        button.removeEventListener('pointerdown', down);
-        window.removeEventListener('pointerup', up);
-        window.removeEventListener('pointercancel', up);
-        modal.classList.add('hidden');
-      };
-      const tick = () => {
-        const pct = Math.min(100, ((performance.now() - startedAt) / 1100) * 100);
-        fill.style.width = `${pct}%`;
-        if (pct >= 100 && !done) {
-          done = true;
-          cleanup();
-          resolve(true);
-          return;
-        }
-        raf = requestAnimationFrame(tick);
-      };
-      const down = (event) => {
-        event.preventDefault();
-        startedAt = performance.now();
-        raf = requestAnimationFrame(tick);
-      };
-      const up = () => {
-        if (done) return;
-        cancelAnimationFrame(raf);
-        fill.style.width = '0%';
-      };
-      button.addEventListener('pointerdown', down);
-      window.addEventListener('pointerup', up);
-      window.addEventListener('pointercancel', up);
-      $('#confirm-cancel').onclick = () => {
-        cleanup();
-        resolve(false);
-      };
-      modal.onclick = (event) => {
-        if (event.target === modal) {
-          cleanup();
-          resolve(false);
-        }
-      };
+  function confirmSheet({ title, message, confirmLabel = 'Confirm', tone = 'danger', warning = '', onConfirm }) {
+    const body = [el('p', { text: message })];
+    if (warning) body.push(el('p', { class: 'warn-text', text: warning }));
+    openSheet({
+      title,
+      body,
+      actions: [
+        { label: 'Cancel', run: () => {} },
+        {
+          label: confirmLabel,
+          tone,
+          run: () => {
+            Promise.resolve(onConfirm()).catch((err) => toast(err.message || 'That did not work', { tone: 'err' }));
+          },
+        },
+      ],
     });
   }
 
-  const HOLD_COPY = {
-    'system.shutdown': ['Shut down the PC?', 'Windows gets a 30 second countdown. The ESP32 can power it back on.'],
-    'system.reboot': ['Restart the PC?', 'Anything unsaved will be lost after the countdown.'],
-    'system.logout': ['Log out?', 'The current session ends immediately.'],
-    'system.sleep': ['Put the PC to sleep?', 'The ESP32 bridge stays awake so you can wake it again.'],
-    'esp.power': ['Use the hardware relay?', 'This cuts power like pressing the case button — the OS does not get to shut down cleanly.'],
-    'esp.reset': ['Press the reset button?', 'The PC restarts as if you pressed the case button.'],
-    'app.kill': ['Force-quit the app?', 'Unsaved work in that app is lost.'],
+  /* ══════════════════════════════════════════════════════════════════════════
+     PAIRING
+     ══════════════════════════════════════════════════════════════════════════ */
+
+  const Pair = {
+    steps: [],
+    busy: false,
   };
 
-  async function triggerCommand(cmd, args = {}, { hold = false, button = null } = {}) {
-    if (!state.connected && !state.demo) {
-      toast('Not connected to the agent', 'err');
+  function renderPairSteps(activeIndex) {
+    const host = $('#pair-steps');
+    if (!Pair.steps.length) {
+      host.hidden = true;
       return;
     }
-    if (hold) {
-      const [title, text] = HOLD_COPY[cmd] || [`Run ${cmd}?`, 'This changes the state of your PC.'];
-      const ok = await confirmHold({ title, text });
-      if (!ok) return;
-      args = { ...args, confirm: true };
-    }
-    if (button) button.classList.add('is-busy');
-    try {
-      await run(cmd, args);
-    } finally {
-      if (button) button.classList.remove('is-busy');
-    }
+    host.hidden = false;
+    host.innerHTML = '';
+    Pair.steps.forEach((step, index) => {
+      const state = activeIndex === null || index < activeIndex ? 'done' : index === activeIndex ? 'active' : '';
+      host.append(
+        el('div', { class: `step ${state}`.trim() }, [
+          el('span', { class: 'mark' }),
+          el('div', {}, [
+            el('strong', { text: step.text }),
+            step.detail ? el('span', { class: 'detail', text: step.detail }) : null,
+          ]),
+        ]),
+      );
+    });
   }
 
-  /* ─────────────────────────── palette ─────────────────────────── */
+  function showPairError(err, { offerProbe = true } = {}) {
+    const host = $('#pair-error');
+    host.hidden = false;
+    host.className = 'alert';
+    host.innerHTML = '';
 
-  function paletteItems(query) {
-    const q = query.trim().toLowerCase();
-    const base = (state.catalogue.length ? state.catalogue : demoCatalogue()).map((item) => ({
-      cmd: item.cmd,
-      label: item.label || item.cmd,
-      group: item.group,
-      run: () => triggerCommand(item.cmd, {}, { hold: /shutdown|reboot|logout|esp\.|kill/.test(item.cmd) }),
-    }));
-    const extra = [
-      { label: 'Capture screenshot', group: 'Action', cmd: 'screen.screenshot', run: () => triggerCommand('screen.screenshot') },
-      { label: 'Go to overview', group: 'Navigate', cmd: 'view', run: () => setView('dashboard') },
-      { label: 'Go to activity log', group: 'Navigate', cmd: 'view', run: () => setView('activity') },
-      { label: 'Go to settings', group: 'Navigate', cmd: 'view', run: () => setView('settings') },
-      { label: 'Copy pairing snippet', group: 'Action', cmd: 'pairing', run: async () => {
-        const pre = $('#pair-code');
-        if (!pre.dataset.raw) await loadPairing();
-        const ok = await copyText($('#pair-code').dataset.raw || '');
-        toast(ok ? 'Pairing snippet copied' : 'Could not copy', ok ? 'ok' : 'err');
-      } },
-    ];
-    const all = [...base, ...extra];
-    if (!q) return all.slice(0, 12);
-    return all.filter((item) => `${item.label} ${item.cmd} ${item.group}`.toLowerCase().includes(q)).slice(0, 12);
-  }
+    const title = el('span', { class: 'alert-title', text: err.title || 'Could not connect' });
+    host.append(title);
+    if (err.message) host.append(el('span', { text: err.message }));
+    if (err.hint) host.append(el('span', { class: 'alert-hint', text: err.hint }));
 
-  function openPalette() {
-    $('#palette').classList.remove('hidden');
-    const field = $('#palette-field');
-    field.value = '';
-    state.paletteIndex = 0;
-    renderPalette('');
-    setTimeout(() => field.focus(), 30);
-  }
-
-  function renderPalette(query) {
-    state.paletteItems = paletteItems(query);
-    const list = $('#palette-list');
-    if (!state.paletteItems.length) {
-      list.innerHTML = '<li class="palette-empty">No matching command</li>';
-      return;
+    const actions = el('div', { class: 'alert-actions' });
+    if (offerProbe) {
+      actions.append(
+        el('button', {
+          class: 'ghost-btn',
+          type: 'button',
+          text: 'Test the address',
+          onclick: () => runProbe(),
+        }),
+      );
     }
-    list.innerHTML = state.paletteItems
-      .map(
-        (item, index) =>
-          `<li class="${index === state.paletteIndex ? 'is-active' : ''}" data-index="${index}">
-            ${icon('bolt')}<span>${esc(item.label)}</span><small>${esc(item.group || '')}</small></li>`,
-      )
-      .join('');
-    $$('#palette-list li[data-index]').forEach((li) =>
-      li.addEventListener('click', () => {
-        const item = state.paletteItems[Number(li.dataset.index)];
-        closePalette();
-        if (item) item.run();
+    actions.append(
+      el('button', {
+        class: 'ghost-btn',
+        type: 'button',
+        text: 'Show diagnostics',
+        onclick: () => {
+          $('#pair-diagnostics').hidden = false;
+          $('#pair-diagnostics-toggle').setAttribute('aria-expanded', 'true');
+          $('#pair-diagnostics').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        },
       }),
+    );
+    if (err.detail) {
+      actions.append(
+        el('button', {
+          class: 'ghost-btn',
+          type: 'button',
+          text: 'Copy details',
+          onclick: async () => {
+            const ok = await copyText(String(err.detail));
+            toast(ok ? 'Details copied' : 'Copy failed', { tone: ok ? 'ok' : 'warn' });
+          },
+        }),
+      );
+    }
+    host.append(actions);
+    Diag.add('error', `${err.title || 'error'}: ${err.message || ''}`);
+  }
+
+  function clearPairError() {
+    const host = $('#pair-error');
+    host.hidden = true;
+    host.innerHTML = '';
+  }
+
+  function setPairBusy(busy) {
+    Pair.busy = busy;
+    const button = $('#pair-submit');
+    button.disabled = busy;
+    button.querySelector('.btn-label').textContent = busy ? 'Connecting…' : 'Connect';
+    button.querySelector('.spinner').hidden = !busy;
+    for (const input of $$('#pair-form input')) input.disabled = busy;
+  }
+
+  /**
+   * Turns the address the user typed into a concrete attempt list:
+   * first the agent tunnel, then the ESP32 tunnel. Whichever answers wins, so
+   * nobody has to know whether 192.168.1.1 is a PC or an ESP32.
+   */
+  function candidatesFor(address) {
+    const url = new URL(T.normaliseAddress(address));
+    const origins = [url.origin];
+    // "192.168.1.50" almost certainly means the agent on 7878, so try that too.
+    if (!url.port) origins.push(`${url.protocol}//${url.hostname}:7878`);
+    const list = [];
+    for (const origin of origins) {
+      list.push({ kind: 'agent', base: `${origin}/api/tunnel`, label: 'PC agent', origin });
+      list.push({ kind: 'esp', base: `${origin}/t`, label: 'ESP32', origin });
+    }
+    return list;
+  }
+
+  async function attemptConnect({ address, key, token, onStep = () => {} }) {
+    if (token && (!address || address === 'self')) {
+      onStep([{ text: 'Using this computer', detail: location.host }], 0);
+      const link = new T.PlainLink({ base: location.origin, token });
+      const result = await link.connect((list) =>
+        onStep(
+          [{ text: 'Using this computer', detail: location.host }].concat(list.map((step) => ({ text: step.text, detail: step.detail }))),
+          list.length,
+        ),
+      );
+      return {
+        pairing: { kind: 'plain', base: location.origin, token, label: location.host, name: 'This computer', addedAt: new Date().toISOString() },
+        link,
+        result,
+      };
+    }
+
+    const keyHex = T.normaliseKey(key);
+    const candidates = candidatesFor(address);
+    let lastError = null;
+
+    for (const candidate of candidates) {
+      const steps = [{ text: `Trying ${candidate.label}`, detail: candidate.base }];
+      onStep(steps, 0);
+      Diag.add('info', `connect ${candidate.base}`, { key: maskKey(keyHex) });
+      const link = new T.TunnelLink({ base: candidate.base, key: keyHex, label: candidate.label });
+      try {
+        const result = await link.connect((list) => {
+          onStep(
+            [{ text: `Trying ${candidate.label}`, detail: candidate.base }].concat(
+              list.map((step) => ({ text: step.text, detail: step.detail })),
+            ),
+            list.length,
+          );
+        });
+        const done = [{ text: `Trying ${candidate.label}`, detail: candidate.base }]
+          .concat([{ text: 'Connected', detail: `${result.rtt} ms round trip` }]);
+        onStep(done, done.length);
+        return {
+          pairing: {
+            kind: candidate.kind,
+            base: candidate.base,
+            key: keyHex,
+            label: candidate.origin.replace(/^https?:\/\//, ''),
+            name: candidate.kind === 'esp' ? 'ESP32' : 'PC agent',
+            addedAt: new Date().toISOString(),
+          },
+          link,
+          result,
+        };
+      } catch (err) {
+        lastError = err;
+        Diag.add('error', `${candidate.label} @ ${candidate.base}: ${err.code || 'ERROR'} — ${err.message}`);
+        // A wrong key is a real answer — asking the next candidate would only
+        // produce a second misleading error.
+        if (err.code === 'KEY_MISMATCH') throw err;
+      }
+    }
+    throw lastError || new Error('nothing answered at that address');
+  }
+
+  function explainTransportError(err) {
+    const detail = err && (err.stack || err.message);
+    const map = {
+      KEY_MISMATCH: {
+        title: 'The pairing key does not match',
+        hint: 'Copy the key again from the PC console (Pairing panel) or from the ESP32 setup page, then paste it here. The two must be character-for-character identical.',
+      },
+      UNREACHABLE: {
+        title: 'Nothing answered at that address',
+        hint: 'Check that the phone is on the same Wi-Fi, that the address is the device\'s local IP, and that SENTINEL is running onthe PC. Tap "Test the address" to see exactly what happens.',
+      },
+      TIMEOUT: {
+        title: 'The device stopped answering',
+        hint: 'Something answered but stayed silent. If this is the PC, the agent may have crashed — restart SENTINEL there. If it is the ESP32, power-cycle it.',
+      },
+      NOT_SENTINEL: {
+        title: 'That address is not a SENTINEL device',
+        hint: 'It may be a router admin page or another service. The agent listens on port 7878 and the ESP32 on port 80.',
+      },
+      REFUSED: {
+        title: 'The device refused the pairing proof',
+        hint: 'The key reached the device but was rejected. Re-copy it — a trailing space or an uppercase/lowercase difference is enough to fail.',
+      },
+      NO_CRYPTO: {
+        title: 'This browser cannot encrypt',
+        hint: 'Web Crypto needs a secure context. Open the console through the link the PC shows you, or install the app.',
+      },
+    };
+    const known = map[err && err.code];
+    return {
+      title: known ? known.title : 'Could not connect',
+      message: err && err.message ? err.message : 'unknown error',
+      hint: (known && known.hint) || (err && err.hint) || '',
+      detail,
+    };
+  }
+
+  async function runProbe() {
+    const address = $('#pair-address').value.trim() || location.host;
+    const host = $('#pair-probe');
+    host.hidden = false;
+    host.innerHTML = '';
+    host.append(el('div', { class: 'probe-row' }, [el('span', { text: 'Testing…' }), el('span', { class: 'muted', text: address })]));
+    Diag.add('info', `probe ${address}`);
+    const report = await T.probeAddress(address);
+    host.innerHTML = '';
+    for (const attempt of report.attempts) {
+      host.append(
+        el('div', { class: 'probe-row' }, [
+          el('span', { text: attempt.target.replace(/^https?:\/\//, '') }),
+          el('span', {
+            class: attempt.status && attempt.status < 400 ? 'ok' : attempt.error ? 'bad' : '',
+            text: attempt.error ? attempt.error : `HTTP ${attempt.status} · ${attempt.ms} ms`,
+          }),
+        ]),
+      );
+    }
+    const verdict =
+      report.verdict === 'agent'
+        ? 'SENTINEL agent found — paste the pairing key and connect.'
+        : report.verdict === 'locked'
+          ? 'SENTINEL agent found (it wants the key) — paste it and connect.'
+          : report.verdict === 'esp32'
+            ? `ESP32 found${report.device ? ` (${report.device})` : ''} — pair with the same key.`
+            : report.verdict === 'silent'
+              ? 'Nothing usable answered. Wrong network or wrong address is the usual cause.'
+              : 'That address is not valid.';
+    host.append(
+      el('div', { class: 'probe-row' }, [
+        el('span', { text: verdict }),
+        el('span', { class: report.verdict === 'silent' ? 'bad' : 'ok', text: report.verdict }),
+      ]),
+    );
+    Diag.add(report.verdict === 'silent' ? 'warn' : 'info', `probe verdict: ${report.verdict}`, report);
+  }
+
+  async function submitPairing(event) {
+    if (event) event.preventDefault();
+    if (Pair.busy) return;
+    clearPairError();
+
+    const address = $('#pair-address').value.trim();
+    const key = $('#pair-key').value.trim();
+    const token = $('#pair-token').value.trim();
+
+    if (!address && !token && !key) {
+      showPairError({
+        title: 'Enter an address first',
+        message: 'Type the address of your PC (for example 192.168.1.50:7878) or your ESP32 (192.168.1.1).',
+        hint: 'The PC console shows its own address at the top of the pairing panel.',
+      });
+      $('#pair-address').focus();
+      return;
+    }
+    if (!token && !key) {
+      showPairError({
+        title: 'The pairing key is missing',
+        message: 'Every SENTINEL device expects the 64-character key.',
+        hint: 'On the PC: Console → Pairing → pairing key. On the ESP32: its setup page shows the same key.',
+      });
+      $('#pair-key').focus();
+      return;
+    }
+
+    setPairBusy(true);
+    Pair.steps = [];
+    renderPairSteps(0);
+
+    try {
+      const attempt = await attemptConnect({
+        address,
+        key,
+        token,
+        onStep: (steps, active) => {
+          Pair.steps = steps;
+          renderPairSteps(active);
+        },
+      });
+      renderPairSteps(null);
+      S.pairing = attempt.pairing;
+      S.link = attempt.link;
+      store.set(STORE.pairing, attempt.pairing);
+      Diag.add('info', `paired with ${attempt.pairing.base}`, attempt.result);
+      toast('Paired', { sub: `${attempt.pairing.name} · ${attempt.result.rtt} ms` });
+      setTimeout(() => startApp(), 420);
+    } catch (err) {
+      const explained = explainTransportError(err);
+      showPairError(explained);
+      renderPairSteps(null);
+      Diag.add('error', `${err.code || 'ERROR'}: ${err.message}`);
+    } finally {
+      setPairBusy(false);
+    }
+  }
+
+  function renderDiag() {}
+
+  /* ══════════════════════════════════════════════════════════════════════════
+     LINK LIFECYCLE
+     ══════════════════════════════════════════════════════════════════════════ */
+
+  function setOnline(online, reason) {
+    if (S.online === online) return;
+    S.online = online;
+    const pill = $('#link-pill');
+    const text = $('#link-pill-text');
+    if (S.demo) {
+      pill.className = 'pill pill-demo';
+      text.textContent = 'demo';
+    } else if (online) {
+      pill.className = 'pill pill-live';
+      text.textContent = 'encrypted';
+    } else {
+      pill.className = 'pill pill-off';
+      text.textContent = 'offline';
+    }
+    if (!online && reason) toast('Connection lost', { sub: reason, tone: 'err' });
+    if (!online) scheduleReconnect();
+    renderHomeBits();
+  }
+
+  function scheduleReconnect() {
+    if (S.demo || S.pairing === null) return;
+    clearTimeout(S.reconnectTimer);
+    const delay = Math.min(30000, 1200 * 2 ** Math.min(S.failures, 4));
+    S.failures += 1;
+    S.reconnectTimer = setTimeout(() => reconnect({ silent: true }), delay);
+  }
+
+  async function reconnect({ silent = false } = {}) {
+    if (S.reconnecting || !S.pairing || S.demo) return;
+    S.reconnecting = true;
+    if (!silent) toast('Reconnecting…', { sub: S.pairing.label });
+    try {
+      if (S.link) S.link.close();
+      const attempt = await attemptConnect({
+        address: S.pairing.base.replace(/\/api\/tunnel$|\/t$/, ''),
+        key: S.pairing.key,
+        token: S.pairing.token,
+        onStep: () => {},
+      });
+      S.link = attempt.link;
+      S.failures = 0;
+      clearPairError();
+      setOnline(true);
+      if (!silent) toast('Reconnected', { sub: `${attempt.result.rtt} ms` });
+      await refresh();
+    } catch (err) {
+      Diag.add('error', `reconnect failed: ${err.message}`);
+      setOnline(false);
+      if (!silent) toast('Still offline', { sub: err.message, tone: 'err' });
+    } finally {
+      S.reconnecting = false;
+    }
+  }
+
+  function startPolling() {
+    clearInterval(S.pollTimer);
+    clearInterval(S.eventTimer);
+    const interval = 5000;
+    S.pollTimer = setInterval(() => {
+      if (document.hidden) return;
+      refresh().catch(() => {});
+    }, interval);
+    if (S.link && typeof S.link.poll === 'function') {
+      S.eventTimer = setInterval(() => {
+        if (document.hidden || !S.online) return;
+        S.link
+          .poll()
+          .then((events) => {
+            if (events && events.length) ingestLogEntries(events);
+          })
+          .catch(() => {});
+      }, 3500);
+    }
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) refresh().catch(() => {});
+    });
+  }
+
+  /* ── data fetching ─────────────────────────────────────────────────────── */
+
+  async function refresh() {
+    if (S.demo) {
+      S.snap = demoSnapshot();
+      setOnline(true);
+      renderAll();
+      return;
+    }
+    if (!S.link) return;
+    try {
+      let reply;
+      try {
+        reply = await S.link.request('system.snapshot');
+      } catch (err) {
+        if (err.code === 'OFFLINE') throw err;
+        reply = { ok: false, code: err.code, message: err.message };
+      }
+      if (reply.ok) {
+        S.snap = reply.data;
+        S.hardwareOnly = false;
+        S.espRaw = reply.data.esp;
+        S.failures = 0;
+        setOnline(true);
+      } else if (reply.code === 'LINK_OFFLINE') {
+        // Talking to the ESP32, but it cannot reach the PC: show hardware only.
+        const esp = await S.link.request('esp.status').catch(() => null);
+        S.espRaw = esp && esp.ok ? esp.data : null;
+        S.hardwareOnly = true;
+        setOnline(true);
+        renderAll();
+        return;
+      } else {
+        throw Object.assign(new Error(reply.message || 'snapshot failed'), { code: reply.code });
+      }
+      renderAll();
+    } catch (err) {
+      S.lastError = err;
+      Diag.add('warn', `refresh failed: ${err.message}`);
+      setOnline(false, err.message);
+    }
+  }
+
+  function ingestLogEntries(entries) {
+    let changed = false;
+    for (const entry of entries) {
+      const data = entry.data || entry;
+      if (!data || !data.message) continue;
+      if (data.level === 'debug') continue;
+      S.events.push({
+        at: data.at || new Date().toISOString(),
+        level: data.level || 'info',
+        source: data.source || 'agent',
+        message: data.message,
+      });
+      changed = true;
+    }
+    if (changed) {
+      S.events = S.events.slice(-300);
+      store.set(STORE.activity, S.events);
+      if (S.tab === 'activity') renderTimeline();
+    }
+  }
+
+  function recordCommand(cmd, ok, detail, ms) {
+    S.events.push({
+      at: new Date().toISOString(),
+      level: ok ? 'info' : 'error',
+      source: 'phone',
+      message: `${cmd}${ok ? '' : ` — ${detail || 'failed'}`}`,
+      cmd,
+      ok,
+      ms,
+    });
+    S.events = S.events.slice(-300);
+    store.set(STORE.activity, S.events);
+    if (S.tab === 'activity') renderTimeline();
+  }
+
+  /* ══════════════════════════════════════════════════════════════════════════
+     COMMAND EXECUTION
+     ══════════════════════════════════════════════════════════════════════════ */
+
+  const DESTRUCTIVE = new Set([
+    'system.shutdown',
+    'system.reboot',
+    'system.logout',
+    'system.sleep',
+    'system.cancel_shutdown',
+    'app.kill',
+    'script.run',
+    'esp.power',
+    'esp.reset',
+  ]);
+
+  const CONFIRM_COPY = {
+    'system.shutdown': {
+      title: 'Shut down the PC?',
+      message: 'The machine will close everything and power off in 30 seconds.',
+      warning: 'You can still cancel from this screen while it counts down.',
+      confirmLabel: 'Shut down',
+    },
+    'system.reboot': {
+      title: 'Restart the PC?',
+      message: 'The machine will restart in 10 seconds.',
+      warning: 'Unsaved work in open applications may be lost.',
+      confirmLabel: 'Restart',
+    },
+    'system.sleep': { title: 'Sleep the PC?', message: 'The machine will go to sleep and stop responding until it wakes.', confirmLabel: 'Sleep' },
+    'system.logout': { title: 'Log out?', message: 'The current Windows user will be signed out.', confirmLabel: 'Log out' },
+    'esp.power': {
+      title: 'Press the power button?',
+      message: 'The ESP32 will close the power relay as if you pressed the physical button.',
+      warning: 'A hard press does not ask the operating system for permission.',
+      confirmLabel: 'Press power',
+    },
+    'esp.reset': {
+      title: 'Press the reset button?',
+      message: 'The ESP32 will close the reset relay, which reboots the machine immediately.',
+      warning: 'This is the hardware reset line. Unsaved work will be lost.',
+      confirmLabel: 'Press reset',
+    },
+  };
+
+  function isDeniedByPolicy(cmd) {
+    const policy = (S.snap && S.snap.policy) || null;
+    if (!policy) return null;
+    const map = {
+      'system.shutdown': 'allowShutdown',
+      'system.reboot': 'allowReboot',
+      'system.sleep': 'allowSleep',
+      'system.lock': 'allowLock',
+      'system.logout': 'allowLogout',
+      'media.play_pause': 'allowMedia',
+      'media.next': 'allowMedia',
+      'media.previous': 'allowMedia',
+      'media.stop': 'allowMedia',
+      'volume.up': 'allowVolume',
+      'volume.down': 'allowVolume',
+      'volume.mute': 'allowVolume',
+      'screen.screenshot': 'allowScreenshot',
+      'screen.wake': 'allowWake',
+      'input.type': 'allowInput',
+      'input.key': 'allowInput',
+      'app.launch': 'allowAppLaunch',
+      'app.kill': 'allowAppKill',
+      'script.run': 'allowScripts',
+      'files.list': 'allowFileList',
+      'esp.power': 'allowEspPower',
+      'esp.reset': 'allowEspPower',
+    };
+    const flag = map[cmd];
+    if (flag && policy[flag] === false) return flag;
+    return null;
+  }
+
+  async function runCommand(cmd, args = {}, { confirm = false, source = 'quick' } = {}) {
+    const blocked = isDeniedByPolicy(cmd);
+    if (blocked) {
+      toast('Blocked by policy', { sub: `${cmd} needs ${blocked} enabled on the PC`, tone: 'warn' });
+      recordCommand(cmd, false, `blocked by ${blocked}`);
+      return;
+    }
+
+    const needsConfirm = DESTRUCTIVE.has(cmd) && !confirm && !(S.snap && S.snap.policy && S.snap.policy.requireConfirm === false);
+    if (needsConfirm) {
+      const copy = CONFIRM_COPY[cmd] || { title: `${cmd}?`, message: 'This changes the state of the machine.', confirmLabel: 'Continue' };
+      confirmSheet({
+        ...copy,
+        tone: 'danger',
+        onConfirm: () => runCommand(cmd, { ...args, confirm: true }, { confirm: true, source }),
+      });
+      return;
+    }
+
+    S.busyCommands.add(cmd);
+    renderHomeBits();
+    const started = performance.now();
+    try {
+      const reply = S.demo
+        ? await demoCommand(cmd, args)
+        : await S.link.request(cmd, { ...args, ...(DESTRUCTIVE.has(cmd) ? { confirm: true } : {}) });
+      const ms = Math.round(performance.now() - started);
+      if (reply && reply.ok === false) {
+        const code = reply.code || 'FAILED';
+        const human =
+          code === 'QUIET_HOURS'
+            ? 'Quiet hours are on — the PC is refusing power commands until morning.'
+            : code === 'RATE_LIMITED'
+              ? 'Too many commands in a minute. Wait a moment.'
+              : code === 'CONFIRM_REQUIRED'
+                ? 'The PC wants an explicit confirmation for that.'
+                : reply.message || 'The command failed.';
+        toast(human, { tone: 'err', sub: code });
+        recordCommand(cmd, false, human, ms);
+        return { ok: false, code, message: human };
+      }
+      const label = commandLabel(cmd);
+      toast(`${label} sent`, { sub: `${ms} ms${reply && reply.data && reply.data.delayed ? ' · scheduled' : ''}`, tone: 'ok' });
+      recordCommand(cmd, true, '', ms);
+      if (reply && Array.isArray(reply.events) && reply.events.length) ingestLogEntries(reply.events);
+      if (cmd === 'esp.power' || cmd === 'esp.reset') {
+        if (S.demo) S.demoRelay = !S.demoRelay;
+      }
+      await refresh();
+      return reply;
+    } catch (err) {
+      recordCommand(cmd, false, err.message);
+      toast('Could not reach the device', { tone: 'err', sub: err.message });
+      setOnline(false, err.message);
+      return { ok: false, code: err.code, message: err.message };
+    } finally {
+      S.busyCommands.delete(cmd);
+      renderHomeBits();
+    }
+  }
+
+  function commandLabel(cmd) {
+    const catalogue = (S.snap && S.snap.catalogue) || [];
+    const found = catalogue.find((entry) => entry.cmd === cmd);
+    return found ? found.label : cmd;
+  }
+
+  function defaultArgs(args) {
+    if (!args) return {};
+    const payload = {};
+    for (const [name, spec] of Object.entries(args)) {
+      if (spec.default !== undefined) payload[name] = spec.default;
+    }
+    return payload;
+  }
+
+  function commandArgs(cmd) {
+    const catalogue = (S.snap && S.snap.catalogue) || [];
+    const entry = catalogue.find((item) => item.cmd === cmd);
+    if (!entry || !entry.args) return null;
+    const keys = Object.keys(entry.args);
+    if (!keys.length) return null;
+    return entry.args;
+  }
+
+  /**
+   * Prompt for arguments only when a command genuinely needs some. Delays and
+   * hold times have defaults on the agent, so "Shut down" stays one tap plus a
+   * confirmation instead of a form.
+   */
+  function runCommandWithArgs(cmd) {
+    // Refuse in the UI before asking for input the agent would reject anyway.
+    const blockedHere = isDeniedByPolicy(cmd);
+    if (blockedHere) {
+      toast('Blocked by policy', { sub: `${cmd} needs ${blockedHere} enabled on the PC`, tone: 'warn' });
+      recordCommand(cmd, false, `blocked by ${blockedHere}`);
+      return;
+    }
+    const args = commandArgs(cmd);
+    const needsInput =
+      args &&
+      Object.values(args).some(
+        (spec) => (spec.type === 'string' && spec.default === undefined) || (spec.type === 'number' && spec.default === undefined),
+      );
+    if (!args || !needsInput) return runCommand(cmd, defaultArgs(args));
+    const inputs = {};
+    const body = Object.entries(args).map(([name, spec]) => {
+      const id = `arg-${cmd.replace(/\W/g, '-')}-${name}`;
+      let input;
+      if (spec.type === 'enum') {
+        input = el('select', { class: 'arg-select', id });
+        for (const value of spec.values || []) input.append(el('option', { value, text: value }));
+      } else if (spec.type === 'number') {
+        input = el('input', {
+          type: 'number',
+          id,
+          value: spec.default ?? 0,
+          min: spec.min ?? undefined,
+          max: spec.max ?? undefined,
+        });
+      } else {
+        input = el('input', { type: 'text', id, placeholder: spec.example || name, value: spec.default ?? '' });
+      }
+      inputs[name] = { input, spec };
+      return el('div', { class: 'field' }, [
+        el('label', { for: id, text: spec.unit ? `${name} (${spec.unit})` : name }),
+        input,
+        spec.example ? el('p', { class: 'hint', text: `e.g. ${spec.example}` }) : null,
+      ]);
+    });
+
+    openSheet({
+      title: commandLabel(cmd),
+      body: el('div', { class: 'sheet-form' }, body),
+      actions: [
+        { label: 'Cancel', run: () => {} },
+        {
+          label: 'Run',
+          tone: 'primary',
+          run: () => {
+            const payload = {};
+            for (const [name, { input, spec }] of Object.entries(inputs)) {
+              payload[name] = spec.type === 'number' ? Number(input.value) : input.value;
+            }
+            runCommand(cmd, payload);
+          },
+        },
+      ],
+    });
+  }
+
+  /* ══════════════════════════════════════════════════════════════════════════
+     RENDERING
+     ══════════════════════════════════════════════════════════════════════════ */
+
+  const QUICK = [
+    { cmd: 'screen.wake', label: 'Wake display', icon: 'wake' },
+    { cmd: 'system.lock', label: 'Lock', icon: 'lock' },
+    { cmd: 'system.sleep', label: 'Sleep', icon: 'sleep', danger: true },
+    { cmd: 'system.reboot', label: 'Restart', icon: 'restart', danger: true },
+    { cmd: 'system.cancel_shutdown', label: 'Cancel shutdown', icon: 'cancel' },
+    { cmd: 'screen.screenshot', label: 'Screenshot', icon: 'shot' },
+    { cmd: 'media.play_pause', label: 'Play / pause', icon: 'play' },
+    { cmd: 'media.next', label: 'Next track', icon: 'next' },
+    { cmd: 'volume.up', label: 'Volume up', icon: 'volup' },
+    { cmd: 'volume.down', label: 'Volume down', icon: 'voldown' },
+    { cmd: 'volume.mute', label: 'Mute', icon: 'mute' },
+    { cmd: 'agent.status', label: 'Agent status', icon: 'info' },
+  ];
+
+  function renderHeader() {
+    const snap = S.snap || {};
+    const name = (snap.name && String(snap.name)) || (S.pairing && S.pairing.name) || 'SENTINEL';
+    $('#device-name').textContent = S.demo ? 'STRIGA-7' : name;
+    const sub = S.demo
+      ? 'demo data · nothing is really touched'
+      : S.pairing
+        ? `${S.pairing.kind === 'esp' ? 'via ESP32' : S.pairing.kind === 'plain' ? 'this computer' : 'encrypted tunnel'} · ${S.pairing.label}`
+        : 'not paired';
+    $('#device-sub').textContent = sub;
+    const pill = $('#link-pill');
+    const text = $('#link-pill-text');
+    if (S.demo) {
+      pill.className = 'pill pill-demo';
+      text.textContent = 'demo';
+    } else if (S.online) {
+      pill.className = 'pill pill-live';
+      text.textContent = S.link && S.link.rtt ? `${S.link.rtt} ms` : 'encrypted';
+    } else {
+      pill.className = 'pill pill-off';
+      text.textContent = 'offline';
+    }
+  }
+
+  function renderHero() {
+    const snap = S.snap;
+    const cpu = snap ? Math.round(snap.cpuPercent || 0) : 0;
+    const ring = $('#ring-cpu');
+    const circumference = 2 * Math.PI * 52;
+    ring.setAttribute('stroke-dasharray', circumference.toFixed(1));
+    ring.setAttribute('stroke-dashoffset', (circumference * (1 - Math.min(100, cpu) / 100)).toFixed(1));
+    ring.setAttribute('class', `ring-value${cpu > 85 ? ' hot' : cpu > 60 ? ' warn' : ''}`);
+    $('#ring-percent').textContent = snap ? `${cpu}%` : '—';
+
+    if (!snap || S.hardwareOnly) {
+      $('#hero-state').textContent = S.hardwareOnly ? 'Hardware only' : 'Not connected';
+      $('#hero-host').textContent = S.hardwareOnly && S.espRaw ? S.espRaw.device || 'ESP32' : 'Waiting for the PC';
+      $('#hero-meta').textContent = S.hardwareOnly
+        ? 'The ESP32 is reachable but the PC agent is not linked. Power and reset still work.'
+        : 'Pair or reconnect to read the machine state.';
+      return;
+    }
+    const pcOn = snap.esp && snap.esp.pc ? snap.esp.pc : 'unknown';
+    $('#hero-state').textContent = pcOn === 'off' ? 'Powered off (relay sees no power)' : 'Online and ready';
+    $('#hero-host').textContent = snap.hostname || snap.name || '—';
+    const parts = [
+      snap.platformLabel || snap.platform || '',
+      `${snap.cpuCount || 0} threads`,
+      `up ${fmtDuration(snap.uptime)}`,
+      snap.agent ? `agent ${snap.agent.version}` : '',
+    ].filter(Boolean);
+    $('#hero-meta').textContent = parts.join(' · ');
+  }
+
+  function renderMetrics() {
+    const host = $('#metrics');
+    host.innerHTML = '';
+    if (!S.snap) {
+      for (let i = 0; i < 4; i += 1) host.append(el('div', { class: 'metric' }, [el('div', { class: 'shimmer', text: 'loading' })]));
+      return;
+    }
+    const snap = S.snap;
+    const memory = snap.memoryDetail || {
+      percent: Math.round((1 - snap.memoryFree / snap.memory) * 100),
+      used: snap.memory - (snap.memoryFree || 0),
+      total: snap.memory,
+    };
+    const esp = snap.esp || S.espRaw || {};
+    const linkOk = esp.connected !== false && (esp.connected === true || esp.link === 'up');
+    const cards = [
+      {
+        label: 'CPU',
+        value: `${Math.round(snap.cpuPercent || 0)}%`,
+        sub: (snap.cpuModel || '').split('@')[0].trim() || `${snap.cpuCount} threads`,
+        bar: Math.min(100, snap.cpuPercent || 0),
+      },
+      {
+        label: 'Memory',
+        value: `${memory.percent || 0}%`,
+        sub: `${fmtBytes(memory.used)} of ${fmtBytes(memory.total)}`,
+        bar: memory.percent || 0,
+      },
+      {
+        label: 'Uptime',
+        value: fmtDuration(snap.uptime),
+        sub: `since ${snap.platformLabel || 'boot'}`,
+      },
+      {
+        label: 'ESP32',
+        value: linkOk ? 'linked' : 'not linked',
+        sub: esp.fw ? `firmware ${esp.fw}` : esp.chip || 'no hardware reported',
+        tone: linkOk ? 'good' : 'bad',
+      },
+      {
+        label: 'Tunnel',
+        value: S.link && S.link.rtt != null ? `${S.link.rtt} ms` : '—',
+        sub: S.pairing ? S.pairing.kind === 'esp' ? 'phone → ESP32' : 'phone → PC' : 'direct',
+      },
+      {
+        label: 'This session',
+        value: String((snap.agent && snap.agent.counters && snap.agent.counters.commands) || 0),
+        sub: 'commands this run',
+      },
+    ];
+    for (const card of cards) {
+      const barClass = card.bar > 85 ? 'hot' : card.bar > 60 ? 'warn' : '';
+      host.append(
+        el('div', { class: `metric ${card.tone || ''}`.trim() }, [
+          el('span', { class: 'metric-label', text: card.label }),
+          el('span', { class: 'metric-value', text: card.value }),
+          el('span', { class: 'metric-sub', text: card.sub }),
+          card.bar !== undefined
+            ? el('span', { class: 'bar' }, [el('i', { class: barClass, style: `width:${Math.min(100, card.bar)}%` })])
+            : null,
+        ]),
+      );
+    }
+  }
+
+  function qaButton(item) {
+    const busy = S.busyCommands.has(item.cmd);
+    const disabled = S.hardwareOnly && !item.cmd.startsWith('esp.');
+    return el(
+      'button',
+      {
+        class: `qa ${item.danger ? 'danger' : ''} ${item.hw ? 'hw' : ''} ${busy ? 'busy' : ''} ${disabled ? 'off' : ''}`.trim(),
+        type: 'button',
+        title: item.cmd,
+        onclick: () => runCommandWithArgs(item.cmd),
+      },
+      [
+        el('span', { class: 'qa-icon', html: svgIcon(ICONS[item.icon] || ICONS.info, 17) }),
+        el('span', { class: 'qa-label', text: item.label }),
+        el('span', { class: 'qa-sub', text: item.cmd }),
+      ],
     );
   }
 
-  function closePalette() {
-    $('#palette').classList.add('hidden');
+  function renderQuickActions() {
+    const host = $('#quick-actions');
+    host.innerHTML = '';
+    for (const item of QUICK) host.append(qaButton(item));
+    $('#quick-hint').textContent = S.hardwareOnly
+      ? 'PC actions need the agent link'
+      : 'Tap to run · destructive actions ask first';
   }
 
-  function movePalette(delta) {
-    if (!state.paletteItems.length) return;
-    state.paletteIndex = (state.paletteIndex + delta + state.paletteItems.length) % state.paletteItems.length;
-    renderPalette($('#palette-field').value);
-  }
-
-  /* ─────────────────────────── connection ─────────────────────────── */
-
-  /* ── ESP32 fallback: power control with the agent stopped ── */
-  const espConfig = () => ({
-    base: (localStorage.getItem(STORE_ESP_BASE) || '').replace(/\/+$/, ''),
-    token: localStorage.getItem(STORE_ESP_TOKEN) || '',
-  });
-
-  async function espStatus() {
-    const { base } = espConfig();
-    if (!base) return null;
-    try {
-      const res = await fetch(`${base}/status`, { cache: 'no-store' });
-      if (!res.ok) return null;
-      return await res.json();
-    } catch {
-      return null;
-    }
-  }
-
-  async function espPower(action) {
-    const { base, token } = espConfig();
-    if (!base || !token) {
-      toast('Add the ESP32 address and power token first', 'err');
+  function renderHardware() {
+    const host = $('#hardware');
+    host.innerHTML = '';
+    const esp = (S.snap && S.snap.esp) || S.espRaw || null;
+    const linked = esp && (esp.connected === true || esp.link === 'up');
+    if (!esp) {
+      host.append(el('p', { class: 'hint', text: 'No ESP32 has reported in yet. Link it from the PC console or from the device\'s own setup page.' }));
       return;
     }
-    try {
-      const res = await fetch(`${base}/power?action=${encodeURIComponent(action)}&t=${encodeURIComponent(token)}`);
-      const data = await res.json().catch(() => ({}));
-      if (res.ok && data.ok) {
-        toast(`Relay: ${action} sent`, 'ok');
-        setTimeout(showOffline, 1200);
-      } else {
-        toast(data.error || 'The ESP32 rejected that request', 'err');
-      }
-    } catch {
-      toast('Could not reach the ESP32', 'err');
-    }
+    const pc = esp.pc || 'unknown';
+    host.append(
+      el('div', { class: 'hw-state' }, [
+        el('span', { class: `hw-badge ${linked ? 'on' : 'off'}` }, [el('span', { class: 'dot' }), linked ? 'ESP32 linked' : 'ESP32 offline']),
+        el('span', { class: 'hw-badge' }, [el('span', { class: 'dot' }), `PC ${pc}`]),
+        esp.chipTemp ? el('span', { class: 'hw-badge' }, [el('span', { class: 'dot' }), `${esp.chipTemp} °C`]) : null,
+        esp.fw ? el('span', { class: 'hw-badge' }, [el('span', { class: 'dot' }), `fw ${esp.fw}`]) : null,
+      ]),
+    );
+
+    const holdValue = el('input', { type: 'range', min: '100', max: '3000', step: '100', value: '600', id: 'hold-ms' });
+    const holdLabel = el('label', { for: 'hold-ms', text: '600 ms' });
+    holdValue.addEventListener('input', () => {
+      holdLabel.textContent = `${holdValue.value} ms`;
+    });
+
+    host.append(
+      el('div', { class: 'hw-actions' }, [
+        el('button', { class: 'action-btn primary', type: 'button', text: 'Power', onclick: () => runCommand('esp.power', { action: 'cycle', holdMs: Number(holdValue.value) }) }),
+        el('button', { class: 'action-btn', type: 'button', text: 'Force off', onclick: () => runCommand('esp.power', { action: 'off', holdMs: Number(holdValue.value) }) }),
+        el('button', {
+          class: 'action-btn danger',
+          type: 'button',
+          text: 'Reset',
+          onclick: () => runCommand('esp.reset', { holdMs: Number(holdValue.value) }),
+        }),
+      ]),
+    );
+    host.append(el('div', { class: 'slider-row' }, [holdLabel, holdValue]));
+    host.append(el('p', { class: 'hold-note', text: 'Hold time is how long the relay keeps the button pressed. 600 ms behaves like a normal press; longer is a hard power-off.' }));
   }
 
-  async function showOffline() {
-    const status = await espStatus();
-    $('#boot').classList.add('done');
-    $('#app').classList.add('hidden');
-    $('#setup').classList.add('hidden');
-    $('#offline').classList.remove('hidden');
-    const kv = $('#offline-kv');
-    if (!status) {
-      kv.innerHTML = '<div><span>ESP32</span><strong>unreachable</strong></div>';
-      $('#offline-msg').textContent = 'Check the ESP32 address and token in the connection settings.';
+  function renderCatalogue() {
+    const host = $('#catalogue');
+    host.innerHTML = '';
+    const catalogue = (S.snap && S.snap.catalogue) || [];
+    if (!catalogue.length) {
+      host.append(el('p', { class: 'hint', text: S.hardwareOnly ? 'The full catalogue needs the agent link.' : 'No commands reported yet.' }));
       return;
     }
-    kv.innerHTML = `
-      <div><span>ESP32</span><strong>${esc(status.device || 'linked')}</strong></div>
-      <div><span>PC power</span><strong>${esc(status.pc || 'unknown')}</strong></div>
-      <div><span>Wi-Fi</span><strong>${status.rssi ? `${status.rssi} dBm` : '—'}</strong></div>
-      <div><span>Firmware</span><strong>${esc(status.fw || '—')}</strong></div>
-      <div><span>Tunnel</span><strong>${status.wg ? 'WireGuard up' : 'direct'}</strong></div>`;
-    $('#offline-msg').textContent = 'Once the PC finishes booting the agent comes back automatically.';
+    const groups = new Map();
+    for (const entry of catalogue) {
+      if (!groups.has(entry.group)) groups.set(entry.group, []);
+      groups.get(entry.group).push(entry);
+    }
+    for (const [group, entries] of groups) {
+      host.append(
+        el('div', { class: 'catalogue-group' }, [
+          el('h4', { text: group }),
+          el(
+            'div',
+            { class: 'catalogue-items' },
+            entries.map((entry) =>
+              el('button', {
+                class: `cmd-chip ${DESTRUCTIVE.has(entry.cmd) ? 'danger' : ''}`.trim(),
+                type: 'button',
+                text: entry.label,
+                title: entry.cmd,
+                onclick: () => runCommandWithArgs(entry.cmd),
+              }),
+            ),
+          ),
+        ]),
+      );
+    }
   }
 
-  function handleAuthFailure(err) {
-    state.connected = false;
-    state.sseOpen = false;
-    localStorage.removeItem(STORE_TOKEN);
-    showSetup(err.message);
+  function renderHomeBits() {
+    if (S.tab !== 'home' && S.tab !== undefined) return;
+    renderHero();
+    renderMetrics();
+    renderQuickActions();
+    renderHardware();
   }
 
-  async function refreshStatus() {
+  function renderTimeline() {
+    const host = $('#timeline');
+    host.innerHTML = '';
+    const filter = S.filter;
+    const items = S.events
+      .filter((entry) => {
+        if (filter === 'all') return true;
+        if (filter === 'command') return Boolean(entry.cmd) || entry.source === 'phone' || entry.source === 'command';
+        if (filter === 'security') return ['security', 'policy', 'tunnel', 'link'].includes(entry.source) || entry.level === 'error';
+        return true;
+      })
+      .slice()
+      .reverse()
+      .slice(0, 200);
+
+    if (!items.length) {
+      host.append(el('p', { class: 'empty', text: 'Nothing here yet. Commands you run will show up with their result.' }));
+      return;
+    }
+    for (const entry of items) {
+      const tone = entry.level === 'error' ? 'fail' : entry.level === 'warn' ? 'warn' : entry.cmd ? (entry.ok === false ? 'fail' : 'ok') : '';
+      host.append(
+        el('div', { class: `tl-item ${tone}`.trim() }, [
+          el('span', { class: 'tl-mark', text: entry.level === 'error' ? '!' : entry.level === 'warn' ? '·' : '✓' }),
+          el('div', { class: 'tl-body' }, [
+            el('span', { class: 'tl-title', text: entry.message }),
+            el('span', { class: 'tl-meta', text: `${entry.source || 'agent'}${entry.ms ? ` · ${entry.ms} ms` : ''}` }),
+          ]),
+          el('span', { class: 'tl-time', text: fmtClock(entry.at) }),
+        ]),
+      );
+    }
+  }
+
+  function renderDevices() {
+    const host = $('#devices');
+    host.innerHTML = '';
+    const snap = S.snap || {};
+    const esp = snap.esp || S.espRaw || {};
+    const pairing = S.pairing;
+
+    // 1 — the link this phone uses
+    host.append(
+      el('div', { class: 'device' }, [
+        el('div', { class: 'device-head' }, [
+          el('span', { class: 'device-icon mint', html: svgIcon(ICONS.bolt, 19) }),
+          el('div', { class: 'device-title' }, [
+            el('strong', { text: pairing ? pairing.name : 'Not paired' }),
+            el('span', { text: pairing ? pairing.base : '—' }),
+          ]),
+        ]),
+        el('dl', { class: 'device-meta' }, [
+          el('dt', { text: 'Channel' }),
+          el('dd', { text: pairing ? (pairing.kind === 'plain' ? 'same-origin token' : 'ST1 · AES-256-GCM') : '—' }),
+          el('dt', { text: 'Round trip' }),
+          el('dd', { text: S.link && S.link.rtt != null ? `${S.link.rtt} ms` : '—' }),
+          el('dt', { text: 'Key' }),
+          el('dd', { text: pairing && pairing.key ? maskKey(pairing.key) : '—' }),
+          el('dt', { text: 'State' }),
+          el('dd', { text: S.online ? 'online' : 'offline' }),
+        ]),
+        el('div', { class: 'device-foot' }, [
+          el('button', { class: 'ghost-btn', type: 'button', text: 'Test now', onclick: () => testLink() }),
+          el('button', { class: 'ghost-btn', type: 'button', text: 'Reconnect', onclick: () => reconnect() }),
+        ]),
+      ]),
+    );
+
+    // 2 — the PC
+    host.append(
+      el('div', { class: 'device' }, [
+        el('div', { class: 'device-head' }, [
+          el('span', { class: 'device-icon', html: svgIcon(ICONS.chip, 19) }),
+          el('div', { class: 'device-title' }, [
+            el('strong', { text: S.hardwareOnly ? 'PC agent — not linked' : snap.name || 'PC agent' }),
+            el('span', { text: S.hardwareOnly ? 'the ESP32 cannot reach the PC' : snap.hostname || '—' }),
+          ]),
+        ]),
+        el('dl', { class: 'device-meta' }, [
+          el('dt', { text: 'Platform' }),
+          el('dd', { text: snap.platformLabel || '—' }),
+          el('dt', { text: 'Agent' }),
+          el('dd', { text: (snap.agent && snap.agent.version) || snap.agentVersion || '—' }),
+          el('dt', { text: 'Uptime' }),
+          el('dd', { text: snap.uptime ? fmtDuration(snap.uptime) : '—' }),
+          el('dt', { text: 'Ports' }),
+          el('dd', { text: snap.agent && snap.agent.ports ? `${snap.agent.ports.ui} / ${snap.agent.ports.link}` : '—' }),
+        ]),
+      ]),
+    );
+
+    // 3 — the ESP32
+    const linked = esp && (esp.connected === true || esp.link === 'up');
+    host.append(
+      el('div', { class: 'device' }, [
+        el('div', { class: 'device-head' }, [
+          el('span', { class: 'device-icon', html: svgIcon(ICONS.brain, 19) }),
+          el('div', { class: 'device-title' }, [
+            el('strong', { text: esp.device || esp.deviceId || 'ESP32 bridge' }),
+            el('span', { text: linked ? 'linked to the agent' : 'not linked' }),
+          ]),
+        ]),
+        el('dl', { class: 'device-meta' }, [
+          el('dt', { text: 'Firmware' }),
+          el('dd', { text: esp.fw || esp.firmware || '—' }),
+          el('dt', { text: 'IP' }),
+          el('dd', { text: esp.ip || '—' }),
+          el('dt', { text: 'PC power' }),
+          el('dd', { text: esp.pc || 'unknown' }),
+          el('dt', { text: 'Chip temp' }),
+          el('dd', { text: esp.chipTemp ? `${esp.chipTemp} °C` : '—' }),
+        ]),
+        el('div', { class: 'device-foot' }, [
+          el('button', { class: 'ghost-btn', type: 'button', text: 'Identify (blink)', onclick: () => runCommand('esp.identify') }),
+          el('button', { class: 'ghost-btn', type: 'button', text: 'Status', onclick: () => runCommand('esp.status') }),
+        ]),
+      ]),
+    );
+  }
+
+  async function testLink() {
+    if (S.demo) {
+      toast('Demo link is fine', { sub: 'simulated 12 ms' });
+      return;
+    }
+    const started = performance.now();
     try {
-      const result = await api('/api/status');
-      if (!result.ok) throw new Error(result.message || 'Status unavailable');
-      render(result.data);
-      banner('');
-      return true;
+      const reply = await S.link.request('system.ping');
+      const ms = Math.round(performance.now() - started);
+      toast('Link works', { sub: `${ms} ms · ${reply.ok ? 'encrypted round trip' : 'device answered'}` });
+      Diag.add('info', `manual ping ok in ${ms} ms`);
     } catch (err) {
-      state.connected = false;
-      if (err.code === 'UNAUTHORISED') return false;
-      const esp = await espStatus();
-      if (esp && !state.demo) {
-        showOffline();
-        return false;
+      toast('Link failed', { sub: err.message, tone: 'err' });
+      Diag.add('error', `manual ping failed: ${err.message}`);
+    }
+  }
+
+  function renderSettings() {
+    const kv = (host, rows) => {
+      host.innerHTML = '';
+      for (const [key, value] of rows) {
+        host.append(el('dt', { text: key }));
+        host.append(el('dd', { text: value || '—' }));
       }
-      banner(`Lost contact with the agent — retrying. ${err.message}`, 'error');
-      return false;
-    }
+    };
+    const pairing = S.pairing || {};
+    kv($('#conn-kv'), [
+      ['Mode', pairing.kind === 'plain' ? 'Console token' : `ST1 tunnel${pairing.kind === 'esp' ? ' (ESP32)' : ''}`],
+      ['Address', pairing.base],
+      ['Device', pairing.name],
+      ['Key', pairing.key ? maskKey(pairing.key) : '—'],
+      ['Session', S.link && S.link.sid ? S.link.sid : '—'],
+      ['Round trip', S.link && S.link.rtt != null ? `${S.link.rtt} ms` : '—'],
+      ['Paired', pairing.addedAt ? timeAgo(pairing.addedAt) : '—'],
+    ]);
+    const policy = (S.snap && S.snap.policy) || {};
+    const yesNo = (value) => (value === false ? 'no' : 'yes');
+    kv($('#policy-kv'), [
+      ['Shutdown', yesNo(policy.allowShutdown)],
+      ['Restart', yesNo(policy.allowReboot)],
+      ['Sleep', yesNo(policy.allowSleep)],
+      ['Screenshots', yesNo(policy.allowScreenshot)],
+      ['Typing on the PC', yesNo(policy.allowInput)],
+      ['Scripts', yesNo(policy.allowScripts)],
+      ['Hardware relay', yesNo(policy.allowEspPower)],
+      ['Quiet hours', policy.quietHours && policy.quietHours.enabled ? `${policy.quietHours.from}–${policy.quietHours.to}` : 'off'],
+      ['Rate limit', policy.rateLimitPerMinute ? `${policy.rateLimitPerMinute}/min` : '—'],
+    ]);
+    kv($('#app-kv'), [
+      ['Console', APP_VERSION],
+      ['Transport', S.pairing && S.pairing.kind === 'plain' ? 'fetch + token' : 'WebCrypto · AES-256-GCM'],
+      ['Service worker', 'serviceWorker' in navigator && navigator.serviceWorker.controller ? 'active' : 'not active'],
+      ['Activity kept', `${S.events.length} entries`],
+    ]);
+    $('#btn-demo-out').hidden = !S.demo;
+    $('#btn-install').hidden = !S.deferredInstall;
   }
 
-  function showSetup(message) {
-    $('#boot').classList.add('done');
-    $('#app').classList.add('hidden');
-    $('#setup').classList.remove('hidden');
-    $('#setup-base').value = localStorage.getItem(STORE_BASE) || '';
-    $('#setup-esp').value = localStorage.getItem(STORE_ESP_BASE) || '';
-    $('#setup-esp-token').value = localStorage.getItem(STORE_ESP_TOKEN) || '';
-    if (message) {
-      const box = $('#setup-error');
-      box.textContent = message;
-      box.classList.remove('hidden');
+  function renderAll() {
+    renderHeader();
+    if (S.tab === 'home') {
+      renderHero();
+      renderMetrics();
+      renderQuickActions();
+      renderHardware();
+      renderCatalogue();
     }
+    if (S.tab === 'activity') renderTimeline();
+    if (S.tab === 'devices') renderDevices();
+    if (S.tab === 'settings') renderSettings();
   }
 
-  function startSse() {
-    if (state.demo || !window.EventSource || state.sseOpen) return;
-    state.sseOpen = true;
-    try {
-      const source = new EventSource(`${state.base}/api/events?t=${encodeURIComponent(state.token)}`);
-      source.addEventListener('log', (event) => {
-        try {
-          pushLog(JSON.parse(event.data));
-        } catch {
-          /* ignore malformed frame */
-        }
-      });
-      source.addEventListener('status', (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          if (!state.status) return;
-          state.status.cpuPercent = data.cpuPercent;
-          state.status.memory = data.memory;
-          state.status.esp = data.esp;
-          state.status.uptime = state.status.uptime;
-          state.status.agent = { ...(state.status.agent || {}), counters: data.counters, lastCommand: data.lastCommand };
-          render(state.status);
-          banner('');
-        } catch {
-          /* ignore */
-        }
-      });
-      source.onopen = () => banner('');
-      source.onerror = () => {
-        // EventSource retries by itself; only surface a hint.
-        banner('Live updates paused — reconnecting…');
-      };
-      window.addEventListener('beforeunload', () => source.close());
-    } catch {
-      /* older WebView without EventSource: polling still works */
+  /* ── tabs ──────────────────────────────────────────────────────────────── */
+
+  function showTab(tab) {
+    S.tab = tab;
+    for (const button of $$('.tab')) button.classList.toggle('is-on', button.dataset.tab === tab);
+    for (const screen of $$('.screen')) screen.hidden = screen.dataset.screen !== tab;
+    renderAll();
+    if (tab === 'devices') renderDevices();
+    if (tab === 'settings') renderSettings();
+  }
+
+  /* ══════════════════════════════════════════════════════════════════════════
+     DEMO
+     ══════════════════════════════════════════════════════════════════════════ */
+
+  function demoSnapshot() {
+    const t = Date.now() / 1000;
+    return {
+      name: 'STRIGA-7',
+      hostname: 'STRIGA-7',
+      platformLabel: 'Windows',
+      platform: 'win32',
+      cpuCount: 16,
+      cpuModel: 'AMD Ryzen 7 5800X 8-Core',
+      cpuPercent: Math.round(18 + 12 * Math.sin(t / 9) + 6 * Math.sin(t / 2.7)),
+      memory: 34359738368,
+      memoryDetail: { total: 34359738368, used: 19864223744, percent: 58 },
+      uptime: 382140,
+      uptimeLabel: '4d 10h',
+      agent: { version: APP_VERSION, counters: { commands: 37 }, ports: { ui: 7878, link: 7879 } },
+      esp: {
+        connected: true,
+        device: 'esp32-bridge',
+        fw: '2.1.0',
+        ip: '192.168.1.1',
+        pc: S.demoRelay ? 'off' : 'on',
+        chipTemp: 47,
+        link: 'up',
+      },
+      policy: {
+        allowShutdown: true,
+        allowReboot: true,
+        allowSleep: true,
+        allowLock: true,
+        allowScreenshot: true,
+        allowInput: false,
+        allowScripts: false,
+        allowEspPower: true,
+        requireConfirm: true,
+        rateLimitPerMinute: 40,
+        quietHours: { enabled: false, from: '23:00', to: '07:00' },
+      },
+      catalogue: [
+        { group: 'Power', cmd: 'system.shutdown', label: 'Shut down' },
+        { group: 'Power', cmd: 'system.reboot', label: 'Restart' },
+        { group: 'Power', cmd: 'system.sleep', label: 'Sleep' },
+        { group: 'Power', cmd: 'system.cancel_shutdown', label: 'Cancel shutdown' },
+        { group: 'Session', cmd: 'system.lock', label: 'Lock screen' },
+        { group: 'Session', cmd: 'screen.wake', label: 'Wake display' },
+        { group: 'Session', cmd: 'screen.screenshot', label: 'Screenshot' },
+        { group: 'Media', cmd: 'media.play_pause', label: 'Play / pause' },
+        { group: 'Media', cmd: 'media.next', label: 'Next track' },
+        { group: 'Media', cmd: 'volume.up', label: 'Volume up' },
+        { group: 'Media', cmd: 'volume.down', label: 'Volume down' },
+        { group: 'Media', cmd: 'volume.mute', label: 'Mute' },
+        { group: 'Hardware', cmd: 'esp.power', label: 'Hard power (relay)' },
+        { group: 'Hardware', cmd: 'esp.reset', label: 'Hard reset (relay)' },
+        { group: 'Hardware', cmd: 'esp.status', label: 'ESP32 status' },
+        { group: 'System', cmd: 'agent.status', label: 'Agent status' },
+      ],
+    };
+  }
+
+  function demoCommand(cmd, args) {
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        if (cmd === 'esp.power' && args.action === 'off') S.demoRelay = true;
+        if (cmd === 'esp.power' && args.action === 'on') S.demoRelay = false;
+        if (cmd === 'esp.power' && args.action === 'cycle') S.demoRelay = !S.demoRelay;
+        resolve({ ok: true, cmd, data: { simulated: true }, ms: 20 + Math.round(Math.random() * 60) });
+      }, 180 + Math.random() * 320);
+    });
+  }
+
+  function startDemo() {
+    S.demo = true;
+    store.set(STORE.demo, true);
+    S.pairing = { kind: 'demo', base: 'demo', label: 'demo', name: 'STRIGA-7', addedAt: new Date().toISOString() };
+    S.events = [
+      { at: new Date(Date.now() - 600000).toISOString(), level: 'info', source: 'agent', message: 'SENTINEL agent started (demo)' },
+      { at: new Date(Date.now() - 420000).toISOString(), level: 'info', source: 'link', message: 'ESP32 authenticated over the local link' },
+      { at: new Date(Date.now() - 240000).toISOString(), level: 'warn', source: 'security', message: 'Blocked input.type — allowInput is off' },
+    ];
+    startApp();
+  }
+
+  /* ══════════════════════════════════════════════════════════════════════════
+     BOOT
+     ══════════════════════════════════════════════════════════════════════════ */
+
+  function dismissBoot() {
+    const boot = $('#boot');
+    if (!boot) return;
+    boot.classList.add('out');
+    setTimeout(() => boot.remove(), 420);
+  }
+
+  function startApp() {
+    dismissBoot();
+    $('#pair').hidden = true;
+    $('#app').hidden = false;
+    showTab(S.tab || 'home');
+    renderAll();
+    startPolling();
+    refresh().catch(() => {});
+    if (!S.demo) S.online = true;
+    setOnline(true);
+  }
+
+  function showPairScreen() {
+    dismissBoot();
+    $('#app').hidden = true;
+    $('#pair').hidden = false;
+    const address = $('#pair-address');
+    if (!address.value && S.pairing) address.value = S.pairing.label || '';
+    $('#pair-key').value = S.pairing && S.pairing.key ? S.pairing.key : '';
+    const params = new URLSearchParams(location.search);
+    if (params.get('t')) {
+      $('#pair-token').value = params.get('t');
+      $('#pair-advanced').open = true;
+      $('#pair-address').value = location.host;
     }
+    $('#pair-version').textContent = `SENTINEL ${APP_VERSION}`;
+  }
+
+  function wireUi() {
+    // pairing
+    $('#pair-form').addEventListener('submit', submitPairing);
+    $('#pair-key-paste').addEventListener('click', async () => {
+      let text = '';
+      try {
+        text = await navigator.clipboard.readText();
+      } catch {
+        toast('Clipboard blocked', { sub: 'Paste into the field by hand', tone: 'warn' });
+        return;
+      }
+      const cleaned = String(text || '').trim();
+      if (!cleaned) {
+        toast('Clipboard is empty', { tone: 'warn' });
+        return;
+      }
+      $('#pair-key').value = cleaned;
+      $('#pair-key').dispatchEvent(new Event('input'));
+      toast('Key pasted', { sub: `${cleaned.replace(/\s/g, '').length} characters` });
+    });
+    $('#pair-key-eye').addEventListener('click', () => {
+      const input = $('#pair-key');
+      const shown = input.type === 'text';
+      input.type = shown ? 'password' : 'text';
+      $('#pair-key-eye').setAttribute('aria-pressed', String(!shown));
+      $('#pair-key-eye').setAttribute('aria-label', shown ? 'Show the key' : 'Hide the key');
+    });
+    $('#pair-address-help').addEventListener('click', () => {
+      openSheet({
+        title: 'Where is the address?',
+        body: [
+          el('p', { text: 'The address is the local IP of your own hardware. Both devices must be on the same Wi-Fi.' }),
+          el('p', { text: 'On the PC: open the SENTINEL console. The pairing panel shows the exact address to type, for example 192.168.1.50:7878.' }),
+          el('p', { text: 'On the ESP32: connect to its setup network or open its page; the IP is 192.168.1.1 by default.' }),
+          el('p', { class: 'hint', text: 'Ports: the PC agent uses 7878, the ESP32 uses 80. If you leave the port out, the app tries the right one.' }),
+          el('p', { class: 'hint', text: 'A phone that is on mobile data cannot reach either device. Join the same Wi-Fi first.' }),
+        ],
+        actions: [{ label: 'Got it', tone: 'primary', run: () => {} }],
+      });
+    });
+    $('#pair-test').addEventListener('click', runProbe);
+    $('#pair-address').addEventListener('blur', () => {
+      const value = $('#pair-address').value.trim();
+      if (!value || value === 'self') return;
+      try {
+        $('#pair-address').value = T.normaliseAddress(value);
+        $('#pair-address').classList.remove('invalid');
+      } catch {
+        $('#pair-address').classList.add('invalid');
+      }
+    });
+    $('#pair-key').addEventListener('input', () => {
+      const value = $('#pair-key').value.replace(/\s/g, '');
+      const ok = /^[0-9a-fA-F]{64}$/.test(value);
+      $('#pair-key-hint').innerHTML = ok
+        ? '<span style="color:var(--mint)">Key looks right — 32 bytes.</span>'
+        : value.length
+          ? `${value.length}/64 characters`
+          : 'Shown in the PC console under <em>Pairing</em>, and on the ESP32 setup page.';
+    });
+    for (const chip of $$('[data-fill]')) {
+      chip.addEventListener('click', () => {
+        if (chip.dataset.fill === 'self') {
+          $('#pair-address').value = location.host;
+          $('#pair-key').focus();
+          toast('Using this computer', { sub: 'Add the pairing key to continue' });
+        } else if (chip.dataset.fill === 'esp32') {
+          $('#pair-address').value = '192.168.1.1';
+          $('#pair-key').focus();
+          toast('ESP32 address filled in', { sub: 'Now paste the pairing key' });
+        }
+      });
+    }
+    $('#pair-diagnostics-toggle').addEventListener('click', () => {
+      const panel = $('#pair-diagnostics');
+      panel.hidden = !panel.hidden;
+      $('#pair-diagnostics-toggle').setAttribute('aria-expanded', String(!panel.hidden));
+      renderDiag();
+    });
+    $('#diag-copy').addEventListener('click', async () => {
+      const ok = await copyText(diagText());
+      toast(ok ? 'Diagnostics copied' : 'Copy failed', { tone: ok ? 'ok' : 'warn' });
+    });
+    $('#diag-clear').addEventListener('click', () => Diag.clear());
+    $('#pair-demo').addEventListener('click', startDemo);
+
+    // app shell
+    for (const tab of $$('.tab')) tab.addEventListener('click', () => showTab(tab.dataset.tab));
+    $('#btn-refresh').addEventListener('click', async () => {
+      $('#btn-refresh').classList.add('spin');
+      try {
+        await refresh();
+        toast('Refreshed', { sub: S.link && S.link.rtt != null ? `${S.link.rtt} ms` : 'ok' });
+      } finally {
+        setTimeout(() => $('#btn-refresh').classList.remove('spin'), 400);
+      }
+    });
+    for (const button of $$('[data-quick]')) {
+      button.addEventListener('click', () => runCommandWithArgs(button.dataset.quick));
+    }
+    $('#btn-pair-new').addEventListener('click', () => {
+      $('#app').hidden = true;
+      showPairScreen();
+    });
+    $('#btn-reconnect').addEventListener('click', () => reconnect());
+    $('#btn-unpair').addEventListener('click', () => {
+      confirmSheet({
+        title: 'Unpair this phone?',
+        message: 'The address and key will be removed from this device. You can pair again with the same key.',
+        confirmLabel: 'Unpair',
+        onConfirm: () => {
+          store.drop(STORE.pairing);
+          S.pairing = null;
+          if (S.link) S.link.close();
+          S.link = null;
+          clearInterval(S.pollTimer);
+          clearInterval(S.eventTimer);
+          location.reload();
+        },
+      });
+    });
+    $('#btn-demo-out').addEventListener('click', () => {
+      store.drop(STORE.demo);
+      location.reload();
+    });
+    $('#btn-install').addEventListener('click', async () => {
+      if (!S.deferredInstall) return;
+      S.deferredInstall.prompt();
+      const choice = await S.deferredInstall.userChoice;
+      toast(choice.outcome === 'accepted' ? 'Installing…' : 'Install dismissed');
+      S.deferredInstall = null;
+      renderSettings();
+    });
+    $('#btn-diagnostics').addEventListener('click', () => {
+      const panel = $('#settings-diag');
+      panel.hidden = !panel.hidden;
+      panel.textContent = diagText();
+    });
+    $('#sheet-close').addEventListener('click', closeSheet);
+    $('#sheet-backdrop').addEventListener('click', closeSheet);
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') closeSheet();
+    });
+    $('#activity-filter').addEventListener('click', (event) => {
+      const button = event.target.closest('[data-filter]');
+      if (!button) return;
+      S.filter = button.dataset.filter;
+      for (const seg of $$('#activity-filter .seg')) seg.classList.toggle('is-on', seg === button);
+      renderTimeline();
+    });
+
+    window.addEventListener('beforeinstallprompt', (event) => {
+      event.preventDefault();
+      S.deferredInstall = event;
+      if (S.tab === 'settings') renderSettings();
+    });
+  }
+
+  function diagText() {
+    const lines = Diag.entries.map((entry) => `${entry.at} ${entry.level.toUpperCase().padEnd(5)} ${entry.message}`);
+    lines.push('');
+    lines.push(`app ${APP_VERSION} · ${navigator.userAgent}`);
+    lines.push(`origin ${location.origin} · online ${S.online} · demo ${S.demo}`);
+    if (S.pairing) lines.push(`pairing ${JSON.stringify({ ...S.pairing, key: maskKey(S.pairing.key) })}`);
+    return lines.join('\n');
   }
 
   async function boot() {
     const params = new URLSearchParams(location.search);
-    if (params.has('t')) {
-      localStorage.setItem(STORE_TOKEN, params.get('t'));
-      params.delete('t');
-      const rest = params.toString();
-      history.replaceState(null, '', `${location.pathname}${rest ? `?${rest}` : ''}${location.hash}`);
-    }
-    if (params.get('demo') === '1') localStorage.setItem(STORE_DEMO, '1');
+    if (params.get('t')) S.token = params.get('t');
+    wireUi();
 
-    state.token = localStorage.getItem(STORE_TOKEN) || '';
-    state.base = (localStorage.getItem(STORE_BASE) || (isNative() ? '' : location.origin)).replace(/\/+$/, '');
-    // Demo data is opt-in only. A missing token means "show the connect screen".
-    state.demo = localStorage.getItem(STORE_DEMO) === '1';
-
-    if (!state.token && !state.demo) return showSetup();
-    if (!state.base && !state.demo) return showSetup();
-    await enterApp();
-  }
-
-  async function enterApp() {
-    if (state.demo) {
-      localStorage.setItem(STORE_DEMO, '1');
-      banner('Demo data — no PC is connected. Enter a server to control a real machine.');
-      const status = demoStatus();
-      state.log = demoLog();
-      state.catalogue = status.catalogue;
-      state.macros = demoMacros;
-      render(status);
-      renderLog();
-      renderFeed();
-      $('#setup').classList.add('hidden');
-      $('#app').classList.remove('hidden');
-      $('#boot').classList.add('done');
-      setInterval(() => {
-        if (!state.demo) return;
-        const status2 = demoStatus();
-        status2.cpuPercent = Math.max(6, Math.min(96, (state.status ? state.status.cpuPercent : 40) + (Math.random() * 18 - 9)));
-        render(status2);
-      }, 2600);
+    if (params.get('demo') === '1' || store.get(STORE.demo, false)) {
+      startDemo();
       return;
     }
-    try {
-      await refreshStatus();
-      $('#setup').classList.add('hidden');
-      $('#app').classList.remove('hidden');
-      $('#boot').classList.add('done');
-      const log = await api('/api/log?limit=200');
-      if (log.ok) {
-        state.log = log.data || [];
-        renderLog();
-        renderFeed();
-      }
-      startSse();
-    } catch (err) {
-      if (err.code === 'UNAUTHORISED') return handleAuthFailure(err);
-      showSetup(`Could not reach ${state.base}. ${err.message}`);
-    }
-  }
 
-  /* ─────────────────────────── wiring ─────────────────────────── */
-
-  function wire() {
-    $$('.nav-item').forEach((item) => item.addEventListener('click', () => setView(item.dataset.view)));
-    $$('[data-goto]').forEach((item) => item.addEventListener('click', () => setView(item.dataset.goto)));
-    $('#avatar').addEventListener('click', () => setView('settings'));
-    $('#refresh-btn').addEventListener('click', async () => {
-      await refreshStatus();
-      toast('Refreshed', 'ok', 1200);
-    });
-
-    // command buttons
-    document.addEventListener('click', (event) => {
-      const button = event.target.closest('[data-cmd]');
-      if (!button) return;
-      let args = {};
-      if (button.dataset.args) {
-        try {
-          args = JSON.parse(button.dataset.args);
-        } catch {
-          args = {};
-        }
-      }
-      triggerCommand(button.dataset.cmd, args, { hold: button.dataset.hold === 'true', button });
-    });
-
-    // policy switches
-    document.addEventListener('click', (event) => {
-      const sw = event.target.closest('[data-policy]');
-      if (!sw) return;
-      const flag = sw.dataset.policy;
-      const current = state.status && state.status.policy ? state.status.policy[flag] !== false : true;
-      patchPolicy({ [flag]: !current });
-    });
-
-    // key buttons
-    $$('[data-key]').forEach((button) =>
-      button.addEventListener('click', () => run('input.key', { combo: button.dataset.key })),
-    );
-
-    // typing
-    $('#type-form').addEventListener('submit', async (event) => {
-      event.preventDefault();
-      const text = $('#type-text').value;
-      if (!text.trim()) return;
-      const result = await run('input.type', { text });
-      if (result.ok && $('#type-enter').checked) await run('input.key', { combo: 'enter' }, { quiet: true });
-      if (result.ok) $('#type-text').value = '';
-    });
-
-    // log filters
-    $$('#log-filters .chip').forEach((chip) =>
-      chip.addEventListener('click', () => {
-        state.level = chip.dataset.level;
-        $$('#log-filters .chip').forEach((c) => c.classList.toggle('is-active', c === chip));
-        renderLog();
-      }),
-    );
-    $('#log-export').addEventListener('click', () => {
-      const blob = new Blob([JSON.stringify(state.log, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `sentinel-activity-${Date.now()}.json`;
-      link.click();
-      setTimeout(() => URL.revokeObjectURL(url), 4000);
-    });
-    $('#log-clear').addEventListener('click', () => {
-      state.log = [];
-      renderLog();
-      renderFeed();
-    });
-
-    // settings
-    $('#set-name-save').addEventListener('click', async () => {
-      const name = $('#set-name').value.trim();
-      if (!name) return;
-      if (state.demo) return toast('Renamed (demo)', 'ok');
-      const result = await api('/api/settings', { method: 'POST', body: { name } });
-      if (result.ok) {
-        toast('Name saved', 'ok');
-        refreshStatus();
-      }
-    });
-    $('#set-server').addEventListener('click', () => {
-      localStorage.removeItem(STORE_TOKEN);
-      showSetup();
-    });
-    $('#set-ping').addEventListener('click', async () => {
-      const started = performance.now();
-      await refreshStatus();
-      toast(`Agent answered in ${Math.round(performance.now() - started)} ms`, 'ok');
-    });
-    $('#app-form').addEventListener('submit', async (event) => {
-      event.preventDefault();
-      const name = $('#app-name').value.trim();
-      const path = $('#app-path').value.trim();
-      if (!name || !path) return;
-      if (state.demo) return toast('App added (demo)', 'ok');
-      const result = await api('/api/apps', { method: 'POST', body: { name, path } });
-      if (result.ok) {
-        toast(`${name} allow-listed`, 'ok');
-        $('#app-form').reset();
-        refreshStatus();
-      } else {
-        toast(result.message || 'Could not add app', 'err');
-      }
-    });
-    $('#rotate-keys').addEventListener('click', async () => {
-      const ok = await confirmHold({ title: 'Rotate every key?', text: 'The ESP32 and all phones must be re-paired with the new key.' });
-      if (!ok) return;
-      if (state.demo) return toast('Keys rotated (demo)', 'ok');
-      const result = await api('/api/keys', { method: 'POST', body: { confirm: true } });
-      if (result.ok) {
-        toast('New keys generated — re-pair your devices', 'ok', 6000);
-        loadPairing();
-      }
-    });
-    $('#forget-device').addEventListener('click', () => {
-      localStorage.removeItem(STORE_TOKEN);
-      localStorage.removeItem(STORE_BASE);
-      localStorage.removeItem(STORE_DEMO);
-      location.reload();
-    });
-    $('#pair-copy').addEventListener('click', async () => {
-      const raw = $('#pair-code').dataset.raw || $('#pair-code').textContent;
-      const ok = await copyText(raw);
-      toast(ok ? 'Pairing snippet copied' : 'Could not copy — select the text manually', ok ? 'ok' : 'err');
-    });
-    $('#pair-rotate').addEventListener('click', () => $('#rotate-keys').click());
-
-    // macros
-    $('#macro-new').addEventListener('click', openMacroBuilder);
-    $('#macro-close').addEventListener('click', () => $('#macro-modal').classList.add('hidden'));
-    $('#macro-add-step').addEventListener('click', () => {
-      const cmd = $('#macro-cmd').value;
-      if (!cmd) return;
-      if (state.pendingMacroSteps.length >= 12) return toast('That is enough steps for one macro', 'err');
-      state.pendingMacroSteps.push({ cmd, args: {} });
-      renderMacroSteps();
-    });
-    $('#macro-save').addEventListener('click', async () => {
-      const name = $('#macro-name').value.trim();
-      if (!name) return toast('Give the macro a name', 'err');
-      if (!state.pendingMacroSteps.length) return toast('Add at least one step', 'err');
-      if (state.demo) {
-        state.macros[name] = { description: $('#macro-desc').value, steps: state.pendingMacroSteps };
-        $('#macro-modal').classList.add('hidden');
-        return loadMacros();
-      }
-      const result = await api('/api/macros', {
-        method: 'POST',
-        body: { name, description: $('#macro-desc').value, steps: state.pendingMacroSteps },
-      });
-      if (result.ok) {
-        toast(`Saved macro ${name}`, 'ok');
-        $('#macro-modal').classList.add('hidden');
-        loadMacros();
-      } else {
-        toast(result.message || 'Could not save macro', 'err');
-      }
-    });
-
-    // palette
-    $('#palette-open').addEventListener('click', openPalette);
-    $('#palette-btn').addEventListener('click', openPalette);
-    $('#palette-field').addEventListener('input', (event) => {
-      state.paletteIndex = 0;
-      renderPalette(event.target.value);
-    });
-    $('#palette').addEventListener('click', (event) => {
-      if (event.target.id === 'palette') closePalette();
-    });
-    document.addEventListener('keydown', (event) => {
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
-        event.preventDefault();
-        openPalette();
+    const pairing = store.get(STORE.pairing, null);
+    if (pairing && pairing.kind && pairing.kind !== 'demo') {
+      S.pairing = pairing;
+      $('#boot').querySelector('.boot-text').textContent = `Reaching ${pairing.label || 'your device'}…`;
+      try {
+        const attempt = await attemptConnect({
+          address: pairing.base.replace(/\/api\/tunnel$|\/t$/, ''),
+          key: pairing.key,
+          token: pairing.token,
+          onStep: () => {},
+        });
+        S.link = attempt.link;
+        S.pairing = attempt.pairing;
+        store.set(STORE.pairing, attempt.pairing);
+        startApp();
+        return;
+      } catch (err) {
+        Diag.add('error', `auto-connect failed: ${err.message}`);
+        showPairScreen();
+        showPairError(explainTransportError(err));
         return;
       }
-      if ($('#palette').classList.contains('hidden')) return;
-      if (event.key === 'Escape') closePalette();
-      if (event.key === 'ArrowDown') {
-        event.preventDefault();
-        movePalette(1);
-      }
-      if (event.key === 'ArrowUp') {
-        event.preventDefault();
-        movePalette(-1);
-      }
-      if (event.key === 'Enter') {
-        const item = state.paletteItems[state.paletteIndex];
-        closePalette();
-        if (item) item.run();
-      }
-    });
+    }
 
-    // modals
-    $('#shot-close').addEventListener('click', () => $('#shot-modal').classList.add('hidden'));
-    $('#shot-modal').addEventListener('click', (event) => {
-      if (event.target.id === 'shot-modal') $('#shot-modal').classList.add('hidden');
-    });
-
-    // offline panel (agent down, ESP32 reachable)
-    $$('[data-esp]').forEach((button) =>
-      button.addEventListener('click', async () => {
-        if (button.dataset.hold === 'true') {
-          const ok = await confirmHold({ title: 'Power cycle the PC?', text: 'The relay cuts power the same way the case button does.' });
-          if (!ok) return;
-        }
-        espPower(button.dataset.esp);
-      }),
-    );
-    $('#offline-retry').addEventListener('click', async () => {
-      const ok = await refreshStatus();
-      if (ok) {
-        $('#offline').classList.add('hidden');
-        $('#app').classList.remove('hidden');
-        startSse();
-      } else {
-        toast('The agent is still not answering', 'err');
-      }
-    });
-
-    // setup screen
-    $('#setup-form').addEventListener('submit', async (event) => {
-      event.preventDefault();
-      const base = $('#setup-base').value.trim().replace(/\/+$/, '');
-      const token = $('#setup-token').value.trim();
-      const espBase = $('#setup-esp').value.trim().replace(/\/+$/, '');
-      const espToken = $('#setup-esp-token').value.trim();
-      if (espBase) localStorage.setItem(STORE_ESP_BASE, espBase);
-      else localStorage.removeItem(STORE_ESP_BASE);
-      if (espToken) localStorage.setItem(STORE_ESP_TOKEN, espToken);
-      else localStorage.removeItem(STORE_ESP_TOKEN);
-      if (!base || !token) return;
-      $('#setup-error').classList.add('hidden');
-      state.base = base;
-      state.token = token;
-      state.demo = false;
-      localStorage.setItem(STORE_BASE, base);
-      localStorage.setItem(STORE_TOKEN, token);
-      localStorage.removeItem(STORE_DEMO);
+    // Same-origin console with a token in the URL: connect straight away.
+    if (S.token) {
+      $('#boot').querySelector('.boot-text').textContent = 'Signing in to this computer…';
       try {
-        const result = await api('/api/status');
-        if (!result.ok) throw new Error(result.message || 'Agent refused the request');
-        $('#setup').classList.add('hidden');
-        $('#app').classList.remove('hidden');
-        render(result.data);
-        const log = await api('/api/log?limit=200');
-        if (log.ok) {
-          state.log = log.data || [];
-          renderLog();
-          renderFeed();
-        }
-        startSse();
-        toast('Connected', 'ok');
+        const attempt = await attemptConnect({ address: location.host, token: S.token, onStep: () => {} });
+        S.link = attempt.link;
+        S.pairing = attempt.pairing;
+        startApp();
+        return;
       } catch (err) {
-        if (err.code === 'UNAUTHORISED' || /token/i.test(err.message)) {
-          const box = $('#setup-error');
-          box.textContent = 'The agent rejected that token. Copy it again from Settings → Pairing.';
-          box.classList.remove('hidden');
-        } else {
-          const status = await espStatus();
-          if (status) {
-            showOffline();
-            return;
-          }
-          const box = $('#setup-error');
-          box.textContent = `No answer from ${base}. Check the address, the port (7878) and that the agent is running.`;
-          box.classList.remove('hidden');
-        }
+        Diag.add('error', `token sign-in failed: ${err.message}`);
+        showPairScreen();
+        showPairError(explainTransportError(err));
+        return;
       }
-    });
-    $('#setup-demo').addEventListener('click', () => {
-      state.demo = true;
-      localStorage.setItem(STORE_DEMO, '1');
-      enterApp();
-    });
+    }
 
-    window.addEventListener('online', () => {
-      banner('Back online — refreshing', 'warn');
-      setTimeout(refreshStatus, 600);
-    });
-    window.addEventListener('offline', () => banner('This device is offline', 'error'));
-
-    document.addEventListener('visibilitychange', () => {
-      if (!document.hidden && state.connected && !state.demo) refreshStatus();
-    });
+    showPairScreen();
   }
 
-  wire();
-  boot();
-  setView('dashboard');
+  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  }
+
+  boot().catch((err) => {
+    showPairScreen();
+    showPairError({ title: 'SENTINEL could not start', message: err.message, hint: 'Reload the page. If it keeps happening, open Diagnostics and copy the report.' });
+  });
 })();

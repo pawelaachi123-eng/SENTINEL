@@ -27,6 +27,7 @@
 #include <ArduinoJson.h>
 #include <mbedtls/md.h>
 #include "config.h"
+#include "tunnel.h"
 
 #if SENTINEL_USE_WIREGUARD
 #include <WireGuard-ESP32.h>
@@ -361,6 +362,26 @@ static void startWireGuard() {
 #endif
 }
 
+// ── Encrypted tunnel (phone ⇄ ESP32, no VPN) ────────────────────────────────
+static StTunnel tunnel;
+
+static String tunnelStatusJson() {
+  JsonDocument doc;
+  doc["ok"] = true;
+  doc["cmd"] = "esp.status";
+  JsonObject data = doc["data"].to<JsonObject>();
+  writeState(data);
+  data["tunnel"] = tunnel.active();
+  String out;
+  serializeJson(doc, out);
+  return out;
+}
+
+static String rpcResultBody;
+static String rpcResultId;
+static bool rpcResultOk = false;
+static bool rpcResultReady = false;
+
 // ── Agent link ──────────────────────────────────────────────────────────────
 static void sendLine(const String &line) {
   if (!agent.connected()) return;
@@ -406,6 +427,35 @@ static void doPower(const String &action, uint32_t holdMs) {
     return;
   }
   relayPulse(cfg.powerPin, holdMs);
+}
+
+/**
+ * Ask the PC agent to run a command the ESP32 cannot do itself and wait for the
+ * answer. linkLoop() is pumped manually because the HTTP handler would otherwise
+ * sit idle while the reply is in flight.
+ */
+static void linkLoop();
+static String relayToAgent(const String &body, bool *ok) {
+  *ok = false;
+  if (linkState != LINK_UP) return "";
+  rpcResultReady = false;
+  rpcResultId = String(millis() % 1000000) + "-" + String((uint32_t)random(0, 100000));
+  JsonDocument doc;
+  doc["t"] = "rpc";
+  doc["id"] = rpcResultId;
+  doc["body"] = body;
+  String out;
+  serializeJson(doc, out);
+  sendLine(out);
+  uint32_t started = millis();
+  while (millis() - started < 8000) {
+    linkLoop();
+    if (rpcResultReady) break;
+    delay(5);
+  }
+  if (!rpcResultReady) return "";
+  *ok = rpcResultOk;
+  return rpcResultBody;
 }
 
 static void handleCommand(JsonObjectConst doc) {
@@ -500,6 +550,15 @@ static void processLine(const String &line) {
   if (type == "cmd") {
     if (linkState != LINK_UP) return;
     handleCommand(doc.as<JsonObjectConst>());
+    return;
+  }
+
+  if (type == "rpc_res") {
+    if (String((const char *)(doc["id"] | "")) == rpcResultId) {
+      rpcResultOk = doc["ok"] | false;
+      rpcResultBody = String((const char *)(doc["body"] | ""));
+      rpcResultReady = true;
+    }
     return;
   }
 
@@ -598,8 +657,32 @@ static void handleRoot() {
 }
 
 // ── Setup ───────────────────────────────────────────────────────────────────
+static void handleTunnelHello() {
+  corsHeaders();
+  String response;
+  int status = tunnel.hello(http.arg("plain"), response);
+  http.send(status, "application/json", response);
+}
+
+static void handleTunnelOpen() {
+  corsHeaders();
+  String response;
+  int status = tunnel.open(http.arg("plain"), response);
+  http.send(status, "application/json", response);
+}
+
+static void handleTunnelMsg() {
+  corsHeaders();
+  String response;
+  int status = tunnel.message(http.arg("plain"), response);
+  http.send(status, "application/json", response);
+}
+
 static void setupHttp() {
   http.on("/", HTTP_GET, handleRoot);
+  http.on("/t/hello", HTTP_POST, handleTunnelHello);
+  http.on("/t/open", HTTP_POST, handleTunnelOpen);
+  http.on("/t/msg", HTTP_POST, handleTunnelMsg);
   http.on("/status", HTTP_GET, handleStatus);
   http.on("/power", HTTP_GET, handlePower);
   http.on("/save", HTTP_POST, []() {
@@ -666,6 +749,11 @@ void setup() {
     return;
   }
 
+  tunnel.begin(cfg.psk);
+  tunnel.setStatusProvider(tunnelStatusJson);
+  tunnel.setPowerHandler([](const String &action, uint32_t holdMs) { doPower(action, holdMs); });
+  tunnel.setRelay(relayToAgent);
+
   startWireGuard();
   if (MDNS.begin(cfg.deviceId.c_str())) {
     MDNS.addService("http", "tcp", DEFAULT_HTTP_PORT);
@@ -694,6 +782,7 @@ void loop() {
 
   http.handleClient();
   linkLoop();
+  tunnel.sweep();
 
   // Heartbeat LED: steady when linked, slow blink when searching.
   uint32_t interval = linkState == LINK_UP ? 3000 : 700;

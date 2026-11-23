@@ -30,6 +30,19 @@ trusts for everything else.
 
 ## Transport
 
+Two transports exist and both end at the same policy gate.
+
+**ST1 (default, no VPN).** Ephemeral ECDH P-256 → HKDF-SHA256 → AES-256-GCM with
+a monotonic counter as nonce and replay guard. Both sides prove knowledge of the
+pairing key over the handshake transcript, so neither can be impersonated, and
+the keys die with the session (15 minutes idle). Specification:
+[`tunnel.md`](tunnel.md).
+
+**Token HTTP (same machine only).** The console opened on the PC itself uses a
+48-character token in the query string, with a 12-strike lockout. It is not meant
+for remote use; the tunnel is.
+
+
 The agent speaks plain HTTP inside your own network. That is a deliberate trade:
 self-signed TLS on an ESP32 breaks certificate pinning across Android versions and
 adds a failure mode that leaves you locked out. The compensating controls are:

@@ -1,4 +1,11 @@
-# VPN layout (phone + ESP32 + PC)
+# VPN layout (optional)
+
+> **You do not need this.** The phone reaches the PC and the ESP32 directly with
+> ST1 (`docs/tunnel.md`), which needs no VPN client and no third-party service.
+> This page is only for the case where you want to reach the machine from
+> **outside your own Wi-Fi** — then something has to carry the packets, and a
+> WireGuard tunnel or a tailnet is the honest way to do it. ST1 keeps working
+> unchanged on top of it.
 
 SENTINEL assumes the network is yours. Any tunnel that gives the phone an IP route
 to the house works; these are the two that need the least fiddling.

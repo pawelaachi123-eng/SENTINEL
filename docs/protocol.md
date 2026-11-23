@@ -2,6 +2,13 @@
 
 Two channels, one key.
 
+## 0. Phone ⇄ agent / ESP32 (ST1 tunnel)
+
+The app's default transport is ST1 — an encrypted channel that needs no VPN.
+Handshake, key schedule, frames and the threat model are specified in
+[`tunnel.md`](tunnel.md). The plain HTTP + token surface below still exists and
+is used when the console is opened on the machine itself.
+
 ## 1. Phone ⇄ agent (HTTP + SSE)
 
 Base: `http://<pc>:7878`
@@ -67,6 +74,20 @@ device → agent  {"t":"log","level":"info","msg":"relay pulse"}
 
 Commands over the link: `power` (`on|off|cycle`), `reset`, `status`, `identify`
 (blink), `reboot`. Anything else returns `UNKNOWN_COMMAND`.
+
+### Relay frames (ESP32 → agent)
+
+When a phone asks the ESP32 for something only the PC can do (anything that is
+not `esp.*`), the ESP32 forwards the request over its authenticated link:
+
+```json
+device → agent  {"t":"rpc","id":"481516-2342","body":"{\"id\":12,\"cmd\":\"system.lock\",\"args\":{}}"}
+agent  → device {"t":"rpc_res","id":"481516-2342","ok":true,"body":"{\"id\":12,\"ok\":true,\"cmd\":\"system.lock\",\"data\":{…},\"ms\":9}"}
+```
+
+The agent executes it with `source: 'esp32'`, so policy, quiet hours, the rate
+limiter and the audit log all still apply. The ESP32 waits up to 8 s, then answers
+`LINK_OFFLINE` to the phone.
 
 ## 3. ESP32 standalone HTTP (port 80)
 

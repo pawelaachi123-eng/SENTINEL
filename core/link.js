@@ -71,7 +71,9 @@ class EspLink extends EventEmitter {
 
   stop() {
     if (this.heartbeat) clearInterval(this.heartbeat);
-    for (const socket of this.sockets.values()) socket.destroy();
+    // this.sockets holds session records, not raw sockets — destroying the
+    // wrong object crashed the agent on shutdown whenever a device was linked.
+    for (const session of this.sockets.values()) session.socket?.destroy();
     this.sockets.clear();
     if (this.server) this.server.close();
     if (this.serial) {
@@ -240,6 +242,24 @@ class EspLink extends EventEmitter {
         clearTimeout(pending.timer);
         if (msg.ok) pending.resolve(msg.data || {});
         else pending.reject(Object.assign(new Error(msg.error || 'Device rejected the command'), { code: msg.code || 'DEVICE_ERROR' }));
+        return;
+      }
+
+      case 'rpc': {
+        if (!session.authed) return;
+        const id = String(msg.id || '');
+        const payload = String(msg.body || '');
+        const reply = async () => {
+          let result;
+          try {
+            if (!this.rpcHandler) throw Object.assign(new Error('relay is not available'), { code: 'NO_RELAY' });
+            result = { ok: true, body: await this.rpcHandler(payload, this.info.deviceId) };
+          } catch (err) {
+            result = { ok: false, body: JSON.stringify({ ok: false, code: err.code || 'FAILED', message: err.message }) };
+          }
+          this.sendRaw(session, { t: 'rpc_res', id, ok: result.ok, body: result.body });
+        };
+        reply();
         return;
       }
 

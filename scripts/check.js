@@ -39,13 +39,15 @@ for (const file of jsFiles) {
     fail(`${path.relative(root, file)}: ${String(err.stderr || err.message).split('\n').slice(0, 3).join(' ')}`);
   }
 }
-const uiScript = path.join(root, 'ui', 'app.js');
-try {
-  execFileSync(process.execPath, ['--check', uiScript], { stdio: 'pipe' });
-} catch (err) {
-  fail(`ui/app.js: ${String(err.stderr || err.message).split('\n').slice(0, 3).join(' ')}`);
+const uiScripts = ['app.js', 'transport.js', 'sw.js'].map((name) => path.join(root, 'ui', name));
+for (const script of uiScripts) {
+  try {
+    execFileSync(process.execPath, ['--check', script], { stdio: 'pipe' });
+  } catch (err) {
+    fail(`ui/${path.basename(script)}: ${String(err.stderr || err.message).split('\n').slice(0, 3).join(' ')}`);
+  }
 }
-console.log(`   checked ${jsFiles.length + 1} files`);
+console.log(`   checked ${jsFiles.length + uiScripts.length} files`);
 
 console.log('2. Assets');
 const html = fs.readFileSync(path.join(root, 'ui', 'index.html'), 'utf8');

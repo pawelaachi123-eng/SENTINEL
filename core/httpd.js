@@ -29,13 +29,14 @@ const MAX_BODY = 256 * 1024;
  * SSE (not WebSocket) keeps the agent dependency-free while still being live.
  */
 class HttpApi {
-  constructor({ config, log, commander, link, stats, state }) {
+  constructor({ config, log, commander, link, stats, state, tunnel }) {
     this.config = config;
     this.log = log;
     this.commander = commander;
     this.link = link;
     this.stats = stats;
     this.state = state;
+    this.tunnel = tunnel || null;
     this.server = null;
     this.clients = new Set();
     this.failures = new Map();
@@ -160,6 +161,12 @@ class HttpApi {
     const route = url.pathname;
 
     try {
+      // Only the three handshake/traffic endpoints are handled by the tunnel;
+      // /api/tunnel/sessions stays a normal, token-protected API call.
+      if (route === '/api/tunnel/hello' || route === '/api/tunnel/open' || route === '/api/tunnel/msg') {
+        return await this.tunnelRoute(req, res, route);
+      }
+
       if (route === '/api/health') {
         return this.json(res, 200, {
           ok: true,
@@ -188,6 +195,42 @@ class HttpApi {
       this.log.debug('http', `Request ${route} failed: ${err.message}`);
       return this.json(res, status, { ok: false, code: err.code || 'ERROR', message: err.message });
     }
+  }
+
+  /**
+   * The tunnel replaces the bearer token with an ECDH session: the pairing key
+   * proves who you are, and everything after the handshake is AES-256-GCM.
+   */
+  async tunnelRoute(req, res, route) {
+    if (!this.tunnel) return this.json(res, 503, { error: 'tunnel disabled' });
+    if (req.method !== 'POST') return this.json(res, 405, { error: 'POST only' });
+    let body;
+    try {
+      body = await this.body(req);
+    } catch (err) {
+      return this.json(res, err.status || 400, { error: err.message });
+    }
+    const ip = req.socket.remoteAddress || 'unknown';
+    const action = route.slice('/api/tunnel/'.length);
+
+    if (action === 'hello') {
+      const result = this.tunnel.hello(body, ip);
+      return this.json(res, result.status, result.body);
+    }
+    if (action === 'open') {
+      const result = this.tunnel.open(body);
+      return this.json(res, result.status, result.body);
+    }
+    if (action === 'msg') {
+      const result = await this.tunnel.message(body, ip);
+      if (result.status !== 200) this.log.debug('tunnel', `frame refused: ${result.body.error}`);
+      return this.json(res, result.status, result.body);
+    }
+    if (action === 'sessions' && req.method === 'POST') {
+      // Diagnostics are still token-protected through the normal API.
+      return this.json(res, 404, { error: 'unknown tunnel action' });
+    }
+    return this.json(res, 404, { error: `unknown tunnel action "${action}"` });
   }
 
   async api(req, res, route, url) {
@@ -242,6 +285,10 @@ class HttpApi {
       const keys = this.config.rotateKeys();
       this.log.warn('security', 'Pairing key and UI token rotated');
       return this.json(res, 200, { ok: true, data: keys });
+    }
+
+    if (route === '/api/tunnel/sessions' && req.method === 'GET') {
+      return this.json(res, 200, { ok: true, data: this.tunnel ? this.tunnel.liveSessions() : [] });
     }
 
     if (route === '/api/log' && req.method === 'GET') {
@@ -320,23 +367,11 @@ class HttpApi {
   }
 
   async snapshot() {
-    const info = await this.commander.handlers['system.info']();
+    const base = await this.commander.handlers['system.snapshot']();
     return {
-      ...info,
-      cpuPercent: this.stats.read(),
+      ...base,
       memory: this.stats.memory(),
-      esp: this.link ? this.link.status() : { connected: false },
-      agent: {
-        version: AGENT_VERSION,
-        startedAt: this.state.startedAt,
-        counters: this.state.counters,
-        lastCommand: this.state.lastCommand,
-      },
-      apps: Object.keys(this.config.get('apps', {})),
       appList: this.commander.handlers['app.list'](),
-      catalogue: this.commander.catalogue(),
-      macros: Object.keys(this.config.get('macros', {})),
-      serverTime: new Date().toISOString(),
     };
   }
 

@@ -1,483 +1,318 @@
 <!doctype html>
-<html lang="en" data-theme="sentinel">
+<html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<meta name="theme-color" content="#070b12" />
-<meta name="color-scheme" content="dark" />
-<meta http-equiv="Content-Security-Policy" content="default-src 'self' data: blob:; connect-src *; img-src 'self' data: blob: *; style-src 'self' 'unsafe-inline'; script-src 'self'; font-src 'self' data:;" />
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#06090f">
+<meta name="color-scheme" content="dark">
+<meta name="description" content="SENTINEL — control your own PC from your phone over an encrypted channel.">
 <title>SENTINEL</title>
-<link rel="manifest" href="/manifest.webmanifest" />
-<link rel="icon" href="/assets/icon.svg" type="image/svg+xml" />
-<link rel="stylesheet" href="/styles.css" />
+<link rel="icon" href="/assets/icon-192.png" sizes="192x192">
+<link rel="apple-touch-icon" href="/assets/icon-192.png">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="stylesheet" href="/styles.css">
 </head>
 <body>
 
-<svg class="sprite" aria-hidden="true">
-  <symbol id="i-logo" viewBox="0 0 24 24"><path d="M12 2.5 4.5 5.6v6.1c0 4.6 3.2 8.8 7.5 9.8 4.3-1 7.5-5.2 7.5-9.8V5.6L12 2.5Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M12 7.2v9.6M8.4 10.4h7.2M8.4 13.6h7.2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" opacity=".85"/></symbol>
-  <symbol id="i-dashboard" viewBox="0 0 24 24"><path d="M4 4h7v7H4zM13 4h7v4h-7zM13 10h7v10h-7zM4 13h7v7H4z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></symbol>
-  <symbol id="i-control" viewBox="0 0 24 24"><path d="M5 7h14M5 12h14M5 17h14" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><circle cx="9" cy="7" r="2.1" fill="currentColor"/><circle cx="15" cy="12" r="2.1" fill="currentColor"/><circle cx="8" cy="17" r="2.1" fill="currentColor"/></symbol>
-  <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13 2 4.5 13.5H11l-1 8.5 8.5-11.5H12l1-8.5Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></symbol>
-  <symbol id="i-chip" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M9.5 9.5h5v5h-5z" filled="none" stroke="currentColor" stroke-width="1.4"/><path d="M10 3v3M14 3v3M10 18v3M14 18v3M3 10h3M3 14h3M18 10h3M18 14h3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></symbol>
-  <symbol id="i-activity" viewBox="0 0 24 24"><path d="M3 12h3.5l2-6 3.5 12 2.5-6H21" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
-  <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M12 2.8v2.6M12 18.6v2.6M4.6 4.6l1.9 1.9M17.5 17.5l1.9 1.9M2.8 12h2.6M18.6 12h2.6M4.6 19.4l1.9-1.9M17.5 6.5l1.9-1.9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></symbol>
-  <symbol id="i-power" viewBox="0 0 24 24"><path d="M12 3v9" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/><path d="M7.5 6.3a7.5 7.5 0 1 0 9 0" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></symbol>
-  <symbol id="i-restart" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.6-5.9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M20 4v4.5h-4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
-  <symbol id="i-sleep" viewBox="0 0 24 24"><path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a7 7 0 0 0 10.5 10.5Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></symbol>
-  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="4.5" y="10.5" width="15" height="10" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8 10.5V7.8a4 4 0 0 1 8 0v2.7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="15.5" r="1.4" fill="currentColor"/></symbol>
-  <symbol id="i-camera" viewBox="0 0 24 24"><path d="M3.5 8.5h3l1.5-2h8l1.5 2h3v10h-17z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><circle cx="12" cy="13" r="3.2" fill="none" stroke="currentColor" stroke-width="1.7"/></symbol>
-  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5 5l1.5 1.5M17.5 17.5 19 19M5 19l1.5-1.5M17.5 6.5 19 5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></symbol>
-  <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z" fill="currentColor"/></symbol>
-  <symbol id="i-next" viewBox="0 0 24 24"><path d="M7 5.5v13l9-6.5z" fill="currentColor"/><rect x="17" y="5.5" width="2.4" height="13" rx="1" fill="currentColor"/></symbol>
-  <symbol id="i-prev" viewBox="0 0 24 24"><path d="M17 5.5v13l-9-6.5z" fill="currentColor"/><rect x="4.6" y="5.5" width="2.4" height="13" rx="1" fill="currentColor"/></symbol>
-  <symbol id="i-volume" viewBox="0 0 24 24"><path d="M4 9.5h3L12 5v14L7 14.5H4z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M16 9a4.5 4.5 0 0 1 0 6M18.6 6.4a8 8 0 0 1 0 11.2" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></symbol>
-  <symbol id="i-mute" viewBox="0 0 24 24"><path d="M4 9.5h3L12 5v14L7 14.5H4z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="m16.5 9.5 5 5m0-5-5 5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></symbol>
-  <symbol id="i-keyboard" viewBox="0 0 24 24"><rect x="2.5" y="6.5" width="19" height="11" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M6 10h1.5M9.5 10H11M13 10h1.5M16.5 10H18M7.5 14h9" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></symbol>
-  <symbol id="i-apps" viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="7" height="7" rx="2" fill="none" stroke="currentColor" stroke-width="1.7"/><rect x="13.5" y="3.5" width="7" height="7" rx="2" fill="none" stroke="currentColor" stroke-width="1.7"/><rect x="3.5" y="13.5" width="7" height="7" rx="2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M17 13.5v7M13.5 17h7" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></symbol>
-  <symbol id="i-monitor" viewBox="0 0 24 24"><rect x="2.5" y="4" width="19" height="12.5" rx="2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M9 20h6M12 16.5V20" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></symbol>
-  <symbol id="i-wifi" viewBox="0 0 24 24"><path d="M2.5 8.5a14 14 0 0 1 19 0M5.8 12a9.5 9.5 0 0 1 12.4 0M9.2 15.4a4.6 4.6 0 0 1 5.6 0" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><circle cx="12" cy="18.8" r="1.5" fill="currentColor"/></symbol>
-  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 2.8 4.8 5.7v6.1c0 4.4 3 8.4 7.2 9.4 4.2-1 7.2-5 7.2-9.4V5.7L12 2.8Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="m8.8 11.8 2.3 2.3 4.1-4.4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
-  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M15 6.5v-1A1.5 1.5 0 0 0 13.5 4H5.5A1.5 1.5 0 0 0 4 5.5v8A1.5 1.5 0 0 0 5.5 15h1" fill="none" stroke="currentColor" stroke-width="1.7"/></symbol>
-  <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></symbol>
-  <symbol id="i-x" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></symbol>
-  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></symbol>
-  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4.5 7h15M9 7V4.8h6V7M6.5 7l.9 12.2A1.8 1.8 0 0 0 9.2 21h5.6a1.8 1.8 0 0 0 1.8-1.8L17.5 7" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></symbol>
-  <symbol id="i-terminal" viewBox="0 0 24 24"><rect x="2.5" y="4" width="19" height="16" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="m6.5 9.5 3 2.8-3 2.8M12.5 15.5h5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></symbol>
-  <symbol id="i-command" viewBox="0 0 24 24"><path d="M9 4.5a2.5 2.5 0 1 0 2.5 2.5v10a2.5 2.5 0 1 0 2.5-2.5H4.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><circle cx="17" cy="17" r="2.5" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="17" cy="7" r="2.5" fill="none" stroke="currentColor" stroke-width="1.7"/></symbol>
-  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M4 12a8 8 0 0 1 13.7-5.6M20 12a8 8 0 0 1-13.7 5.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M17.7 3v3.6h-3.6M6.3 21v-3.6h3.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
-  <symbol id="i-logout" viewBox="0 0 24 24"><path d="M14 4.5H6.5A1.5 1.5 0 0 0 5 6v12a1.5 1.5 0 0 0 1.5 1.5H14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="M17 8.5 20.5 12 17 15.5M10 12h10" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></symbol>
-  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M12 7.5V12l3 2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></symbol>
-  <symbol id="i-gauge" viewBox="0 0 24 24"><path d="M4 18a9 9 0 1 1 16 0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="m12 13 4-3.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="13.5" r="1.7" fill="currentColor"/></symbol>
-</svg>
-
-<!-- ─────────────  boot / setup  ───────────── -->
-<div id="boot" class="boot">
-  <div class="boot-mark">
-    <svg class="icon"><use href="#i-logo"/></svg>
-    <span>SENTINEL</span>
-  </div>
-  <p class="boot-sub">Connecting to your machine…</p>
-  <div class="boot-bar"><i></i></div>
+<!-- ── ambient background ──────────────────────────────────────────────── -->
+<div class="backdrop" aria-hidden="true">
+  <div class="glow glow-a"></div>
+  <div class="glow glow-b"></div>
+  <div class="grid-lines"></div>
 </div>
 
-<section id="setup" class="setup hidden" aria-labelledby="setup-title">
-  <div class="setup-card">
-    <div class="setup-head">
-      <svg class="icon icon-lg"><use href="#i-logo"/></svg>
-      <div>
-        <h1 id="setup-title">Connect to your PC</h1>
-        <p>Enter the agent address shown in SENTINEL on the computer, plus its access token.</p>
-      </div>
-    </div>
-    <form id="setup-form">
-      <label class="field">
-        <span>Agent address</span>
-        <input id="setup-base" type="url" inputmode="url" placeholder="http://192.168.1.20:7878" autocomplete="off" required />
-        <small>Over your VPN use the tunnel address, e.g. <code>http://10.8.0.5:7878</code></small>
-      </label>
-      <label class="field">
-        <span>Access token</span>
-        <input id="setup-token" type="text" placeholder="48-character token" autocomplete="off" spellcheck="false" required />
-        <small>Settings → Pairing in the desktop app, or the URL printed by <code>sentinel-agent</code>.</small>
-      </label>
-      <details class="esp-setup">
-        <summary>ESP32 fallback (optional)</summary>
-        <label class="field">
-          <span>ESP32 address</span>
-          <input id="setup-esp" type="url" inputmode="url" placeholder="http://10.8.0.7" autocomplete="off" />
-        </label>
-        <label class="field">
-          <span>Power token</span>
-          <input id="setup-esp-token" placeholder="16 hex characters" autocomplete="off" spellcheck="false" />
-        </label>
-        <p class="muted small">Lets the app switch the PC on while the agent is stopped. Shown in Settings → Pairing.</p>
-      </details>
-      <div class="setup-actions">
-        <button class="btn btn-primary" type="submit">Connect</button>
-        <button class="btn btn-ghost" type="button" id="setup-demo">Explore demo</button>
-      </div>
-      <p class="setup-error hidden" id="setup-error"></p>
-    </form>
+<!-- ── boot splash ─────────────────────────────────────────────────────── -->
+<div id="boot" class="boot" role="status" aria-live="polite">
+  <div class="boot-mark">
+    <svg viewBox="0 0 64 64" width="44" height="44" aria-hidden="true">
+      <path d="M32 5 55 16v18c0 13-9.6 21.6-23 25C18.6 55.6 9 47 9 34V16Z" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/>
+      <path d="M22 32.5 29 39l14-15" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
   </div>
-</section>
+  <p class="boot-text">Opening SENTINEL…</p>
+</div>
 
-<section id="offline" class="setup hidden" aria-labelledby="offline-title">
-  <div class="setup-card">
-    <div class="setup-head">
-      <svg class="icon icon-lg"><use href="#i-power"/></svg>
-      <div>
-        <h1 id="offline-title">PC is offline</h1>
-        <p>The agent is not answering, but the ESP32 bridge is awake. You can still switch the machine on.</p>
-      </div>
-    </div>
-    <div class="kv" id="offline-kv"></div>
-    <div class="row-buttons" style="margin-top:18px">
-      <button class="btn btn-primary" data-esp="on"><svg class="icon"><use href="#i-power"/></svg>Power on</button>
-      <button class="btn" data-esp="cycle" data-hold="true"><svg class="icon"><use href="#i-restart"/></svg>Power cycle</button>
-      <button class="btn btn-ghost" id="offline-retry"><svg class="icon"><use href="#i-refresh"/></svg>Retry agent</button>
-    </div>
-    <p class="muted small" id="offline-msg" style="margin-top:14px"></p>
-  </div>
-</section>
-
-<!-- ─────────────  app shell  ───────────── -->
-<div id="app" class="app hidden">
-  <aside class="sidebar">
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<!--  PAIRING                                                               -->
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<main id="pair" class="pair" hidden>
+  <header class="pair-head">
     <div class="brand">
-      <svg class="icon icon-logo"><use href="#i-logo"/></svg>
-      <div class="brand-text"><strong>SENTINEL</strong><span>PC control</span></div>
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 64 64" width="26" height="26">
+          <path d="M32 5 55 16v18c0 13-9.6 21.6-23 25C18.6 55.6 9 47 9 34V16Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/>
+          <path d="M22 32.5 29 39l14-15" fill="none" stroke="currentColor" stroke-width="4.4" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </span>
+      <span class="brand-text">SENTINEL</span>
     </div>
-    <nav class="nav" aria-label="Primary">
-      <button class="nav-item is-active" data-view="dashboard"><svg class="icon"><use href="#i-dashboard"/></svg><span>Overview</span></button>
-      <button class="nav-item" data-view="control"><svg class="icon"><use href="#i-control"/></svg><span>Control</span></button>
-      <button class="nav-item" data-view="automation"><svg class="icon"><use href="#i-bolt"/></svg><span>Automation</span></button>
-      <button class="nav-item" data-view="devices"><svg class="icon"><use href="#i-chip"/></svg><span>Devices</span></button>
-      <button class="nav-item" data-view="activity"><svg class="icon"><use href="#i-activity"/></svg><span>Activity</span></button>
-      <button class="nav-item" data-view="settings"><svg class="icon"><use href="#i-settings"/></svg><span>Settings</span></button>
-    </nav>
-    <div class="sidebar-foot">
-      <div class="link-chip" id="link-chip">
-        <span class="dot"></span>
-        <div><strong id="link-label">Linking…</strong><span id="link-detail">ESP32</span></div>
+    <button class="ghost-btn" id="pair-diagnostics-toggle" type="button" aria-expanded="false">
+      Diagnostics
+    </button>
+  </header>
+
+  <section class="pair-intro">
+    <h1>Pair this phone</h1>
+    <p>
+      SENTINEL talks straight to your own machine. No account, no VPN, no cloud —
+      the key below turns into a private encrypted channel between this phone and
+      your PC or ESP32.
+    </p>
+  </section>
+
+  <form id="pair-form" class="card pair-card" autocomplete="off" novalidate>
+    <div class="field">
+      <div class="field-head">
+        <label for="pair-address">Address</label>
+        <button type="button" class="link-btn" id="pair-address-help">Where do I find this?</button>
       </div>
-      <button class="palette-hint" id="palette-open"><svg class="icon"><use href="#i-command"/></svg><span>Commands</span><kbd>Ctrl K</kbd></button>
+      <input id="pair-address" name="address" type="text" inputmode="url" spellcheck="false"
+             placeholder="192.168.1.50:7878" aria-describedby="pair-address-hint">
+      <p class="hint" id="pair-address-hint">
+        Your PC's local IP and the console port, or the ESP32's IP. Scheme and port are optional.
+      </p>
+      <div class="chips" role="group" aria-label="Suggested addresses">
+        <button type="button" class="chip" data-fill="self">This computer</button>
+        <button type="button" class="chip" data-fill="esp32">ESP32 · 192.168.1.1</button>
+        <button type="button" class="chip" id="pair-test">Test address</button>
+      </div>
+      <div id="pair-probe" class="probe" hidden></div>
     </div>
-  </aside>
 
-  <main class="main">
-    <header class="topbar">
-      <div class="topbar-title">
-        <h1 id="view-title">Overview</h1>
-        <p id="view-sub">Your machine at a glance</p>
+    <div class="field">
+      <div class="field-head">
+        <label for="pair-key">Pairing key</label>
+        <button type="button" class="link-btn" id="pair-key-paste">Paste</button>
       </div>
-      <div class="topbar-actions">
-        <button class="icon-btn" id="palette-btn" title="Run a command (Ctrl K)"><svg class="icon"><use href="#i-command"/></svg></button>
-        <div class="pill" id="latency-pill" title="Round-trip to the agent"><span class="dot"></span><span id="latency">—</span></div>
-        <button class="icon-btn" id="refresh-btn" title="Refresh"><svg class="icon"><use href="#i-refresh"/></svg></button>
-        <button class="avatar" id="avatar" title="Settings">PC</button>
+      <div class="key-wrap">
+        <input id="pair-key" name="key" type="password" spellcheck="false" autocapitalize="off"
+               placeholder="64 hex characters" aria-describedby="pair-key-hint">
+        <button type="button" class="eye-btn" id="pair-key-eye" aria-label="Show the key" aria-pressed="false">
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12Z" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="12" r="2.6" fill="none" stroke="currentColor" stroke-width="1.7"/></svg>
+        </button>
       </div>
-    </header>
+      <p class="hint" id="pair-key-hint">
+        Shown in the PC console under <em>Pairing</em>, and on the ESP32 setup page.
+      </p>
+    </div>
 
-    <div id="banner" class="banner hidden" role="status"></div>
-
-    <!-- ═══ overview ═══ -->
-    <section class="view is-active" data-view="dashboard">
-      <div class="grid dash-top">
-        <article class="card hero">
-          <div class="hero-glow"></div>
-          <div class="hero-body">
-            <div class="hero-meta">
-              <span class="tag" id="hero-platform">—</span>
-              <span class="tag tag-muted" id="hero-arch">—</span>
-            </div>
-            <h2 id="hero-name">…</h2>
-            <p id="hero-sub" class="muted">Connecting…</p>
-            <div class="hero-status">
-              <span class="state-pill" id="hero-state"><span class="dot"></span><span>Online</span></span>
-              <span class="hero-ip" id="hero-ip">—</span>
-            </div>
-            <div class="hero-actions">
-              <button class="btn btn-ghost" data-cmd="screen.screenshot"><svg class="icon"><use href="#i-camera"/></svg>Screenshot</button>
-              <button class="btn btn-ghost" data-cmd="system.cancel_shutdown"><svg class="icon"><use href="#i-x"/></svg>Cancel shutdown</button>
-            </div>
-          </div>
-          <div class="gauge" id="gauge">
-            <svg viewBox="0 0 120 120">
-              <circle class="gauge-track" cx="60" cy="60" r="52"></circle>
-              <circle class="gauge-value" cx="60" cy="60" r="52"></circle>
-            </svg>
-            <div class="gauge-label"><strong id="gauge-cpu">0</strong><span>% CPU</span></div>
-          </div>
-        </article>
-
-        <article class="card tile">
-          <div class="tile-head"><svg class="icon"><use href="#i-gauge"/></svg><span>Memory</span></div>
-          <div class="tile-value"><strong id="mem-used">—</strong><span id="mem-total">/ —</span></div>
-          <div class="meter"><i id="mem-meter"></i></div>
-          <div class="tile-foot" id="mem-percent">—</div>
-        </article>
-
-        <article class="card tile">
-          <div class="tile-head"><svg class="icon"><use href="#i-clock"/></svg><span>Uptime</span></div>
-          <div class="tile-value"><strong id="up-value">—</strong></div>
-          <div class="tile-foot" id="up-foot">since boot</div>
-        </article>
-
-        <article class="card tile">
-          <div class="tile-head"><svg class="icon"><use href="#i-shield"/></svg><span>Commands</span></div>
-          <div class="tile-value"><strong id="cmd-count">0</strong><span> this session</span></div>
-          <div class="tile-foot" id="cmd-last">no commands yet</div>
-        </article>
+    <details class="advanced" id="pair-advanced">
+      <summary>I only have a console token</summary>
+      <div class="field">
+        <label for="pair-token">Console token</label>
+        <input id="pair-token" name="token" type="text" spellcheck="false" placeholder="e.g. 4f1c…">
+        <p class="hint">Token mode works when this page is served by the PC itself (same Wi-Fi, no encryption layer).</p>
       </div>
+    </details>
 
-      <div class="section-head">
-        <h3>Quick actions</h3>
-        <span class="muted" id="quick-hint">Tap to run · hold for destructive actions</span>
+    <button class="primary-btn" id="pair-submit" type="submit">
+      <span class="btn-label">Connect</span>
+      <span class="spinner" hidden aria-hidden="true"></span>
+    </button>
+
+    <div id="pair-steps" class="steps" hidden></div>
+    <div id="pair-error" class="alert" role="alert" hidden></div>
+    <p class="fineprint">
+      The phone keeps only the address and the key, stored on this device.
+      Every command travels encrypted; nothing is sent to a third party.
+    </p>
+  </form>
+
+  <section id="pair-diagnostics" class="card diag" hidden>
+    <h2>Connection diagnostics</h2>
+    <p class="hint">Everything the app tried, in order. Useful when the phone and the PC disagree about the network.</p>
+    <pre id="diag-log" class="diag-log">(nothing yet)</pre>
+    <div class="row-actions">
+      <button type="button" class="ghost-btn" id="diag-copy">Copy</button>
+      <button type="button" class="ghost-btn" id="diag-clear">Clear</button>
+    </div>
+    <dl class="diag-meta" id="diag-meta"></dl>
+  </section>
+
+  <footer class="pair-foot">
+    <span id="pair-version">SENTINEL 2.1</span>
+    <button type="button" class="link-btn" id="pair-demo">Explore a demo</button>
+  </footer>
+</main>
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<!--  APP SHELL                                                             -->
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<div id="app" class="app" hidden>
+  <header class="topbar">
+    <div class="topbar-left">
+      <span class="brand-mark small" aria-hidden="true">
+        <svg viewBox="0 0 64 64" width="22" height="22">
+          <path d="M32 5 55 16v18c0 13-9.6 21.6-23 25C18.6 55.6 9 47 9 34V16Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/>
+          <path d="M22 32.5 29 39l14-15" fill="none" stroke="currentColor" stroke-width="4.4" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </span>
+      <div class="topbar-titles">
+        <h1 id="device-name">SENTINEL</h1>
+        <p id="device-sub" class="muted">connecting…</p>
       </div>
-      <div class="quick-grid" id="quick-grid">
-        <button class="quick" data-cmd="system.lock"><svg class="icon"><use href="#i-lock"/></svg><span>Lock</span></button>
-        <button class="quick" data-cmd="system.sleep"><svg class="icon"><use href="#i-sleep"/></svg><span>Sleep</span></button>
-        <button class="quick" data-cmd="screen.wake"><svg class="icon"><use href="#i-sun"/></svg><span>Wake</span></button>
-        <button class="quick" data-cmd="system.reboot" data-hold="true"><svg class="icon"><use href="#i-restart"/></svg><span>Restart</span></button>
-        <button class="quick quick-danger" data-cmd="system.shutdown" data-hold="true"><svg class="icon"><use href="#i-power"/></svg><span>Shut down</span></button>
-        <button class="quick" data-cmd="esp.power" data-args='{"action":"cycle"}' data-hold="true"><svg class="icon"><use href="#i-bolt"/></svg><span>Hard power</span></button>
-      </div>
+    </div>
+    <div class="topbar-right">
+      <span id="link-pill" class="pill pill-wait">
+        <span class="dot"></span><span id="link-pill-text">linking</span>
+      </span>
+      <button class="icon-btn" id="btn-refresh" type="button" aria-label="Refresh now">
+        <svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+    </div>
+  </header>
 
-      <div class="grid dash-bottom">
-        <article class="card">
-          <div class="card-head"><h3>ESP32 bridge</h3><span class="badge" id="esp-badge">offline</span></div>
-          <div class="kv" id="esp-kv">
-            <div><span>Transport</span><strong id="esp-transport">—</strong></div>
-            <div><span>Wi-Fi</span><strong id="esp-rssi">—</strong></div>
-            <div><span>Chip temp</span><strong id="esp-temp">—</strong></div>
-            <div><span>PC sense</span><strong id="esp-pc">—</strong></div>
-          </div>
-          <div class="row-buttons">
-            <button class="btn btn-sm" data-cmd="esp.power" data-args='{"action":"on"}'>Power on</button>
-            <button class="btn btn-sm" data-cmd="esp.power" data-args='{"action":"off"}' data-hold="true">Power off</button>
-            <button class="btn btn-sm" data-cmd="esp.reset" data-hold="true">Reset</button>
-          </div>
-        </article>
-
-        <article class="card">
-          <div class="card-head"><h3>Recent activity</h3><button class="link" data-goto="activity">View all</button></div>
-          <ul class="feed" id="feed-mini"></ul>
-        </article>
-      </div>
-    </section>
-
-    <!-- ═══ control ═══ -->
-    <section class="view" data-view="control">
-      <div class="grid two">
-        <article class="card">
-          <div class="card-head"><h3>Media &amp; sound</h3></div>
-          <div class="media-pad">
-            <button class="media-btn" data-cmd="media.previous" title="Previous"><svg class="icon"><use href="#i-prev"/></svg></button>
-            <button class="media-btn media-main" data-cmd="media.play_pause" title="Play / pause"><svg class="icon"><use href="#i-play"/></svg></button>
-            <button class="media-btn" data-cmd="media.next" title="Next"><svg class="icon"><use href="#i-next"/></svg></button>
-          </div>
-          <div class="row-buttons center">
-            <button class="btn btn-sm" data-cmd="volume.down"><svg class="icon"><use href="#i-volume"/></svg>−</button>
-            <button class="btn btn-sm" data-cmd="volume.mute"><svg class="icon"><use href="#i-mute"/></svg>Mute</button>
-            <button class="btn btn-sm" data-cmd="volume.up"><svg class="icon"><use href="#i-volume"/></svg>+</button>
-          </div>
-        </article>
-
-        <article class="card">
-          <div class="card-head"><h3>Type on the PC</h3><span class="badge badge-warn" id="input-badge">locked</span></div>
-          <form id="type-form" class="stack">
-            <textarea id="type-text" rows="3" placeholder="Text to type into the focused window…" maxlength="4000"></textarea>
-            <div class="row-buttons">
-              <button class="btn btn-primary" type="submit"><svg class="icon"><use href="#i-keyboard"/></svg>Type it</button>
-              <label class="check"><input type="checkbox" id="type-enter" /> press Enter after</label>
-            </div>
-          </form>
-          <div class="keys">
-            <button class="key" data-key="ctrl+shift+esc">Ctrl+Shift+Esc</button>
-            <button class="key" data-key="alt+tab">Alt+Tab</button>
-            <button class="key" data-key="ctrl+c">Ctrl+C</button>
-            <button class="key" data-key="ctrl+v">Ctrl+V</button>
-            <button class="key" data-key="win+d">Win+D</button>
-            <button class="key" data-key="enter">Enter</button>
-          </div>
-        </article>
-      </div>
-
-      <div class="section-head"><h3>Capabilities</h3><span class="muted">Switch off anything you never want to happen</span></div>
-      <div class="grid caps" id="caps-grid"></div>
-
-      <div class="grid two">
-        <article class="card">
-          <div class="card-head"><h3>Allowed apps</h3><button class="link" data-goto="settings">Manage</button></div>
-          <div class="chips" id="apps-chips"></div>
-        </article>
-        <article class="card">
-          <div class="card-head"><h3>Display</h3></div>
-          <div class="row-buttons">
-            <button class="btn" data-cmd="screen.screenshot"><svg class="icon"><use href="#i-camera"/></svg>Capture screen</button>
-            <button class="btn" data-cmd="screen.wake"><svg class="icon"><use href="#i-sun"/></svg>Wake display</button>
-            <button class="btn" data-cmd="system.logout" data-hold="true"><svg class="icon"><use href="#i-logout"/></svg>Log out</button>
-          </div>
-          <div class="shot-preview" id="shot-preview"><span>No screenshot yet</span></div>
-        </article>
-      </div>
-    </section>
-
-    <!-- ═══ automation ═══ -->
-    <section class="view" data-view="automation">
-      <div class="grid two">
-        <article class="card">
-          <div class="card-head"><h3>Macros</h3><button class="btn btn-sm btn-primary" id="macro-new"><svg class="icon"><use href="#i-plus"/></svg>New macro</button></div>
-          <ul class="macro-list" id="macro-list"></ul>
-        </article>
-        <article class="card">
-          <div class="card-head"><h3>Command catalogue</h3><span class="muted" id="catalogue-count"></span></div>
-          <div class="catalogue" id="catalogue"></div>
-        </article>
-      </div>
-    </section>
-
-    <!-- ═══ devices ═══ -->
-    <section class="view" data-view="devices">
-      <div class="grid two">
-        <article class="card">
-          <div class="card-head"><h3>ESP32 bridge</h3><span class="badge" id="esp-badge-2">offline</span></div>
-          <div class="kv" id="esp-kv-2"></div>
-          <div class="row-buttons" style="margin-top:14px">
-            <button class="btn btn-sm" data-cmd="esp.power" data-args='{"action":"on"}'>Power on</button>
-            <button class="btn btn-sm" data-cmd="esp.power" data-args='{"action":"off"}' data-hold="true">Power off</button>
-            <button class="btn btn-sm" data-cmd="esp.power" data-args='{"action":"cycle"}' data-hold="true">Power cycle</button>
-            <button class="btn btn-sm" data-cmd="esp.reset" data-hold="true">Reset</button>
-          </div>
-        </article>
-
-        <article class="card">
-          <div class="card-head"><h3>Pairing</h3><span class="badge badge-warn">keep secret</span></div>
-          <p class="muted small">Paste this into the ESP32 setup page. Anyone with this key can control the PC, so treat it like a password.</p>
-          <pre class="code" id="pair-code">loading…</pre>
-          <div class="row-buttons">
-            <button class="btn btn-sm" id="pair-copy"><svg class="icon"><use href="#i-copy"/></svg>Copy</button>
-            <button class="btn btn-sm btn-danger-ghost" id="pair-rotate"><svg class="icon"><use href="#i-refresh"/></svg>Rotate keys</button>
-          </div>
-        </article>
-      </div>
-
-      <article class="card">
-        <div class="card-head"><h3>How the link works</h3></div>
-        <ol class="steps">
-          <li><strong>Phone → VPN</strong> Your WireGuard/tailnet tunnel carries the app traffic.</li>
-          <li><strong>ESP32</strong> Dials the agent on TCP <span class="mono" id="pair-port">7879</span>, proven with a challenge/response.</li>
-          <li><strong>Agent → PC</strong> Executes only allow-listed commands, rate-limited and audit-logged.</li>
-          <li><strong>Fallback</strong> No network? The ESP32 relay can still power the machine on or off.</li>
-        </ol>
-      </article>
-    </section>
-
-    <!-- ═══ activity ═══ -->
-    <section class="view" data-view="activity">
-      <article class="card">
-        <div class="card-head">
-          <h3>Activity log</h3>
-          <div class="filters" id="log-filters">
-            <button class="chip is-active" data-level="all">All</button>
-            <button class="chip" data-level="info">Info</button>
-            <button class="chip" data-level="warn">Warnings</button>
-            <button class="chip" data-level="error">Errors</button>
+  <main class="screens">
+    <!-- HOME ---------------------------------------------------------- -->
+    <section id="screen-home" class="screen" data-screen="home">
+      <div class="hero card" id="hero">
+        <div class="hero-ring" id="hero-ring">
+          <svg viewBox="0 0 120 120" width="132" height="132" aria-hidden="true">
+            <circle class="ring-track" cx="60" cy="60" r="52" fill="none" stroke-width="7"/>
+            <circle class="ring-value" id="ring-cpu" cx="60" cy="60" r="52" fill="none" stroke-width="7"
+                    stroke-dasharray="326.7" stroke-dashoffset="326.7" transform="rotate(-90 60 60)"/>
+          </svg>
+          <div class="ring-label">
+            <span id="ring-percent">—</span>
+            <small>CPU</small>
           </div>
         </div>
-        <div class="terminal" id="terminal"></div>
-        <div class="row-buttons">
-          <button class="btn btn-sm" id="log-export">Export JSON</button>
-          <button class="btn btn-sm btn-ghost" id="log-clear">Clear view</button>
+        <div class="hero-body">
+          <p class="eyebrow" id="hero-state">Reading state…</p>
+          <h2 id="hero-host">—</h2>
+          <p class="hero-meta" id="hero-meta">—</p>
+          <div class="hero-actions">
+            <button class="action-btn primary" data-quick="screen.wake" type="button">Wake display</button>
+            <button class="action-btn danger-ghost" data-quick="system.shutdown" data-confirm type="button">Shut down</button>
+          </div>
         </div>
-      </article>
+      </div>
+
+      <div class="metrics" id="metrics"></div>
+
+      <section class="block">
+        <div class="block-head">
+          <h3>Quick actions</h3>
+          <span class="muted" id="quick-hint">Tap to run · destructive actions ask first</span>
+        </div>
+        <div class="action-grid" id="quick-actions"></div>
+      </section>
+
+      <section class="block">
+        <div class="block-head">
+          <h3>Hardware</h3>
+          <span class="muted" id="hw-hint">Relay on the ESP32</span>
+        </div>
+        <div class="card hw-card" id="hardware"></div>
+      </section>
+
+      <section class="block">
+        <div class="block-head">
+          <h3>Anything else</h3>
+          <span class="muted">Every command the agent exposes</span>
+        </div>
+        <div class="card catalogue" id="catalogue"></div>
+      </section>
     </section>
 
-    <!-- ═══ settings ═══ -->
-    <section class="view" data-view="settings">
-      <div class="grid two">
-        <article class="card">
-          <div class="card-head"><h3>This PC</h3></div>
-          <label class="field"><span>Display name</span><input id="set-name" type="text" maxlength="48" /></label>
-          <div class="row-buttons"><button class="btn btn-primary btn-sm" id="set-name-save">Save name</button></div>
-          <div class="kv compact" id="set-system"></div>
-        </article>
-
-        <article class="card">
-          <div class="card-head"><h3>Connection</h3></div>
-          <div class="kv compact" id="set-connection"></div>
-          <div class="row-buttons">
-            <button class="btn btn-sm" id="set-server">Change server</button>
-            <button class="btn btn-sm btn-ghost" id="set-ping">Test connection</button>
-          </div>
-        </article>
-      </div>
-
-      <div class="grid two">
-        <article class="card">
-          <div class="card-head"><h3>Safety</h3></div>
-          <div class="switch-list" id="safety-list"></div>
-        </article>
-
-        <article class="card">
-          <div class="card-head"><h3>Allow-listed apps</h3></div>
-          <form class="stack" id="app-form">
-            <label class="field"><span>Name</span><input id="app-name" placeholder="Spotify" maxlength="40" required /></label>
-            <label class="field"><span>Executable path</span><input id="app-path" placeholder="C:\\Program Files\\…\\Spotify.exe" required /></label>
-            <button class="btn btn-primary btn-sm" type="submit"><svg class="icon"><use href="#i-plus"/></svg>Allow app</button>
-          </form>
-          <ul class="app-list" id="app-list"></ul>
-        </article>
-      </div>
-
-      <article class="card danger">
-        <div class="card-head"><h3>Danger zone</h3></div>
-        <p class="muted small">Rotating the keys disconnects the ESP32 and every paired phone until you enter the new key.</p>
-        <div class="row-buttons">
-          <button class="btn btn-danger" id="rotate-keys">Rotate pairing keys</button>
-          <button class="btn btn-ghost" id="forget-device">Forget this server</button>
+    <!-- ACTIVITY ------------------------------------------------------ -->
+    <section id="screen-activity" class="screen" data-screen="activity" hidden>
+      <div class="block-head sticky">
+        <h2>Activity</h2>
+        <div class="segmented" id="activity-filter" role="group" aria-label="Filter activity">
+          <button type="button" class="seg is-on" data-filter="all">All</button>
+          <button type="button" class="seg" data-filter="command">Commands</button>
+          <button type="button" class="seg" data-filter="security">Security</button>
         </div>
-      </article>
+      </div>
+      <div class="card timeline" id="timeline">
+        <p class="empty">Nothing yet. Commands you run will appear here.</p>
+      </div>
+    </section>
+
+    <!-- DEVICES ------------------------------------------------------- -->
+    <section id="screen-devices" class="screen" data-screen="devices" hidden>
+      <div class="block-head sticky">
+        <h2>Devices</h2>
+        <button class="ghost-btn" id="btn-pair-new" type="button">Pair another</button>
+      </div>
+      <div id="devices" class="devices"></div>
+      <div class="card note-card">
+        <h3>How this stays private</h3>
+        <ul class="ticks">
+          <li>The channel key is derived fresh every time you connect (ECDH P-256).</li>
+          <li>Both sides prove they know the pairing key before a single command is sent.</li>
+          <li>Messages are AES-256-GCM with a counter, so replays are rejected.</li>
+          <li>Nothing reaches a cloud service — the phone talks only to your hardware.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- SETTINGS ------------------------------------------------------ -->
+    <section id="screen-settings" class="screen" data-screen="settings" hidden>
+      <div class="block-head sticky"><h2>Settings</h2></div>
+      <div class="card">
+        <h3>This connection</h3>
+        <dl class="kv" id="conn-kv"></dl>
+        <div class="row-actions">
+          <button class="ghost-btn" id="btn-reconnect" type="button">Reconnect</button>
+          <button class="ghost-btn" id="btn-diagnostics" type="button">Diagnostics</button>
+          <button class="ghost-btn danger" id="btn-unpair" type="button">Unpair this phone</button>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Policy on the PC</h3>
+        <dl class="kv" id="policy-kv"></dl>
+        <p class="hint">Change these in the PC console — SENTINEL will not let the phone widen its own permissions.</p>
+      </div>
+      <div class="card">
+        <h3>App</h3>
+        <dl class="kv" id="app-kv"></dl>
+        <div class="row-actions">
+          <button class="ghost-btn" id="btn-install" type="button" hidden>Install on this phone</button>
+          <button class="ghost-btn" id="btn-demo-out" type="button">Leave demo</button>
+        </div>
+      </div>
+      <pre id="settings-diag" class="diag-log" hidden></pre>
     </section>
   </main>
 
-  <nav class="mobile-nav" aria-label="Sections">
-    <button class="nav-item is-active" data-view="dashboard"><svg class="icon"><use href="#i-dashboard"/></svg><span>Overview</span></button>
-    <button class="nav-item" data-view="control"><svg class="icon"><use href="#i-control"/></svg><span>Control</span></button>
-    <button class="nav-item" data-view="automation"><svg class="icon"><use href="#i-bolt"/></svg><span>Macros</span></button>
-    <button class="nav-item" data-view="devices"><svg class="icon"><use href="#i-chip"/></svg><span>Devices</span></button>
-    <button class="nav-item" data-view="activity"><svg class="icon"><use href="#i-activity"/></svg><span>Log</span></button>
+  <nav class="tabbar" aria-label="Sections">
+    <button class="tab is-on" data-tab="home" type="button">
+      <svg viewBox="0 0 24 24" width="21" height="21" aria-hidden="true"><path d="M4 11.2 12 4l8 7.2V20a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>
+      <span>Control</span>
+    </button>
+    <button class="tab" data-tab="activity" type="button">
+      <svg viewBox="0 0 24 24" width="21" height="21" aria-hidden="true"><path d="M3 13h4l2.5-6 4 12 2.5-6h5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span>Activity</span>
+    </button>
+    <button class="tab" data-tab="devices" type="button">
+      <svg viewBox="0 0 24 24" width="21" height="21" aria-hidden="true"><rect x="3" y="4" width="12" height="9" rx="1.6" fill="none" stroke="currentColor" stroke-width="1.7"/><rect x="16.5" y="9" width="4.5" height="11" rx="1.4" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M6 17h6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+      <span>Devices</span>
+    </button>
+    <button class="tab" data-tab="settings" type="button">
+      <svg viewBox="0 0 24 24" width="21" height="21" aria-hidden="true"><circle cx="12" cy="12" r="3.1" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M12 3v2.4M12 18.6V21M3 12h2.4M18.6 12H21M5.6 5.6l1.7 1.7M16.7 16.7l1.7 1.7M18.4 5.6l-1.7 1.7M7.3 16.7l-1.7 1.7" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+      <span>Settings</span>
+    </button>
   </nav>
 </div>
 
-<!-- ─────────────  overlays  ───────────── -->
-<div class="overlay hidden" id="confirm-modal">
-  <div class="modal">
-    <div class="modal-icon"><svg class="icon"><use href="#i-power"/></svg></div>
-    <h2 id="confirm-title">Are you sure?</h2>
-    <p class="muted" id="confirm-text"></p>
-    <div class="hold-target">
-      <button class="btn btn-danger btn-block" id="confirm-hold"><span>Hold to confirm</span><i></i></button>
-    </div>
-    <button class="btn btn-ghost btn-block" id="confirm-cancel">Cancel</button>
-  </div>
-</div>
-
-<div class="overlay hidden" id="shot-modal">
-  <div class="modal modal-wide">
-    <div class="card-head"><h3>Screen capture</h3><button class="icon-btn" id="shot-close"><svg class="icon"><use href="#i-x"/></svg></button></div>
-    <img id="shot-img" alt="Screenshot of the remote PC" />
-    <div class="row-buttons"><a class="btn btn-sm" id="shot-download" download="sentinel-screen.png">Download PNG</a></div>
-  </div>
-</div>
-
-<div class="overlay hidden" id="macro-modal">
-  <div class="modal modal-wide">
-    <div class="card-head"><h3>New macro</h3><button class="icon-btn" id="macro-close"><svg class="icon"><use href="#i-x"/></svg></button></div>
-    <label class="field"><span>Name</span><input id="macro-name" placeholder="Morning setup" maxlength="40" /></label>
-    <label class="field"><span>Description</span><input id="macro-desc" placeholder="Unlock, open mail, set volume" maxlength="120" /></label>
-    <div class="macro-steps" id="macro-steps"></div>
-    <div class="row-buttons">
-      <select id="macro-cmd" class="select"></select>
-      <button class="btn btn-sm" id="macro-add-step"><svg class="icon"><use href="#i-plus"/></svg>Add step</button>
-      <button class="btn btn-sm btn-primary" id="macro-save">Save macro</button>
-    </div>
-  </div>
-</div>
-
-<div class="overlay hidden" id="palette">
-  <div class="palette">
-    <div class="palette-input">
-      <svg class="icon"><use href="#i-command"/></svg>
-      <input id="palette-field" placeholder="Run a command…" autocomplete="off" />
-      <kbd>Esc</kbd>
-    </div>
-    <ul class="palette-list" id="palette-list"></ul>
-  </div>
-</div>
-
+<!-- ── overlays ────────────────────────────────────────────────────────── -->
 <div id="toasts" class="toasts" role="status" aria-live="polite"></div>
 
+<div id="sheet-backdrop" class="sheet-backdrop" hidden></div>
+<aside id="sheet" class="sheet" hidden role="dialog" aria-modal="true" aria-labelledby="sheet-title">
+  <header class="sheet-head">
+    <h2 id="sheet-title">Confirm</h2>
+    <button class="icon-btn" id="sheet-close" type="button" aria-label="Close">
+      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg>
+    </button>
+  </header>
+  <div class="sheet-body" id="sheet-body"></div>
+  <footer class="sheet-foot" id="sheet-foot"></footer>
+</aside>
+
+<script src="/transport.js"></script>
 <script src="/app.js"></script>
 </body>
 </html>

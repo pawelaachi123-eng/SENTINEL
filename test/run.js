@@ -150,6 +150,149 @@ test('broken config is quarantined, not deleted', () => {
   assert.equal(backups.length, 1, 'the damaged file should be kept for forensics');
 });
 
+/* ── integration: the encrypted tunnel and the ESP32 relay ─────────────── */
+
+test('tunnel: handshake, encrypted command, replay refused', async () => {
+  const net = require('node:net');
+  const { createAgent } = require('../core/agent');
+  const { TunnelClient } = require('../core/tunnel');
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'sentinel-tunnel-'));
+  const agent = createAgent({ configPath: path.join(home, 'config.json') });
+  agent.config.merge({ ports: { ui: 0, link: 0 } });
+  agent.start();
+  await new Promise((r) => setTimeout(r, 300));
+  const port = agent.http.server.address().port;
+  const psk = agent.config.get('psk');
+
+  try {
+    const client = new TunnelClient({ baseUrl: `http://127.0.0.1:${port}/api/tunnel`, pskHex: psk });
+    const opened = await client.connect();
+    assert.match(opened.sid, /^[0-9a-f]{16}$/, 'session id looks wrong');
+
+    const info = await client.command('system.info');
+    assert.equal(info.ok, true, info.message);
+    assert.ok(info.data.hostname, 'system.info came back empty');
+
+    const denied = await client.command('system.shutdown', {});
+    assert.equal(denied.code, 'CONFIRM_REQUIRED', 'policy must still apply inside the tunnel');
+
+    const poll = await client.poll();
+    assert.equal(poll.ok, true);
+
+    // A frame that was already used must not be accepted a second time.
+    const sealed = client.c2s.seal(Buffer.from(JSON.stringify({ id: 99, poll: true })));
+    const first = await fetch(`http://127.0.0.1:${port}/api/tunnel/msg`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ sid: client.sid, seq: sealed.seq, ct: sealed.body.toString('base64') }),
+    }).then((r) => r.json());
+    assert.ok(first.ct, 'first use of a frame should succeed');
+    const replay = await fetch(`http://127.0.0.1:${port}/api/tunnel/msg`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ sid: client.sid, seq: sealed.seq, ct: sealed.body.toString('base64') }),
+    }).then((r) => r.json());
+    assert.ok(replay.error, 'replayed frame was accepted');
+
+    // Plain text must never work.
+    const plain = await fetch(`http://127.0.0.1:${port}/api/tunnel/msg`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ sid: client.sid, seq: 500, ct: Buffer.from('{"cmd":"system.info"}').toString('base64') }),
+    }).then((r) => r.json());
+    assert.ok(plain.error, 'unencrypted payload was accepted');
+  } finally {
+    agent.stop();
+  }
+});
+
+test('tunnel: a wrong pairing key cannot open a session', async () => {
+  const { createAgent } = require('../core/agent');
+  const { TunnelClient } = require('../core/tunnel');
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'sentinel-wrongkey-'));
+  const agent = createAgent({ configPath: path.join(home, 'config.json') });
+  agent.config.merge({ ports: { ui: 0, link: 0 } });
+  agent.start();
+  await new Promise((r) => setTimeout(r, 300));
+  const port = agent.http.server.address().port;
+  try {
+    const client = new TunnelClient({ baseUrl: `http://127.0.0.1:${port}/api/tunnel`, pskHex: 'b'.repeat(64) });
+    let message = null;
+    try {
+      await client.connect();
+    } catch (err) {
+      message = err.message;
+    }
+    assert.ok(message, 'a wrong key must not connect');
+    assert.match(message, /pairing key|share/i);
+  } finally {
+    agent.stop();
+  }
+});
+
+test('relay: an ESP32 can forward commands over its authenticated link', async () => {
+  const net = require('node:net');
+  const { createAgent } = require('../core/agent');
+  const { handshakeProof } = require('../core/protocol');
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'sentinel-relay-'));
+  const agent = createAgent({ configPath: path.join(home, 'config.json') });
+  agent.config.merge({ ports: { ui: 0, link: 0 } });
+  agent.start();
+  await new Promise((r) => setTimeout(r, 300));
+  const linkPort = agent.http.server.address().port + 1;
+  // The agent picked an ephemeral link port; read it back from the listener.
+  const actualLinkPort = agent.link.server.address().port;
+  const psk = agent.config.get('psk');
+
+  const socket = net.connect(actualLinkPort, '127.0.0.1');
+  const frames = [];
+  let buffer = '';
+  socket.on('data', (chunk) => {
+    buffer += chunk.toString('utf8');
+    let index;
+    while ((index = buffer.indexOf('\n')) >= 0) {
+      const line = buffer.slice(0, index);
+      buffer = buffer.slice(index + 1);
+      if (line.trim()) frames.push(JSON.parse(line));
+    }
+  });
+  const waitFor = async (type, timeout = 3000) => {
+    const started = Date.now();
+    while (Date.now() - started < timeout) {
+      // Consume the frame so a second wait sees the *next* reply.
+      const index = frames.findIndex((frame) => frame.t === type);
+      if (index >= 0) return frames.splice(index, 1)[0];
+      await new Promise((r) => setTimeout(r, 25));
+    }
+    throw new Error(`no ${type} frame from the agent (got ${frames.map((f) => f.t).join(', ')})`);
+  };
+
+  try {
+    const hello = await waitFor('hello');
+    const deviceId = 'esp32-test';
+    const deviceNonce = 'a'.repeat(32);
+    socket.write(JSON.stringify({
+      t: 'auth',
+      deviceId,
+      nonce: deviceNonce,
+      sig: handshakeProof(psk, hello.nonce, deviceNonce, deviceId),
+    }) + '\n');
+    await waitFor('welcome');
+    socket.write(JSON.stringify({ t: 'rpc', id: 'r1', body: JSON.stringify({ cmd: 'system.info' }) }) + '\n');
+    const replyFrame = await waitFor('rpc_res');
+    assert.equal(replyFrame.ok, true, 'relay refused the command');
+    const reply = JSON.parse(replyFrame.body);
+    assert.ok(reply.data.hostname, 'relayed system.info came back empty');
+
+    socket.write(JSON.stringify({ t: 'rpc', id: 'r2', body: JSON.stringify({ cmd: 'system.shutdown' }) }) + '\n');
+    const denied = JSON.parse((await waitFor('rpc_res')).body);
+    assert.equal(denied.code, 'CONFIRM_REQUIRED', 'policy must apply to relayed commands');
+  } finally {
+    socket.destroy();
+    agent.stop();
+  }
+});
+
 (async () => {
   let failed = 0;
   for (const { name, fn } of tests) {

@@ -24,10 +24,14 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Install dev dependencies (jsdom for the UI test)
+        run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Behaviour tests (signatures, replay, policy, secrets)
         run: node test/run.js
       - name: Syntax, assets and boot test
         run: node scripts/check.js
+      - name: UI test (real page, real agent, real WebCrypto)
+        run: node test/ui.js
 
   # ── Windows executables: headless agent + desktop console ───────────────
   windows:

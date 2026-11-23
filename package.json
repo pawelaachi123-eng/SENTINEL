@@ -1,8 +1,8 @@
 {
   "name": "sentinel",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "private": true,
-  "description": "SENTINEL — control your PC from your phone through your own VPN and an ESP32 bridge",
+  "description": "SENTINEL \u2014 control your own PC from your phone over an encrypted direct channel (no VPN, no cloud)",
   "author": "pawelaachi123-eng",
   "license": "MIT",
   "main": "desktop/main.js",
@@ -13,12 +13,14 @@
     "start": "node bin/sentinel-agent.js --open",
     "agent": "node bin/sentinel-agent.js",
     "pair": "node bin/sentinel-agent.js --pair",
-    "test": "node test/run.js",
+    "test": "node test/run.js && node test/ui.js",
     "check": "node scripts/check.js",
     "build:exe": "pkg bin/sentinel-agent.js --targets node22-win-x64 --compress GZip --output dist/SENTINEL-Agent.exe",
     "build:desktop": "electron-builder --win --x64",
     "build:all": "npm run build:exe && npm run build:desktop",
-    "mobile:sync": "node scripts/sync-mobile.js"
+    "mobile:sync": "node scripts/sync-mobile.js",
+    "test:core": "node test/run.js",
+    "test:ui": "node test/ui.js"
   },
   "pkg": {
     "assets": [
@@ -45,8 +47,18 @@
     "win": {
       "icon": "build/icon.ico",
       "target": [
-        { "target": "nsis", "arch": ["x64"] },
-        { "target": "portable", "arch": ["x64"] }
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
       ],
       "artifactName": "SENTINEL-Setup-${version}-${arch}.${ext}"
     },
@@ -65,7 +77,8 @@
   "devDependencies": {
     "@yao-pkg/pkg": "^6.5.1",
     "electron": "^33.2.0",
-    "electron-builder": "^25.1.8"
+    "electron-builder": "^25.1.8",
+    "jsdom": "^31.0.1"
   },
   "engines": {
     "node": ">=20"

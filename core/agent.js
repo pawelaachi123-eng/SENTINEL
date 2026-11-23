@@ -9,6 +9,7 @@ const { EspLink } = require('./link');
 const { HttpApi } = require('./httpd');
 const { Stats } = require('./stats');
 const { RateLimiter } = require('./policy');
+const { TunnelServer } = require('./tunnel');
 const { uiDir } = require('./paths');
 
 /**
@@ -37,6 +38,14 @@ class Agent extends EventEmitter {
       limiter: this.limiter,
       link: this.link,
       state: this.state,
+      stats: this.stats,
+    });
+    // Our own encrypted channel: the phone talks to this without any VPN.
+    this.tunnel = new TunnelServer({
+      config: this.config,
+      log: this.log,
+      commander: this.commander,
+      pskBytes: Buffer.from(this.config.get('psk'), 'hex'),
     });
     this.http = new HttpApi({
       config: this.config,
@@ -45,6 +54,7 @@ class Agent extends EventEmitter {
       link: this.link,
       stats: this.stats,
       state: this.state,
+      tunnel: this.tunnel,
     });
     this.link.on('connected', (status) => {
       this.emit('esp', status);
@@ -56,7 +66,39 @@ class Agent extends EventEmitter {
       this.emit('esp', status);
       this.http.broadcast('esp', status);
     });
-    this.log.on('entry', (entry) => this.http.broadcast('log', entry));
+    this.log.on('entry', (entry) => {
+      this.http.broadcast('log', entry);
+      // Tunnel clients get the same feed, delivered with their next frame.
+      this.tunnel.pushEvent({ event: 'log', data: entry });
+    });
+
+    /**
+     * The ESP32 is dumb hardware on purpose: when it cannot handle a command
+     * itself it relays the request here over its authenticated link.
+     */
+    this.link.rpcHandler = async (payload) => {
+      let request;
+      try {
+        request = JSON.parse(payload);
+      } catch {
+        return JSON.stringify({ ok: false, code: 'BAD_REQUEST', message: 'relay payload is not JSON' });
+      }
+      const cmd = String(request.cmd || '');
+      const args = request.args && typeof request.args === 'object' ? request.args : {};
+      try {
+        const result = await this.commander.execute(cmd, args, { source: 'esp32' });
+        return JSON.stringify({ id: request.id ?? null, ok: true, cmd, data: result.data, ms: result.ms });
+      } catch (err) {
+        return JSON.stringify({
+          id: request.id ?? null,
+          ok: false,
+          cmd,
+          code: err.code || 'FAILED',
+          message: err.message,
+          detail: err.detail,
+        });
+      }
+    };
     this.started = false;
   }
 
@@ -71,12 +113,14 @@ class Agent extends EventEmitter {
     const host = this.http.primaryAddress();
     this.loginUrl = `http://127.0.0.1:${port}/?t=${token}`;
     this.lanUrl = `http://${host}:${port}/?t=${token}`;
+    this.log.info('tunnel', 'Encrypted tunnel ready on /api/tunnel (no VPN needed)');
     this.log.info('agent', `Open ${this.loginUrl}`);
     if (host !== '127.0.0.1') this.log.info('agent', `Phone/tablet: ${this.lanUrl}`);
     return this;
   }
 
   stop() {
+    this.tunnel.stop();
     this.http.stop();
     this.link.stop();
     this.log.info('agent', 'Stopped');
@@ -94,6 +138,7 @@ class Agent extends EventEmitter {
       counters: this.state.counters,
       startedAt: this.state.startedAt,
       uiDir: uiDir(),
+      tunnel: this.tunnel.liveSessions(),
       loginUrl: this.loginUrl,
       lanUrl: this.lanUrl,
     };

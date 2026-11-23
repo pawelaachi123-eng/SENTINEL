@@ -21,12 +21,13 @@ class CmdError extends Error {
 const sleepMs = (ms) => new Promise((r) => setTimeout(r, clamp(ms, 0, 2500)));
 
 class Commander {
-  constructor({ config, log, limiter, link, state }) {
+  constructor({ config, log, limiter, link, state, stats }) {
     this.config = config;
     this.log = log;
     this.limiter = limiter;
     this.link = link;
     this.state = state;
+    this.stats = stats || null;
     this.capsCache = null;
     this.capsAt = 0;
     this.handlers = this.buildHandlers();
@@ -68,6 +69,7 @@ class Commander {
       { group: 'Automation', cmd: 'script.run', label: 'Run script', args: { name: { type: 'string' } } },
       { group: 'Automation', cmd: 'macro.run', label: 'Run macro', args: { name: { type: 'string' } } },
       { group: 'Automation', cmd: 'files.list', label: 'List files', args: { path: { type: 'string', default: '~' } } },
+      { group: 'System', cmd: 'system.snapshot', label: 'Everything at once' },
       { group: 'System', cmd: 'system.info', label: 'System info' },
       { group: 'System', cmd: 'agent.status', label: 'Agent status' },
       { group: 'System', cmd: 'esp.status', label: 'ESP32 status' },
@@ -113,6 +115,32 @@ class Commander {
         lastCommand: this.state.lastCommand || null,
         counters: this.state.counters,
       }),
+
+      /**
+       * One call that returns everything the phone renders. Without it the app
+       * would need three round trips (and tunnel clients cannot use /api/status).
+       */
+      'system.snapshot': async () => {
+        const info = await this.handlers['system.info']();
+        return {
+          ...info,
+          cpuPercent: this.stats ? this.stats.read() : 0,
+          memoryDetail: this.stats ? this.stats.memory() : null,
+          esp: this.link ? this.link.status() : { connected: false },
+          agent: {
+            version: AGENT_VERSION,
+            startedAt: this.state.startedAt,
+            uptimeSec: Math.round((Date.now() - this.state.startedAt.getTime()) / 1000),
+            counters: this.state.counters,
+            lastCommand: this.state.lastCommand,
+            ports: { ui: this.config.get('ports.ui'), link: this.config.get('ports.link') },
+          },
+          apps: Object.keys(this.config.get('apps', {})),
+          macros: Object.keys(this.config.get('macros', {})),
+          catalogue: this.catalogue(),
+          serverTime: new Date().toISOString(),
+        };
+      },
 
       'agent.policy.get': () => this.config.get('policy'),
 
