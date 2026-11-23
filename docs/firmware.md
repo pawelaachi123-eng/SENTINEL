@@ -66,6 +66,13 @@ pio device monitor -b 115200   # logs, including the power token
 5. save. It reboots onto your network, links to the agent, and the *Devices* page
    turns **linked**.
 
+### Pairing over the setup network
+
+The ESP32 also answers the encrypted tunnel while it is in setup mode, so a phone
+can pair with it at `192.168.4.1` before any Wi-Fi is configured — and then pair
+with the PC once it joins your network. The endpoints are the same `/t/hello`,
+`/t/open`, `/t/msg` described in [`tunnel.md`](tunnel.md).
+
 The portal stays open for 10 minutes in setup mode only; there is no always-on
 configuration endpoint. Re-entering it always requires physical access (BOOT button).
 

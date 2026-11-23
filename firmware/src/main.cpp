@@ -723,6 +723,14 @@ void setup() {
   setLed(false);
 
   loadSettings();
+
+  // The encrypted tunnel is available even in setup mode, so a phone can pair
+  // over the ESP32's own softAP (192.168.4.1) before any Wi-Fi is configured.
+  tunnel.begin(cfg.psk);
+  tunnel.setStatusProvider(tunnelStatusJson);
+  tunnel.setPowerHandler([](const String &action, uint32_t holdMs) { doPower(action, holdMs); });
+  tunnel.setRelay(relayToAgent);
+
   pinMode(cfg.powerPin, OUTPUT);
   pinMode(cfg.resetPin, OUTPUT);
   relayWrite(cfg.powerPin, false);
@@ -748,11 +756,6 @@ void setup() {
     setupHttp();
     return;
   }
-
-  tunnel.begin(cfg.psk);
-  tunnel.setStatusProvider(tunnelStatusJson);
-  tunnel.setPowerHandler([](const String &action, uint32_t holdMs) { doPower(action, holdMs); });
-  tunnel.setRelay(relayToAgent);
 
   startWireGuard();
   if (MDNS.begin(cfg.deviceId.c_str())) {

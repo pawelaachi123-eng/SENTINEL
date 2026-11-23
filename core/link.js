@@ -338,6 +338,8 @@ class EspLink extends EventEmitter {
       tempC: this.info.tempC,
       fw: this.info.fw,
       pcState: this.info.pcState,
+      // Same value the ESP32 reports on its own /status endpoint.
+      pc: this.info.pcState || 'unknown',
       deviceUptime: this.info.deviceUptime,
       wg: this.info.wg,
       gpio: this.info.gpio,
