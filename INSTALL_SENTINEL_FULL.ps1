@@ -478,18 +478,34 @@ if (Test-Path $cli) {
   }
 }
 
-# 4.0: verify the deterministic core on the installed copy. This runs without a
+# 6.0: verify the deterministic core on the installed copy. This runs without a
 # model and without network; a failure is reported, not hidden, but it does not
 # roll back a working install.
 $evalScript = Join-Path $InstallDir "scripts\eval.js"
 if (Test-Path $evalScript) {
-  Say "Weryfikuję rdzeń deterministyczny (4.0)" "step"
+  Say "Weryfikuję rdzeń deterministyczny (6.0)" "step"
   Push-Location $InstallDir
   try {
     $evalOutput = & node $evalScript 2>&1
     $evalOutput | ForEach-Object { if (-not $Quiet) { Write-Host "  $_" } }
     if ($LASTEXITCODE -ne 0) { Add-Warning "deterministic evaluation reported failures (see above); the install is otherwise usable" }
   } catch { Add-Warning "evaluation could not run: $($_.Exception.Message)" } finally { Pop-Location }
+}
+
+# 6.0: read-only health of the new subsystems. Training is never started by the
+# installer; that needs a person and an explicit approval.
+$cliScript = Join-Path $InstallDir "bin\sentinel.js"
+if (Test-Path $cliScript) {
+  Say "Sprawdzam laboratorium i runtime (6.0)" "step"
+  Push-Location $InstallDir
+  try {
+    $labOutput = & node $cliScript lab 2>&1
+    $labOutput | ForEach-Object { if (-not $Quiet) { Write-Host "  $_" } }
+    if ($LASTEXITCODE -ne 0) { Add-Warning "learning lab status could not be read; training stays unavailable until fixed" }
+    $neuralOutput = & node $cliScript neural 2>&1
+    $neuralOutput | ForEach-Object { if (-not $Quiet) { Write-Host "  $_" } }
+    if ($LASTEXITCODE -ne 0) { Add-Warning "neural runtime status could not be read" }
+  } catch { Add-Warning "6.0 subsystem check could not run: $($_.Exception.Message)" } finally { Pop-Location }
 }
 
 Say "Done" "step"
@@ -499,7 +515,8 @@ if ($script:Failures.Count -eq 0) {
   Say "Terminal: sentinel ask `"jaki mam GPU?`""
   Say "  sentinel status · doctor · models --benchmark · agents · tools · tasks · memory"
   Say "  sentinel benchmark · test · backup · rollback · update · migrate · chat"
-  Say "  sentinel runtime [idle|balanced|deep|gaming] · graph · org · mcp"
+  Say "  sentinel runtime [idle|balanced|deep|gaming] · graph · org · mcp · neural"
+  Say "  sentinel lab [status|classify] · train --approve <name> · research list|start|report"
   Say "  backups live in $dataDir\backups; rollback keeps the previous files"
   if ($script:Warnings.Count) {
     Say "$($script:Warnings.Count) optional piece(s) were skipped:" "warn"

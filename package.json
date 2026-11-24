@@ -1,8 +1,8 @@
 {
   "name": "sentinel",
-  "version": "5.0.0",
+  "version": "6.0.0",
   "private": true,
-  "description": "SENTINEL — local-first neural cognitive assistant: real model metadata and routing, evidence-bound reasoning, skills, repository map, and a PC/phone agent with no cloud account",
+  "description": "SENTINEL — local-first neural cognitive platform: real model metadata/routing, a CPU learning lab with measured held-out metrics, persistent research, typed memory, 270 audited tools and a PC/phone agent with no cloud account",
   "author": "pawelaachi123-eng",
   "license": "MIT",
   "main": "desktop/main.js",
@@ -23,7 +23,8 @@
     "test:core": "node test/run.js",
     "test:deep": "node test/deep.js",
     "test:ui": "node test/ui.js",
-    "test:ai": "node test/ai.js"
+    "test:ai": "node test/ai.js",
+    "bench:lab": "node scripts/lab-bench.js"
   },
   "pkg": {
     "assets": [

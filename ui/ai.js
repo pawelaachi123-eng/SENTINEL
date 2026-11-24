@@ -1155,6 +1155,49 @@
     }
   }
 
+  async function loadLab() {
+    const host = panel('lab');
+    if (!host) return;
+    host.textContent = 'Czytam laboratorium…';
+    try {
+      const [lab, neural, research] = await Promise.all([api('/api/lab'), api('/api/neural'), api('/api/research')]);
+      const data = lab.data || {};
+      host.textContent = '';
+      const active = data.active;
+      host.append(
+        el('p', { class: 'panel-note', text: active
+          ? `Aktywny model: ${active.experimentId} · test ${active.metrics.accuracy} · promowany przez ${active.promotedBy}`
+          : 'Brak aktywnego modelu. Trening: sentinel train --approve <imię>; promocja: sentinel lab promote <id> --approve <imię>.' }),
+      );
+      const provenance = el('p', { class: 'panel-note', text: `Dataset: ${data.dataset ? data.dataset.items : 0} przykładów, ${data.dataset ? data.dataset.labels.length : 0} intencji · ${data.dataset ? data.dataset.provenance : 'brak'} · ${data.honest || ''}` });
+      host.append(provenance);
+      const cards = el('div', { class: 'grid-cards' });
+      for (const experiment of (data.experiments || []).slice(0, 6)) {
+        cards.append(
+          el('article', { class: 'card mini-card' }, [
+            el('div', { class: 'mini-card-head' }, [el('h3', { text: experiment.id.split('_').slice(-1)[0] }), el('span', { class: `badge ${experiment.status === 'candidate' ? 'badge-ok' : 'badge-bad'}`, text: experiment.status })]),
+            el('p', { class: 'mini-card-desc', text: `test ${experiment.accuracy} vs baseline ${experiment.baseline} (delta ${experiment.delta}) · ${experiment.artifact.bytes} B` }),
+            el('div', { class: 'mini-card-tags' }, [el('span', { class: 'tag', text: `sha ${String(experiment.artifact.checksum).slice(0, 12)}…` }), el('span', { class: 'tag', text: experiment.approvedBy || 'bez zgody' })]),
+          ]),
+        );
+      }
+      host.append(cards);
+      const neuralBox = el('article', { class: 'card mini-card' }, [
+        el('h3', { text: 'Neural runtime' }),
+        el('p', { class: 'mini-card-desc', text: `${(neural.data && neural.data.models ? neural.data.models.length : 0)} modeli w metadanych · ${(neural.data && neural.data.counts ? neural.data.counts.tools : 0)} z narzędziami · ${(neural.data && neural.data.counts ? neural.data.counts.vision : 0)} wizyjnych` }),
+        el('p', { class: 'mini-card-desc', text: neural.data && neural.data.honest ? neural.data.honest : 'metadane tylko z providery' }),
+      ]);
+      const researchBox = el('article', { class: 'card mini-card' }, [
+        el('h3', { text: 'Sesje badawcze' }),
+        el('p', { class: 'mini-card-desc', text: `${(research.data && research.data.status ? research.data.status.sessions : 0)} sesji · ${(research.data && research.data.status ? research.data.status.sources : 0)} źródeł · online tylko za zgodą` }),
+        el('div', { class: 'mini-card-tags' }, ((research.data && research.data.sessions) || []).slice(0, 5).map((session) => el('span', { class: 'tag', text: `${session.status}: ${session.question.slice(0, 40)}` }))),
+      ]);
+      host.append(el('div', { class: 'grid-cards' }, [neuralBox, researchBox]));
+    } catch (err) {
+      host.textContent = `Nie mogę wczytać laboratorium: ${err.message}`;
+    }
+  }
+
   async function loadTasks() {
     const host = panel('tasks');
     if (!host) return;
@@ -1778,7 +1821,10 @@
     for (const screen of $$('.screen')) screen.hidden = screen.dataset.screen !== tab;
     if (tab === 'agents') loadAgents();
     if (tab === 'tools') loadTools();
-    if (tab === 'models') loadModels();
+    if (tab === 'models') {
+      loadModels();
+      loadLab();
+    }
     if (tab === 'cognition') loadCognition();
     if (tab === 'tasks') loadTasks();
     if (tab === 'memory') loadMemory();

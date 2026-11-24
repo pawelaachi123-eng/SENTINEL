@@ -442,6 +442,30 @@ class HttpApi {
       return this.json(res, 200, { ok: true, data: status });
     }
 
+    if (route === '/api/lab' && req.method === 'GET') {
+      if (!this.ai) return this.json(res, 503, { ok: false, error: 'AI not ready' });
+      return this.json(res, 200, { ok: true, data: this.ai.lab.status() });
+    }
+
+    if (route === '/api/lab/classify' && req.method === 'POST') {
+      if (!this.ai) return this.json(res, 503, { ok: false, error: 'AI not ready' });
+      const body = await this.body(req).catch(() => ({}));
+      const text = String(body.text || '').slice(0, 1000);
+      if (!text) return this.json(res, 400, { ok: false, error: 'text is required' });
+      return this.json(res, 200, { ok: true, data: this.ai.lab.classify(text) });
+    }
+
+    if (route === '/api/neural' && req.method === 'GET') {
+      if (!this.ai) return this.json(res, 503, { ok: false, error: 'AI not ready' });
+      // Cached metadata only: this endpoint must not trigger provider calls.
+      return this.json(res, 200, { ok: true, data: this.ai.neural.status() });
+    }
+
+    if (route === '/api/research' && req.method === 'GET') {
+      if (!this.ai) return this.json(res, 503, { ok: false, error: 'AI not ready' });
+      return this.json(res, 200, { ok: true, data: { sessions: this.ai.research.list({ limit: 50 }), status: this.ai.research.status() } });
+    }
+
     if (route === '/api/models/benchmark' && req.method === 'POST') {
       if (!this.ai) return this.json(res, 503, { ok: false, error: 'AI not ready' });
       const body = await this.body(req).catch(() => ({}));

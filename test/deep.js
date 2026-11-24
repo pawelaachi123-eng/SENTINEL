@@ -2296,6 +2296,380 @@ test('context: the output reserve is subtracted before optional sections are adm
   assert.ok(built.dropped.length > 0, 'the budget must actually drop something');
 });
 
+
+
+/* ── typed memory and migration 6.0 ───────────────────────────────────── */
+
+test('memory: preference, prospective and history are distinct typed records', async () => {
+  const memory = new Memory({ store, embedder });
+  const pref = await memory.remember({ kind: 'preference', text: 'Wolę krótkie odpowiedzi po polsku.', scope: 'typed-6' });
+  assert.equal(pref.record.kind, 'preference');
+  const missingDue = await memory.remember({ kind: 'prospective', text: 'Zadzwonić do serwisu.', scope: 'typed-6' });
+  assert.equal(missingDue.record, null);
+  assert.match(missingDue.rejected, /due time/);
+  const soon = await memory.remember({ kind: 'prospective', text: 'Oddać raport.', scope: 'typed-6', dueAt: Date.now() + 60000 });
+  const late = await memory.remember({ kind: 'prospective', text: 'Zamówić dysk.', scope: 'typed-6', dueAt: Date.now() + 120000 });
+  assert.equal(soon.record.dueAt > 0, true);
+  assert.equal(late.record.dueAt > soon.record.dueAt, true);
+  const due = memory.due({ before: Date.now() + 180000 });
+  assert.deepEqual(due.map((entry) => entry.record.text), ['Oddać raport.', 'Zamówić dysk.']);
+  assert.equal(due[0].overdue, false);
+  const old = await memory.remember({ kind: 'long_term', text: 'Biuro ma 12 m2.', scope: 'typed-6' });
+  const replaced = await memory.supersede(old.record.id, { text: 'Biuro ma 16 m2.' });
+  const history = memory.history(old.record.id);
+  assert.equal(history.length, 2);
+  assert.equal(history[0].id, old.record.id);
+  assert.equal(history[1].id, replaced.record.id);
+  assert.equal(memory.get(old.record.id).supersededBy, replaced.record.id);
+});
+
+test('memory: migration previews, requires approval, backs up and preserves content', async () => {
+  const dir = path.join(home, 'memory-migration-source');
+  const driver = openStore({ dir });
+  driver.put('memory', 'legacy-1', { id: 'legacy-1', kind: 'error', text: 'Legacy failure during update.', tags: ['old'], createdAt: 111, updatedAt: 222, source: 'import' });
+  const memory = new Memory({ store: driver, embedder });
+  const preview = await memory.migrate({});
+  assert.equal(preview.apply, false);
+  assert.ok(preview.pending >= 1);
+  assert.equal(driver.get('memory', 'legacy-1').scope, undefined, 'preview must not write');
+  const refused = await memory.migrate({ apply: true });
+  assert.equal(refused.code, 'APPROVAL_REQUIRED');
+  assert.equal(driver.get('memory', 'legacy-1').kind, 'error', 'a refused migration must not change records');
+  const backup = path.join(home, 'migration-backup.sqlite');
+  const applied = await memory.migrate({ apply: true, approvedBy: 'test-operator', backupTo: backup });
+  assert.equal(applied.ok, true);
+  assert.ok(applied.applied >= 1);
+  assert.ok(fs.existsSync(backup), 'no backup was written before applying');
+  const record = driver.get('memory', 'legacy-1');
+  assert.equal(record.kind, 'errors');
+  assert.equal(record.scope, 'global');
+  assert.equal(record.text, 'Legacy failure during update.');
+  assert.equal(record.createdAt, 111);
+  assert.equal(record.provenance.migrated, true);
+  assert.equal(record.migratedBy, 'test-operator');
+  driver.close();
+});
+
+
+/* ── persistent research sessions 6.0 ─────────────────────────────────── */
+
+test('research: sessions plan sub-questions and refuse to invent without sources', () => {
+  const { ResearchService } = require('../core/research');
+  const research = new ResearchService({});
+  assert.equal(research.start({ question: 'x' }).code, 'BAD_QUESTION');
+  assert.equal(research.start({ question: 'Ile VRAM ma karta?', online: true }).code, 'APPROVAL_REQUIRED');
+  const started = research.start({ question: 'Ile VRAM ma karta i ile kosztuje?' });
+  assert.equal(started.ok, true);
+  assert.equal(started.session.subquestions.length, 2);
+  assert.equal(started.session.sources.length, 0);
+  const early = research.synthesize(started.session.id);
+  assert.equal(early.code, 'NO_SOURCES');
+  assert.equal(research.get(started.session.id).report, null, 'a refused synthesis must not create a report');
+  assert.equal(research.start({ question: 'research online', online: true, approvedBy: 'operator' }).ok, true);
+});
+
+test('research: sources are fingerprinted, cited by real line, and conflicts are preserved', () => {
+  const { ResearchService } = require('../core/research');
+  const research = new ResearchService({});
+  const id = research.start({ question: 'Jaka jest cena karty RTX 4060 Ti?' }).session.id;
+  const first = research.addSource(id, { title: 'cennik', text: 'Karta RTX 4060 Ti ma 8 GB VRAM.\nCena karty wynosi 1800 PLN.\nGWARANCJA WYNOSI 36 miesięcy.' });
+  assert.equal(first.ok, true);
+  assert.equal(first.source.lines, 3);
+  const duplicate = research.addSource(id, { title: 'kopia', text: 'Karta RTX 4060 Ti ma 8 GB VRAM.\nCena karty wynosi 1800 PLN.\nGWARANCJA WYNOSI 36 miesięcy.' });
+  assert.equal(duplicate.duplicate, true);
+  assert.equal(research.get(id).sources.length, 1);
+  research.addSource(id, { title: 'forum', text: 'Karta RTX 4060 Ti ma 16 GB VRAM.\nCena karty wynosi 2100 PLN.' });
+  const conflicts = research.get(id).conflicts;
+  assert.ok(conflicts.length >= 1);
+  assert.equal(conflicts[0].resolution, null);
+  assert.equal(conflicts[0].values.length >= 2, true);
+  const report = research.synthesize(id);
+  assert.equal(report.ok, true);
+  assert.match(report.report, /L1/);
+  assert.match(report.report, /untrusted/i);
+  assert.equal(report.structured.inference, null);
+  assert.ok(report.structured.conflicts.length >= 1);
+  assert.equal(report.structured.gaps.length, 0);
+  const evidence = research.evidence(id, { query: 'cena karty' });
+  assert.ok(evidence.evidence.some((entry) => entry.line === 2 && /Cena/.test(entry.text)));
+  assert.ok(evidence.evidence.every((entry) => entry.untrusted === true));
+});
+
+test('research: a file outside the workspace is refused and a single source is called out as uncorroborated', () => {
+  const { ResearchService } = require('../core/research');
+  const workspace = path.join(home, 'research-workspace');
+  fs.mkdirSync(workspace, { recursive: true });
+  fs.writeFileSync(path.join(workspace, 'spec.txt'), 'Karta ma 8 GB VRAM.\nCena wynosi 1800 PLN.\n');
+  const research = new ResearchService({ workspaceDir: workspace });
+  const id = research.start({ question: 'Jaka jest specyfikacja karty?' }).session.id;
+  const outside = research.addSource(id, { file: path.join(home, 'outside.txt') });
+  assert.equal(outside.code, 'OUTSIDE_WORKSPACE');
+  const inside = research.addSource(id, { file: path.join(workspace, 'spec.txt'), reliability: 'medium' });
+  assert.equal(inside.ok, true);
+  assert.equal(inside.source.reliability, 'medium');
+  const report = research.synthesize(id);
+  assert.ok(report.structured.gaps.some((gap) => /one source/.test(gap)));
+  assert.match(report.report, /spec\.txt|L2/);
+});
+
+/* ── neural learning lab 6.0 ──────────────────────────────────────────── */
+
+test('mlp: real forward pass, numeric gradients, learning and checksummed checkpoints', () => {
+  const mlp = require('../core/ml/mlp');
+  const net = mlp.createNetwork({ dim: 8, hidden: [6, 4], classes: 3, seed: 3 });
+  const samples = [
+    { x: [1, 0, 0, 0, 0, 0, 0, 0], y: 0 },
+    { x: [0, 1, 0, 0, 0, 0, 0, 0], y: 1 },
+    { x: [0, 0, 1, 0, 0, 0, 0, 0], y: 2 },
+    { x: [1, 1, 0, 0, 0, 0, 0, 0], y: 0 },
+    { x: [0, 1, 1, 0, 0, 0, 0, 0], y: 1 },
+  ];
+  const before = mlp.lossOf(net, samples[0].x, samples[0].y);
+  const gradient = mlp.gradientCheck(net, samples[0], { checks: 6 });
+  assert.equal(gradient.ok, true, `worst gradient difference ${gradient.worst}`);
+  assert.ok(gradient.checked >= 4);
+  const trained = mlp.train({ network: net, samples, epochs: 40, learningRate: 0.02, batchSize: 5, seed: 2, patience: 0 });
+  assert.ok(trained.history.length >= 1);
+  assert.ok(mlp.lossOf(net, samples[0].x, samples[0].y) < before, 'cross-entropy did not decrease');
+  assert.ok(mlp.accuracy(net, samples) >= 0.8, 'the network did not learn a separable toy set');
+  const checkpoint = mlp.toCheckpoint(net, { labels: ['a', 'b', 'c'], featureVersion: 'test', metrics: { accuracy: 1 } });
+  const loaded = mlp.fromCheckpoint(JSON.parse(JSON.stringify(checkpoint)));
+  const p1 = mlp.predict(net, samples[0].x).probabilities;
+  const p2 = mlp.predict(loaded, samples[0].x).probabilities;
+  assert.ok(Math.abs(p1[0] - p2[0]) < 1e-12, 'checkpoint did not restore the network exactly');
+  const tampered = JSON.parse(JSON.stringify(checkpoint));
+  tampered.parameters[0].weights[0] += 0.01;
+  assert.throws(() => mlp.fromCheckpoint(tampered), (err) => err.code === 'CHECKSUM_MISMATCH');
+});
+
+test('lab: training needs approval, uses clean splits and reports measured metrics', () => {
+  const { LearningLab } = require('../core/lab');
+  const paths = { dataDir: () => path.join(home, 'lab-home') };
+  const lab = new LearningLab({ paths });
+  const refused = lab.trainIntent({ epochs: 10 });
+  assert.equal(refused.code, 'APPROVAL_REQUIRED');
+  assert.equal(lab.status().experiments.length, 0, 'a refused request must not create an experiment');
+  const splits = lab.split();
+  assert.ok(splits.train.length > splits.test.length && splits.test.length >= 10);
+  assert.equal(lab.contamination(splits).clean, true);
+  const baseline = lab.baseline(splits);
+  assert.ok(baseline.accuracy > 0 && baseline.accuracy < 1);
+  const started = Date.now();
+  const result = lab.trainIntent({ approvedBy: 'test-operator', epochs: 40, seed: 7 });
+  assert.equal(result.ok, true, JSON.stringify(result).slice(0, 300));
+  const experiment = result.experiment;
+  assert.equal(experiment.status, 'candidate', 'training must never auto-deploy');
+  assert.equal(experiment.metrics.cases, splits.test.length);
+  assert.ok(experiment.metrics.accuracy >= 0.7, `held-out accuracy was ${experiment.metrics.accuracy}`);
+  assert.ok(experiment.metrics.accuracy > experiment.baseline.accuracy, 'the trained model did not beat the keyword baseline');
+  assert.ok(experiment.metrics.macroF1 > 0.5);
+  assert.equal(experiment.metrics.confusion.length, 10);
+  assert.ok(experiment.training.history.length >= 2, 'training must record a real loss history');
+  assert.ok(experiment.training.bestEpoch >= 0);
+  assert.ok(experiment.artifact.bytes > 1000);
+  assert.ok(experiment.artifact.path.startsWith(path.join(home, 'lab-home')), 'weights must live outside the source tree');
+  assert.match(experiment.artifact.checksum, /^[0-9a-f]{64}$/);
+  assert.ok(Date.now() - started < 60000);
+  assert.equal(experiment.dataset.provenance, 'synthetic, project-authored, non-sensitive');
+});
+
+test('lab: promotion and rollback are explicit, and inference loads verified weights', () => {
+  const { LearningLab } = require('../core/lab');
+  const paths = { dataDir: () => path.join(home, 'lab-runtime') };
+  const lab = new LearningLab({ paths });
+  assert.equal(lab.classify('sprawdz cpu').code, 'NO_MODEL');
+  const first = lab.trainIntent({ approvedBy: 'operator', epochs: 40, seed: 7 }).experiment;
+  assert.equal(lab.promote(first.id, {}).code, 'APPROVAL_REQUIRED');
+  const promoted = lab.promote(first.id, { approvedBy: 'operator' });
+  assert.equal(promoted.ok, true);
+  const answer = lab.classify('pokaz temperature gpu i uzycie pamieci');
+  assert.equal(answer.ok, true);
+  assert.equal(typeof answer.intent, 'string');
+  assert.ok(answer.confidence > 0 && answer.confidence <= 1);
+  const total = answer.probabilities.reduce((sum, entry) => sum + entry.probability, 0);
+  assert.ok(Math.abs(total - 1) < 0.02, `probabilities summed to ${total}`);
+  assert.match(answer.model.checksum, /^[0-9a-f]{64}$/);
+  assert.equal(lab.rollback({}).code, 'APPROVAL_REQUIRED');
+  assert.equal(lab.rollback({ approvedBy: 'operator' }).code, 'NO_PREVIOUS_MODEL');
+  // A second promotion records the first one, enabling a real rollback.
+  const second = lab.trainIntent({ approvedBy: 'operator', epochs: 40, seed: 7 }).experiment;
+  assert.equal(second.status, 'candidate');
+  assert.notEqual(second.id, first.id);
+  assert.equal(lab.promote(second.id, { approvedBy: 'operator' }).ok, true);
+  assert.equal(lab.active().experimentId, second.id);
+  const rolled = lab.rollback({ approvedBy: 'operator' });
+  assert.equal(rolled.ok, true);
+  assert.equal(lab.active().experimentId, first.id);
+  assert.equal(lab.classify('streść raport pdf').ok, true);
+});
+
+test('lab: the same seed reproduces the same measured training result', () => {
+  const { LearningLab } = require('../core/lab');
+  const make = () => new LearningLab({ paths: { dataDir: () => path.join(home, `lab-repro-${Math.random()}`) } });
+  const a = make().trainIntent({ approvedBy: 'operator', epochs: 25, seed: 13, hidden: [16, 8] }).experiment;
+  const b = make().trainIntent({ approvedBy: 'operator', epochs: 25, seed: 13, hidden: [16, 8] }).experiment;
+  assert.equal(a.metrics.accuracy, b.metrics.accuracy);
+  assert.equal(a.training.bestEpoch, b.training.bestEpoch);
+  assert.deepEqual(a.training.history.map((row) => row.validationLoss), b.training.history.map((row) => row.validationLoss));
+  assert.equal(a.artifact.checksum, b.artifact.checksum, 'identical seeds must produce identical weights');
+});
+
+
+/* ── data, statistics, text and encoding tools 6.0 ────────────────────── */
+
+const analyticsTools = require('../core/tools/analytics.tools');
+const textTools = require('../core/tools/text.tools');
+const byName = new Map([...analyticsTools, ...textTools].map((tool) => [tool.name, tool]));
+const runTool = async (name, args = {}) => byName.get(name).run(args, {});
+
+test('data tools: CSV, JSON, grouping, filtering, joins and dedupe are real', async () => {
+  const csv = await runTool('data.csv_parse', { text: 'name,city,amount\n"Kowalski, Jan",Kraków,120\nNowak,Warszawa,80\n' });
+  assert.equal(csv.rows.length, 2);
+  assert.equal(csv.rows[0].name, 'Kowalski, Jan');
+  assert.equal(csv.columns.length, 3);
+  const generated = await runTool('data.csv_generate', { rows: [{ a: 'x,y', b: 1 }, { a: 'quote " here', b: 2 }] });
+  assert.match(generated.csv, /"x,y"/);
+  assert.match(generated.csv, /"quote "" here"/);
+  const reparsed = await runTool('data.csv_parse', { text: generated.csv });
+  assert.equal(reparsed.rows[1].a, 'quote " here');
+
+  const nested = { user: { name: 'Pawel', tags: ['a', 'b'] }, active: true };
+  const flat = await runTool('data.json_flatten', { value: nested });
+  assert.equal(flat.flat['user.tags[1]'], 'b');
+  assert.equal((await runTool('data.json_path', { value: nested, path: 'user.tags[0]' })).value, 'a');
+  assert.equal((await runTool('data.json_path', { value: nested, path: 'user.missing' })).found, false);
+  const diff = await runTool('data.json_diff', { left: { a: 1, b: 2 }, right: { a: 1, b: 3, c: 4 } });
+  assert.deepEqual(diff.added.map((entry) => entry.path), ['c']);
+  assert.deepEqual(diff.changed.map((entry) => entry.path), ['b']);
+
+  const rows = [
+    { team: 'A', points: 10, name: 'a1' },
+    { team: 'B', points: 5, name: 'b1' },
+    { team: 'A', points: 20, name: 'a2' },
+    { team: 'A', points: 20, name: 'a2' },
+  ];
+  const grouped = await runTool('data.table_group', { rows, key: 'team', operations: [{ field: 'points', op: 'sum' }, { field: 'points', op: 'avg' }] });
+  assert.equal(grouped.groups.find((group) => group.key === 'A').sum_points, 50);
+  const filtered = await runTool('data.table_filter', { rows, conditions: [{ field: 'points', op: 'gte', value: 10 }] });
+  assert.equal(filtered.matched, 3);
+  const sortedRows = await runTool('data.table_sort', { rows, keys: [{ field: 'points', direction: 'desc' }, { field: 'name', direction: 'asc' }] });
+  assert.equal(sortedRows.rows[0].points, 20);
+  const deduped = await runTool('data.dedupe', { rows, keys: ['team', 'name'] });
+  assert.equal(deduped.rows.length, 3);
+  const joined = await runTool('data.join', { left: [{ id: 1, x: 'a' }, { id: 2, x: 'b' }], right: [{ id: 1, y: 'z' }], leftKey: 'id' });
+  assert.equal(joined.rows.length, 1);
+  assert.equal(joined.unmatched, 1);
+  const columns = await runTool('data.columns', { rows });
+  assert.equal(columns.columns.find((column) => column.name === 'points').type, 'number');
+});
+
+test('statistics: every reported number follows from the stated formula', async () => {
+  const values = [2, 4, 4, 4, 5, 5, 7, 9];
+  const describe = await runTool('stats.describe', { values });
+  assert.equal(describe.mean, 5);
+  assert.equal(describe.stdDev, 2);
+  const percentiles = await runTool('stats.percentile', { values, percentiles: [25, 50, 75] });
+  assert.equal(percentiles.percentiles.p50, 4.5);
+  assert.equal(percentiles.percentiles.p25, 4);
+  assert.equal(percentiles.percentiles.p75, 5.5);
+  const histogram = await runTool('stats.histogram', { values, bins: 4 });
+  assert.equal(histogram.bins.reduce((sum, bin) => sum + bin.count, 0), values.length);
+  const correlation = await runTool('stats.correlation', { x: [1, 2, 3, 4], y: [2, 4, 6, 8] });
+  assert.equal(correlation.r, 1);
+  assert.equal(correlation.strength, 'strong');
+  const regression = await runTool('stats.linear_regression', { x: [1, 2, 3], y: [3, 5, 7] });
+  assert.equal(regression.slope, 2);
+  assert.equal(regression.intercept, 1);
+  assert.equal(regression.r2, 1);
+  assert.equal((await runTool('stats.linear_regression', { x: [1, 1, 1], y: [1, 2, 3] })).code, 'NO_VARIANCE');
+  const outliers = await runTool('stats.outliers', { values: [1, 2, 3, 4, 5, 6, 100] });
+  assert.deepEqual(outliers.outliers, [100]);
+  assert.equal(outliers.rule, 'Tukey 1.5×IQR');
+  const zscores = await runTool('stats.zscores', { values: [2, 2, 2, 2] });
+  assert.equal(zscores.stdDev, 0);
+  assert.ok(zscores.zscores.every((entry) => entry.z === null));
+  const ab = await runTool('stats.two_proportion', { successesA: 50, totalA: 100, successesB: 50, totalB: 100 });
+  assert.equal(ab.z, 0);
+  assert.equal(ab.pValue, 1);
+  const ci = await runTool('stats.mean_ci', { values: [1, 2, 3, 4, 5] });
+  assert.ok(ci.low < ci.mean && ci.high > ci.mean);
+  assert.match(ci.method, /normal approximation/);
+});
+
+test('text tools: extraction, redaction, chunk offsets and similarity are accurate', async () => {
+  const text = 'Kontakt: jan@example.com, https://example.com/a?b=1, IP 192.168.0.10, data 2026-03-01, numer 12,5 oraz /home/user/plik.txt';
+  const extracted = await runTool('text.extract', { text });
+  for (const kind of ['email', 'url', 'ipv4', 'date', 'path']) assert.ok(extracted.found.some((entry) => entry.kind === kind), `missing ${kind}`);
+  const redacted = await runTool('text.redact', { text: 'password=SuperTajne123\nmail jan@example.com\nBearer abcdefghijklmnopqrstuvwxyz123456' });
+  assert.equal(redacted.redacted.password, 1);
+  assert.equal(redacted.redacted.email, 1);
+  assert.equal(redacted.redacted.bearer, 1);
+  assert.ok(!redacted.text.includes('SuperTajne123'));
+  assert.ok(!redacted.text.includes('jan@example.com'));
+  assert.match(redacted.text, /REDACTED:password/);
+  const slug = await runTool('text.slugify', { text: 'Zażółć gęślą jaźń — SENTINEL 6.0' });
+  assert.equal(slug.slug, 'zazolc-gesla-jazn-sentinel-6-0');
+  assert.equal((await runTool('text.levenshtein', { a: 'kot', b: 'koty' })).distance, 1);
+  const similarity = await runTool('text.similarity', { a: 'the same sentence here', b: 'the same sentence here' });
+  assert.equal(similarity.similarity, 1);
+  const long = `${'Akapit pierwszy. '.repeat(40)}\n\n${'Akapit drugi. '.repeat(40)}`;
+  const chunks = await runTool('text.chunk', { text: long, size: 400, overlap: 50 });
+  assert.ok(chunks.chunks.length > 1);
+  assert.equal(chunks.chunks[0].start, 0);
+  for (const chunk of chunks.chunks) {
+    assert.equal(long.slice(chunk.start, chunk.end), chunk.text);
+    assert.ok(chunk.lineStart >= 1 && chunk.lineEnd >= chunk.lineStart);
+  }
+  const keywords = await runTool('text.keywords', { text: 'dysk dysk dysk pamięć pamięć procesor i oraz the', limit: 3 });
+  assert.equal(keywords.keywords[0].term, 'dysk');
+  assert.equal(keywords.keywords[0].count, 3);
+  const stats = await runTool('text.stats', { text: 'Pierwsze zdanie. Drugie zdanie!\n\nNowy akapit.' });
+  assert.equal(stats.sentences, 3);
+  assert.equal(stats.paragraphs, 2);
+});
+
+test('time and encoding tools refuse invalid input instead of guessing', async () => {
+  const parsed = await runTool('time.parse', { value: '2026-03-01T10:00:00Z' });
+  assert.equal(parsed.ok, true);
+  assert.equal(parsed.utc.hour, 10);
+  assert.equal((await runTool('time.parse', { value: 'jutro po południu' })).code, 'INVALID_DATE');
+  const diff = await runTool('time.diff', { from: '2026-03-01T10:00:00Z', to: '2026-03-02T10:00:00Z' });
+  assert.equal(diff.days, 1);
+  const added = await runTool('time.add', { value: '2026-03-01T10:00:00Z', days: 2, hours: 3 });
+  assert.equal(added.result, '2026-03-03T13:00:00.000Z');
+  const base64 = await runTool('encode.base64', { text: 'Zażółć' });
+  assert.equal((await runTool('encode.base64', { text: base64.result, mode: 'decode' })).result, 'Zażółć');
+  assert.equal((await runTool('encode.base64', { text: '!!!', mode: 'decode' })).code, 'BAD_BASE64');
+  const hex = await runTool('encode.hex', { text: 'abc' });
+  assert.equal(hex.result, '616263');
+  assert.equal((await runTool('encode.hex', { text: 'zz', mode: 'decode' })).code, 'BAD_HEX');
+  const hash = await runTool('encode.hash', { text: 'abc', algorithm: 'sha256' });
+  assert.equal(hash.hex, 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad');
+  const uuid = await runTool('encode.uuid', { count: 3 });
+  assert.equal(new Set(uuid.uuids).size, 3);
+  assert.equal((await runTool('encode.uuid', { validate: uuid.uuids[0] })).valid, true);
+  assert.equal((await runTool('encode.url', { text: 'zażółć gęślą' })).result.includes('%'), true);
+});
+
+test('the new tool modules are registered once with complete schemas', () => {
+  const agent = new Agent();
+  try {
+    const names = [...analyticsTools, ...textTools].map((tool) => tool.name);
+    assert.equal(new Set(names).size, names.length, 'duplicate tool names in the new modules');
+    for (const tool of [...analyticsTools, ...textTools]) {
+      const registered = agent.tools.get(tool.name);
+      assert.ok(registered, `${tool.name} was not registered`);
+      assert.equal(registered.category, tool.category);
+      assert.ok(String(tool.description).length >= 40, `${tool.name} description is too short`);
+      assert.equal(tool.parameters.type, 'object');
+    }
+    assert.equal(agent.tools.get('stats.describe').permission, 'read');
+    assert.equal(agent.tools.get('text.redact').category, 'security');
+  } finally {
+    agent.stop();
+  }
+});
+
 /* ── runner ───────────────────────────────────────────────────────────── */
 
 (async () => {

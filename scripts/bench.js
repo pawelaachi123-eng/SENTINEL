@@ -10,7 +10,7 @@
  * providers are disabled so the numbers describe the deterministic core and
  * cannot be mistaken for inference benchmarks.
  *
- * Output: docs/bench-4.0.json and a short table on stdout.
+ * Output: docs/bench-<major>.0.json and a short table on stdout.
  */
 
 const fs = require('node:fs');
@@ -170,7 +170,8 @@ async function main() {
       'Memory and retrieval numbers use hashed embeddings, not nomic-embed-text.',
       'Boot time is a single construction, not a cold start of Windows services.',
     ];
-    const target = path.join(__dirname, '..', 'docs', 'bench-4.0.json');
+    const major = String(require('../package.json').version).split('.')[0];
+    const target = path.join(__dirname, '..', 'docs', `bench-${major}.0.json`);
     fs.writeFileSync(target, `${JSON.stringify(report, null, 2)}\n`);
     for (const [name, value] of Object.entries(report.measurements)) {
       const latency = value.p50 !== undefined ? `p50 ${value.p50} ms, p95 ${value.p95} ms` : `${value.ms} ms`;

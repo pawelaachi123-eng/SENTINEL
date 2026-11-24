@@ -39,6 +39,51 @@ const SAFE_CALLS = [
   { name: 'system.snapshot', args: {} },
   { name: 'org.status', args: {} },
   { name: 'org.plan', args: { capability: 'windows', workers: 2 } },
+  { name: 'lab.status', args: {} },
+  { name: 'models.capabilities', args: {} },
+  { name: 'reason.contradictions', args: { facts: [{ key: 'a', value: 1 }, { key: 'a', value: 2 }] } },
+  { name: 'skill.list', args: {} },
+  { name: 'research.list', args: {} },
+  { name: 'memory.due', args: {} },
+  { name: 'memory.migrate_preview', args: {} },
+  { name: 'repo.map', args: {} },
+  { name: 'data.csv_parse', args: { text: 'a,b\n1,2\n' } },
+  { name: 'data.csv_generate', args: { rows: [{ a: 1, b: 2 }] } },
+  { name: 'data.json_flatten', args: { value: { a: { b: 1 } } } },
+  { name: 'data.json_path', args: { value: { a: 1 }, path: 'a' } },
+  { name: 'data.json_diff', args: { left: { a: 1 }, right: { a: 2 } } },
+  { name: 'data.table_group', args: { rows: [{ k: 'a', v: 1 }], key: 'k', operations: [{ field: 'v', op: 'sum' }] } },
+  { name: 'data.table_sort', args: { rows: [{ v: 2 }, { v: 1 }], keys: [{ field: 'v' }] } },
+  { name: 'data.table_filter', args: { rows: [{ v: 1 }, { v: 2 }], conditions: [{ field: 'v', op: 'gte', value: 2 }] } },
+  { name: 'data.columns', args: { rows: [{ a: 1 }] } },
+  { name: 'data.dedupe', args: { rows: [{ a: 1 }, { a: 1 }], keys: ['a'] } },
+  { name: 'data.join', args: { left: [{ id: 1 }], right: [{ id: 1, x: 2 }], leftKey: 'id' } },
+  { name: 'stats.describe', args: { values: [1, 2, 3] } },
+  { name: 'stats.percentile', args: { values: [1, 2, 3], percentiles: [50] } },
+  { name: 'stats.histogram', args: { values: [1, 2, 3], bins: 2 } },
+  { name: 'stats.correlation', args: { x: [1, 2], y: [2, 4] } },
+  { name: 'stats.linear_regression', args: { x: [1, 2], y: [2, 4] } },
+  { name: 'stats.outliers', args: { values: [1, 2, 3, 4, 100] } },
+  { name: 'stats.zscores', args: { values: [1, 2, 3] } },
+  { name: 'stats.sample', args: { values: [1, 2, 3], size: 2 } },
+  { name: 'stats.mean_ci', args: { values: [1, 2, 3] } },
+  { name: 'stats.two_proportion', args: { successesA: 5, totalA: 10, successesB: 6, totalB: 10 } },
+  { name: 'text.extract', args: { text: 'mail a@b.pl i numer 12' } },
+  { name: 'text.redact', args: { text: 'password=abcdef123' } },
+  { name: 'text.slugify', args: { text: 'Zażółć gęślą jaźń' } },
+  { name: 'text.levenshtein', args: { a: 'kot', b: 'koty' } },
+  { name: 'text.similarity', args: { a: 'abc def', b: 'abc def' } },
+  { name: 'text.chunk', args: { text: 'Akapit. Drugi akapit.', size: 100 } },
+  { name: 'text.keywords', args: { text: 'dysk dysk pamiec' } },
+  { name: 'text.stats', args: { text: 'Zdanie. Drugie zdanie.' } },
+  { name: 'time.parse', args: { value: '2026-03-01T10:00:00Z' } },
+  { name: 'time.diff', args: { from: '2026-03-01T00:00:00Z', to: '2026-03-02T00:00:00Z' } },
+  { name: 'time.add', args: { value: '2026-03-01T00:00:00Z', days: 1 } },
+  { name: 'encode.base64', args: { text: 'abc' } },
+  { name: 'encode.hex', args: { text: 'abc' } },
+  { name: 'encode.url', args: { text: 'a b' } },
+  { name: 'encode.hash', args: { text: 'abc' } },
+  { name: 'encode.uuid', args: { count: 2 } },
 ];
 
 async function main() {
@@ -93,7 +138,8 @@ async function main() {
       },
       unexecuted: structural.total - executed.filter((entry) => entry.ok).length,
     };
-    const target = path.join(__dirname, '..', 'docs', 'tool-audit-4.0.json');
+    const major = String(require('../package.json').version).split('.')[0];
+    const target = path.join(__dirname, '..', 'docs', `tool-audit-${major}.0.json`);
     if (!noWrite) {
       fs.mkdirSync(path.dirname(target), { recursive: true });
       fs.writeFileSync(target, `${JSON.stringify(report, null, 2)}\n`);

@@ -12,7 +12,7 @@ const fsp = require('node:fs/promises');
 const path = require('node:path');
 const { truncate } = require('./helpers');
 
-const KINDS = ['short_term', 'working', 'long_term', 'episodic', 'semantic', 'procedural', 'project', 'errors'];
+const KINDS = ['short_term', 'working', 'long_term', 'episodic', 'semantic', 'procedural', 'project', 'errors', 'conversation', 'preference', 'temporal', 'prospective'];
 
 function citationList(items, prefix) {
   return items.map((item, index) => {
@@ -502,6 +502,78 @@ module.exports = [
       return ctx.memory.summarise(args.sessionId || 'default');
     },
     format: (data) => (data ? `${data.turns} tur, ${data.decisions.length} decyzji, ${data.constraints.length} ograniczeń` : 'brak rozmowy'),
+  },
+  {
+    name: 'memory.due',
+    title: 'Prospective memories that are due',
+    description: 'Lists intentions stored as prospective memory whose due time has passed, sorted by deadline, with overdue milliseconds. Reminders are data, not an autonomous action.',
+    category: 'memory',
+    permission: 'read',
+    tags: ['memory', 'prospective', 'reminder', 'due'],
+    parameters: {
+      type: 'object',
+      properties: { limit: { type: 'number', minimum: 1, maximum: 100 } },
+      additionalProperties: false,
+    },
+    async run(args, ctx) {
+      const due = ctx.memory.due({ limit: args.limit || 50 });
+      return { ok: true, due: due.map((entry) => ({ id: entry.record.id, text: entry.record.text, dueAt: entry.record.dueAt, overdueMs: entry.dueInMs })), count: due.length };
+    },
+    format: (data) => `${data.count} zaległych przypomnień`,
+  },
+  {
+    name: 'memory.history',
+    title: 'Supersession history of a memory',
+    description: 'Returns the full chain of a memory and its replacements, oldest first, so a decision that changed can be audited instead of silently lost.',
+    category: 'memory',
+    permission: 'read',
+    tags: ['memory', 'history', 'supersession', 'audit'],
+    parameters: {
+      type: 'object',
+      properties: { id: { type: 'string', minLength: 1, maxLength: 80 } },
+      required: ['id'],
+      additionalProperties: false,
+    },
+    async run(args, ctx) {
+      const chain = ctx.memory.history(args.id);
+      if (!chain.length) return { ok: false, code: 'NOT_FOUND' };
+      return { ok: true, chain: chain.map((record) => ({ id: record.id, kind: record.kind, text: record.text, createdAt: record.createdAt, supersededBy: record.supersededBy })), length: chain.length };
+    },
+    format: (data) => (data.ok ? `${data.length} wersji w historii` : 'nie znaleziono'),
+  },
+  {
+    name: 'memory.migrate_preview',
+    title: 'Preview a memory migration',
+    description: 'Previews missing provenance/scope fields and legacy kind names without writing anything. The apply step is a separate tool that requires a consumed human approval.',
+    category: 'memory',
+    permission: 'read',
+    tags: ['memory', 'migration', 'backup', 'provenance'],
+    parameters: {
+      type: 'object',
+      properties: {},
+      additionalProperties: false,
+    },
+    async run(args, ctx) {
+      const approvedBy = ctx.approval ? ctx.approval.by || ctx.approval.requestedBy || `approval:${ctx.approval.id}` : null;
+      return ctx.memory.migrate({ apply: false });
+    },
+    format: (data) => `${data.pending} rekordów do migracji (podgląd, bez zapisu)`,
+  },
+  {
+    name: 'memory.migrate_apply',
+    title: 'Apply a memory migration with a backup',
+    description: 'Adds missing provenance/scope fields and normalises legacy kind names after a consumed human approval. A full store backup is written first; text, ids and timestamps are preserved and the migration is reversible by restoring the backup.',
+    category: 'memory',
+    permission: 'system',
+    tags: ['memory', 'migration', 'backup', 'approval'],
+    parameters: { type: 'object', properties: {}, additionalProperties: false },
+    async run(args, ctx) {
+      const approvedBy = ctx.approval ? ctx.approval.by || ctx.approval.requestedBy || `approval:${ctx.approval.id}` : null;
+      if (!approvedBy) return { ok: false, code: 'APPROVAL_REQUIRED', message: 'applying a migration needs a consumed human approval' };
+      const destination = ctx.paths && ctx.paths.backupsDir ? require('node:path').join(ctx.paths.backupsDir(), `memory-migration-${Date.now()}.sqlite`) : null;
+      return ctx.memory.migrate({ apply: true, approvedBy, backupTo: destination });
+    },
+    format: (data) => (data.ok ? `zmigrowano ${data.applied}, backup ${data.backup}` : `odmowa: ${data.code}`),
   },
 ];
 

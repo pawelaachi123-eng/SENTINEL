@@ -13,6 +13,10 @@
  *   procedural  — how to do something that worked before
  *   project     — repository/domain knowledge
  *   errors      — failures and the fix that actually worked
+ *   conversation— durable conversation facts that are not just the raw log
+ *   preference  — how the user wants things done (kept separate from facts)
+ *   temporal    — validity-bounded facts ("until March", "on that day")
+ *   prospective — intentions with a due time ("remind me tomorrow")
  *
  * Retrieval is hybrid (BM25 + vector, fused with RRF) and ranking adds recency,
  * importance and how often a memory has been useful. Duplicates collapse.
@@ -26,7 +30,9 @@ const { Bm25Index, hybridSearch } = require('./search');
 const { HashingEmbedder, encodeVector, decodeVector, cosine, expandQuery } = require('./embeddings');
 const { newId } = require('./store');
 
-const KINDS = ['short_term', 'working', 'long_term', 'episodic', 'semantic', 'procedural', 'project', 'errors'];
+const KINDS = ['short_term', 'working', 'long_term', 'episodic', 'semantic', 'procedural', 'project', 'errors', 'conversation', 'preference', 'temporal', 'prospective'];
+const KIND_ALIASES = { error: 'errors', pref: 'preference', preference: 'preference', conversation: 'conversation', temporal: 'temporal', prospective: 'prospective' };
+const LEGACY_KIND = { short: 'short_term', long: 'long_term', episode: 'episodic', procedure: 'procedural' };
 
 const { scan: scanInjection } = require('../security/injection');
 
@@ -121,11 +127,16 @@ class Memory {
     confidence = 0.8,
     provenance = null,
     expiresAt = null,
+    dueAt = null,
+    validFrom = null,
+    validUntil = null,
   } = {}) {
     this.load();
     const clean = String(text || '').trim();
     if (!clean) return { record: null, rejected: 'empty' };
+    if (KIND_ALIASES[kind]) kind = KIND_ALIASES[kind];
     if (!KINDS.includes(kind)) kind = 'long_term';
+    if (kind === 'prospective' && !dueAt) return { record: null, rejected: 'a prospective memory needs a due time' };
 
     const secret = looksSecret(clean);
     if (secret) {
@@ -172,7 +183,10 @@ class Memory {
       scope,
       confidence: clamp01(confidence),
       provenance: provenance || { source, capturedAt: now, runId: null, documentId: null },
-      expiresAt: expiresAt || null,
+      expiresAt: expiresAt || validUntil || null,
+      dueAt: dueAt || null,
+      validFrom: validFrom || null,
+      validUntil: validUntil || null,
       supersededBy: null,
       conflictWith: conflicts.map((entry) => entry.id),
       text: clean,
@@ -522,6 +536,80 @@ class Memory {
       if (record.kind === kind && this.forget(record.id, { quiet: true })) count += 1;
     }
     return count;
+  }
+
+  /* ── 6.0: typed memory, supersession, migration ─────────────────────── */
+
+  /** Full supersession chain, oldest first, so an old decision is recoverable. */
+  history(id) {
+    this.load();
+    const chain = [];
+    let current = this.cache.get(id);
+    const seen = new Set();
+    while (current && !seen.has(current.id)) {
+      seen.add(current.id);
+      chain.push(current);
+      current = current.supersededBy ? this.cache.get(current.supersededBy) : null;
+    }
+    return chain;
+  }
+
+  /** Prospective memory: intentions that are due, sorted by deadline. */
+  due({ before = this.now(), limit = 50 } = {}) {
+    this.load();
+    return [...this.cache.values()]
+      .filter((record) => record.kind === 'prospective' && record.dueAt && record.dueAt <= before && !record.supersededBy)
+      .sort((a, b) => a.dueAt - b.dueAt)
+      .slice(0, limit)
+      .map((record) => ({ record, dueInMs: record.dueAt - this.now(), overdue: record.dueAt < this.now() }));
+  }
+
+  /**
+   * Migration preview/apply for older records. Preview never writes. Applying
+   * requires an approving identity, writes a full store backup first, and then
+   * adds missing provenance/scope fields and normalises legacy kind names.
+   * Original text, id and timestamps are never changed.
+   */
+  async migrate({ apply = false, approvedBy = null, backupTo = null } = {}) {
+    this.load();
+    const actions = [];
+    for (const record of this.cache.values()) {
+      const changes = {};
+      if (LEGACY_KIND[record.kind]) changes.kind = LEGACY_KIND[record.kind];
+      if (record.kind === 'error') changes.kind = 'errors';
+      if (!record.scope) changes.scope = 'global';
+      if (!record.provenance) changes.provenance = { source: record.source || 'migration', capturedAt: record.createdAt || this.now(), runId: null, documentId: null, migrated: true };
+      if (record.confidence === undefined) changes.confidence = 0.5;
+      if (!Array.isArray(record.tags)) changes.tags = [];
+      if (record.supersededBy === undefined) changes.supersededBy = null;
+      if (Object.keys(changes).length) actions.push({ id: record.id, kind: record.kind, text: record.text.slice(0, 80), changes });
+    }
+    const report = {
+      apply: false,
+      total: this.cache.size,
+      pending: actions.length,
+      byKind: actions.reduce((out, action) => ({ ...out, [action.kind]: (out[action.kind] || 0) + 1 }), {}),
+      sample: actions.slice(0, 10),
+      backup: null,
+      note: 'Preview only. Text, ids and timestamps are preserved; applying writes a backup first.',
+    };
+    if (!apply) return report;
+    if (!approvedBy) return { ...report, ok: false, code: 'APPROVAL_REQUIRED', message: 'applying a migration needs an approving identity' };
+    if (!actions.length) return { ...report, ok: true, applied: 0, backup: null };
+    let backup = backupTo;
+    if (this.store && typeof this.store.backupAsync === 'function') {
+      backup = backupTo || `${this.store.file || 'memory'}.migration-${new Date(this.now()).toISOString().replace(/[:.]/g, '-')}.backup`;
+      await this.store.backupAsync(backup);
+    }
+    const applied = [];
+    for (const action of actions) {
+      const record = this.cache.get(action.id);
+      if (!record) continue;
+      Object.assign(record, action.changes, { migratedAt: this.now(), migratedBy: approvedBy });
+      this.persist(record);
+      applied.push(action.id);
+    }
+    return { ...report, apply: true, ok: true, applied: applied.length, backup, approvedBy };
   }
 
   /* ── conversation ───────────────────────────────────────────────────── */

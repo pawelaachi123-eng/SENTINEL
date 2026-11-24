@@ -311,3 +311,20 @@ names the models the user is expected to pull themselves.
 | Agent benchmarks | τ-bench `pass^k`, τ²-bench and the Agentic Benchmark Checklist warn about overestimation | deterministic/mock gates kept separate from live-model evaluation; no unrun test reported as passed |
 | Windows process spawning | `npm` is a `.cmd` shim; `spawnSync('npm')` fails with ENOENT off a shell | verifier uses `npm.cmd` on `win32` |
 | Read-only reasoning | hypotheses need refutable measurements | each hypothesis names a real tool and expected observation; failures are `untested` |
+
+---
+
+## 15. 6.0 research notes and decisions
+
+| Topic | Finding that mattered | Implementation decision |
+| --- | --- | --- |
+| Backpropagation and gradient checking | Manual backprop is only trustworthy if it agrees with a numeric derivative | `core/ml/mlp.js` exposes `gradientCheck()`; the test suite requires worst error < 1e-3 and checks both weights and biases |
+| Adam | Adaptive moments need bias correction at the start of training | implemented with β1/β2 correction and decoupled L2 penalty; learning rate is tiny because the dataset is small |
+| Small-data generalisation | A high-capacity MLP memorises 110 examples and validation stays at chance | larger, template-generated synthetic set, smaller hidden layers, L2, early stopping on validation loss, and the held-out score is what is reported |
+| Dataset contamination | Near-duplicate templates inflate held-out scores | near-duplicate test/validation items are curated into training and reported in `split.curated`; the contamination check runs before training and refuses |
+| Tokenisation | Hashing word/char n-grams is not a tokenizer and cannot be sold as one | feature file names the method; token counts elsewhere remain labelled estimates |
+| Memory migration | Destructive schema changes without a preview are unacceptable | preview is read-only; apply requires an approval and writes a full store backup first; text/ids/timestamps preserved |
+| Research citations | A summary without a locatable quote is not evidence | every quote is stored with source id and real line number; numeric conflicts stay unresolved |
+| Retrieved content | Research sources are hostile until proven otherwise | sources are marked `untrusted: true`, never executed and cannot grant permissions |
+| Agent/eval literature | Benchmarks overstate capability when mocks are mixed with live runs | deterministic tool cases are labelled mock; live model evaluation remains a separate gate |
+| Windows CI | Logs were unreachable in this sandbox; annotations were the only reliable signal | per-suite workflow annotations and uploaded logs (5.0), retained for 6.0 |

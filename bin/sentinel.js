@@ -55,6 +55,9 @@ const HELP = `SENTINEL ${require('../package.json').version} — your own assist
   sentinel status [--json]                this machine and the AI stack
   sentinel runtime [profil]               idle / balanced / deep / gaming
     neural [status|discover|route <zadanie>]  modele: metadane, możliwości, routing
+    lab [status|classify <tekst>]              laboratorium: metryki, aktywny model
+    train --approve <imię>                     trening małego klasyfikatora na CPU
+    research [list|start <pytanie>|add <id> <plik>|report <id>]  sesje badawcze z cytatami
   sentinel graph [zapytanie]              knowledge graph stats or a multi-hop query
   sentinel org [zdolność]                 organisation chart or a delegation preview
   sentinel mcp [status|connect|disconnect] [serwer]   opt-in MCP servers
@@ -88,6 +91,7 @@ function parse(argv) {
     else if (arg === '--lang' || arg === '--language') out.lang = argv[++index];
     else if (arg === '--tags') out.tags = String(argv[++index] || '').split(',').map((tag) => tag.trim()).filter(Boolean);
     else if (arg === '--max') out.max = Number(argv[++index]);
+    else if (arg === '--approve') out.approve = argv[++index] || 'cli-operator';
     else out._.push(arg);
   }
   return out;
@@ -604,6 +608,131 @@ async function main() {
         console.log(`${chart.total} agentów · ${Object.entries(chart.counts).map(([tier, count]) => `${tier} ${count}`).join(' · ')}`);
         for (const [domain, info] of Object.entries(chart.domains)) console.log(`  ${domain.padEnd(14)} ${info.lead} ${dim(`(${info.members.join(', ')})`)}`);
         return done(0);
+      }
+
+      case 'lab':
+      case 'train': {
+        const action = command === 'train' ? 'train' : rest[0] || 'status';
+        if (action === 'status') {
+          const status = agent.lab.status();
+          if (args.json) console.log(JSON.stringify(status, null, 2));
+          else {
+            console.log(bold('laboratorium neuronowe'));
+            console.log(`  dataset: ${status.dataset.items} przykładów, ${status.dataset.labels.length} intencji, ${status.dataset.version} (${status.dataset.provenance})`);
+            console.log(`  aktywne: ${status.active ? `${status.active.experimentId} · test ${status.active.metrics.accuracy} · baseline ${status.active.metrics.baseline || '?'}` : 'brak (wytrenuj i promuj)'}`);
+            for (const experiment of status.experiments.slice(0, 8)) console.log(`  ${experiment.id} · ${experiment.status} · test ${experiment.accuracy} vs baseline ${experiment.baseline} · ${experiment.artifact.bytes} B`);
+            console.log(dim(`  ${status.honest}`));
+          }
+          return done(0);
+        }
+        if (action === 'train') {
+          if (!args.approve) {
+            console.error(red('trening wymaga jawnej zgody: sentinel train --approve <twoje-imie>'));
+            return done(4);
+          }
+          console.log(dim(`  trenuję na CPU (seed ${args.seed || 7}); to mały MLP, nie LoRA`));
+          const result = agent.lab.trainIntent({ approvedBy: args.approve, epochs: args.max || 40 });
+          if (!result.ok) {
+            console.error(red(`✗ ${result.code}: ${result.message || ''}`));
+            return done(4);
+          }
+          const experiment = result.experiment;
+          if (args.json) console.log(JSON.stringify(experiment, null, 2));
+          else {
+            console.log(green(`✓ ${experiment.id} · ${experiment.status}`));
+            console.log(`  test: ${experiment.metrics.accuracy} (baseline ${experiment.baseline.accuracy}, delta ${experiment.delta}), macro-F1 ${experiment.metrics.macroF1}`);
+            console.log(`  epoki: ${experiment.training.epochsRun}, najlepsza: ${experiment.training.bestEpoch}, loss walidacyjny ${experiment.training.bestValidationLoss}`);
+            console.log(`  checkpoint: ${experiment.artifact.path} (${experiment.artifact.bytes} B, sha256 ${experiment.artifact.checksum.slice(0, 16)}…)`);
+            console.log(dim('  nic nie jest aktywne bez: sentinel lab promote <id> --approve <imię>'));
+          }
+          return done(0);
+        }
+        if (action === 'promote' || action === 'rollback') {
+          if (!args.approve) {
+            console.error(red(`operacja ${action} wymaga --approve <imię>`));
+            return done(4);
+          }
+          const result = action === 'promote' ? agent.lab.promote(rest[1], { approvedBy: args.approve }) : agent.lab.rollback({ approvedBy: args.approve });
+          if (!result.ok) {
+            console.error(red(`✗ ${result.code}: ${result.message || ''}`));
+            return done(4);
+          }
+          console.log(green(`✓ ${action}: ${result.active.experimentId}`));
+          return done(0);
+        }
+        if (action === 'classify') {
+          const text = rest.slice(1).join(' ');
+          if (!text) {
+            console.error(red('użycie: sentinel lab classify <tekst>'));
+            return done(4);
+          }
+          const result = agent.lab.classify(text);
+          if (!result.ok) {
+            console.error(red(`✗ ${result.code}: ${result.message}`));
+            return done(4);
+          }
+          if (args.json) console.log(JSON.stringify(result, null, 2));
+          else {
+            console.log(`${result.intent} ${dim(`(pewność ${result.confidence})`)}`);
+            console.log(dim(`  model ${result.model.experimentId}`));
+          }
+          return done(0);
+        }
+        console.error(red(`nieznana akcja lab: ${action}`));
+        return done(4);
+      }
+
+      case 'research': {
+        const action = rest[0] || 'list';
+        if (action === 'list') {
+          const status = agent.research.status();
+          if (args.json) console.log(JSON.stringify(status, null, 2));
+          else {
+            console.log(`${status.sessions} sesji, ${status.sources} źródeł`);
+            for (const session of agent.research.list({ limit: 20 })) console.log(`  ${session.id} · ${session.status} · ${session.sources} źródeł · ${session.question}`);
+          }
+          return done(0);
+        }
+        if (action === 'start') {
+          const question = rest.slice(1).join(' ');
+          if (!question) {
+            console.error(red('użycie: sentinel research start <pytanie>'));
+            return done(4);
+          }
+          const started = agent.research.start({ question, online: Boolean(args.approve && args.online), approvedBy: args.approve || null });
+          if (!started.ok) {
+            console.error(red(`✗ ${started.code}: ${started.message || ''}`));
+            return done(4);
+          }
+          console.log(green(`✓ ${started.session.id}`));
+          for (const item of started.session.subquestions) console.log(`  ${item.id}: ${item.question}`);
+          return done(0);
+        }
+        if (action === 'add') {
+          if (!rest[1] || !rest[2]) {
+            console.error(red('użycie: sentinel research add <id> <plik-w-workspace>'));
+            return done(4);
+          }
+          const added = agent.research.addSource(rest[1], { file: path.resolve(rest.slice(2).join(' ')) });
+          if (!added.ok) {
+            console.error(red(`✗ ${added.code}: ${added.message || ''}`));
+            return done(4);
+          }
+          console.log(green(`✓ ${added.source.title}: ${added.source.lines} linii`));
+          return done(0);
+        }
+        if (action === 'report') {
+          const report = agent.research.synthesize(rest[1]);
+          if (!report.ok) {
+            console.error(red(`✗ ${report.code}: ${report.message || ''}`));
+            return done(4);
+          }
+          if (args.json) console.log(JSON.stringify(report.structured, null, 2));
+          else process.stdout.write(report.report);
+          return done(0);
+        }
+        console.error(red(`nieznana akcja research: ${action}`));
+        return done(4);
       }
 
       case 'neural': {

@@ -1,4 +1,36 @@
-# SENTINEL 5.0 — progress and verification log
+# SENTINEL 6.0 — progress and verification log
+
+Branch: `arena/15fbea48-sentinel`. Everything below was executed in this
+repository unless explicitly labelled otherwise. The persistent requirement
+matrix is `docs/REQUIREMENTS-6.0.md`; the delivery report is
+`docs/REPORT-6.0.md`.
+
+## 6.0 status (this slice)
+
+Implemented and tested: real CPU MLP with gradients/checkpoints; learning lab
+with measured held-out metrics, approval-gated promotion and rollback; typed
+memory (conversation/preference/temporal/prospective), due reminders and
+preview/apply migration with backup; persistent research sessions with
+line-level citations and conflicts; 38 deterministic data/statistics/text/
+encoding tools; lab/neural/research API, UI panel and CLI; installer read-only
+health checks. Outstanding work is listed in the matrix, not hidden.
+
+| Gate | Result |
+| --- | --- |
+| `node test/run.js` | 23 passed |
+| `node test/ai.js` | 25 passed |
+| `node test/ui.js` | 35/35 |
+| `node test/deep.js` | **131/131** |
+| `node scripts/check.js` | all checks passed |
+| `node scripts/eval.js` | **76/76**, score 1, **mock mode** |
+| `node scripts/audit-tools.js --no-write` | **270 tools / 24 categories / 0 problems / 59 executed / 211 unexecuted** |
+| `sentinel train --approve tester` | candidate, test 0.796 vs baseline 0.755, 197,681-byte checkpoint |
+
+**Windows CI for 6.0 has not been run yet.** The last green Windows run was
+`d995bf7` for 5.0. No GPU or live model was available, and the installer was not
+executed here.
+
+# Historical: SENTINEL 5.0 progress log
 
 Branch: `arena/15fbea48-sentinel`. Everything below was executed in this
 repository; anything unexecuted is labelled as such.

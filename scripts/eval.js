@@ -40,6 +40,12 @@ function makeAsk(agent, live) {
   return async (entry) => {
     const input = String((entry.platformInput && entry.platformInput[process.platform]) || entry.input);
     switch (entry.adapter) {
+      case 'tool': {
+        if (!entry.tool) return { ok: false, text: 'tool case without a tool name' };
+        const result = await agent.tools.execute(entry.tool, entry.args || {}, { source: 'eval' });
+        const payload = result.data === undefined ? result : result.data;
+        return { ok: Boolean(result.ok), text: JSON.stringify(payload), tools: [entry.tool], ms: result.ms };
+      }
       case 'arithmetic': {
         if (!live) {
           // Deterministic arithmetic goes through the real brain; providers are

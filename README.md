@@ -1,4 +1,4 @@
-# SENTINEL 5.0
+# SENTINEL 6.0
 
 **Your own assistant for your own machine — it runs on the PC, answers with measurements instead of guesses, and can still be driven from your phone over a direct encrypted channel. No account, no cloud.**
 
@@ -24,7 +24,7 @@ Three situations, one app:
 
 ## The assistant
 
-SENTINEL 5.0 is a cognitive assistant that can *operate this computer*, not
+SENTINEL 6.0 is a cognitive assistant that can *operate this computer*, not
 just talk about it — with a real brief, bounded plans, verified answers and a
 memory that admits when two facts contradict each other. Ask in the UI, on the phone, or in a terminal:
 
@@ -35,12 +35,18 @@ sentinel doctor --fix
 ```
 
 * **It measures before it speaks.** Hardware, processes, files, documents, logs
-  and the ESP32 are read through 219 audited tools; every answer carries its
+  and the ESP32 are read through 270 audited tools; every answer carries its
   tool calls, citations and a verification report.
 * **It knows what its models can do.** `sentinel neural` reads architecture,
   quantisation, context length and capabilities from the provider itself, routes
   each task to a capable model, and refuses with exit code 4 when none is
   installed — no invented context windows or neuron counts.
+* **It trains a small model and measures it.** `sentinel train --approve <name>`
+  trains a CPU MLP on synthetic PL/EN intents, reports held-out accuracy against
+  a keyword baseline, macro-F1 and confusion, writes a checksummed checkpoint
+  outside the source tree, and only activates it after an explicit promotion.
+* **Research keeps its receipts.** Sessions store source fingerprints and quote
+  real line numbers; numeric conflicts stay unresolved rather than synthesised.
 * **Reasoning is tied to measurements.** Diagnoses build hypotheses only from
   crossed thresholds and test them with real tools; untested stays untested and
   contradictory facts are kept side by side.
@@ -98,22 +104,22 @@ code blocks, and approvals appear at the top of the screen wherever you are.
 
 ---
 
-### What 5.0 verifies, and what it does not
+### What 6.0 verifies, and what it does not
 
 `npm test` runs four suites: **23** protocol/CLI checks, **35** UI checks,
-**25** assistant-stack checks and **117** deep checks (semantics, executor,
+**25** assistant-stack checks and **131** deep checks (semantics, executor,
 isolated verification, graph, MCP, runtime profiles, held-out evaluation,
 organisation, conversation state, plus the 3.0 checks). Two gates run on top:
-`node scripts/eval.js` (**23/23** deterministic cases, every provider disabled)
-and `node scripts/audit-tools.js` (**219** tools, **0** structural problems,
-**14** executed successfully, **205** explicitly unexecuted).
+`node scripts/eval.js` (**76/76** deterministic cases, every provider disabled)
+and `node scripts/audit-tools.js` (**270** tools, **0** structural problems,
+**59** executed successfully, **211** explicitly unexecuted).
 
 Counts, measurements and the full delivery report are in
-[`docs/REPORT-5.0.md`](docs/REPORT-5.0.md), [`docs/REPORT-4.0.md`](docs/REPORT-4.0.md) and
+[`docs/REPORT-6.0.md`](docs/REPORT-6.0.md), [`docs/REPORT-5.0.md`](docs/REPORT-5.0.md), [`docs/REPORT-4.0.md`](docs/REPORT-4.0.md) and
 [`docs/PROGRESS.md`](docs/PROGRESS.md); research and licences in
-[`docs/research.md`](docs/research.md). Windows CI is green as of commit `d995bf7` (behaviour tests, deterministic
-evaluation and tool audit); no GPU was available, no live model
-evaluation was run, and 205 tools remain unexecuted. Those limits are stated
+[`docs/research.md`](docs/research.md). The last Windows CI run was green at `d995bf7` (5.0); the 6.0 revision has not
+yet been run on Windows; no GPU was available, no live model
+evaluation was run, and 211 tools remain unexecuted. Those limits are stated
 there rather than glossed over.
 
 ## Download
