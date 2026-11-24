@@ -31,6 +31,8 @@ const { SelfHeal } = require('./selfheal');
 const { CognitiveCore } = require('./cognition');
 const { ContextManager } = require('./context');
 const { PatchManager } = require('./patching');
+const { SemanticInterpreter } = require('./semantics');
+const { Executor } = require('./executor');
 const { ExperienceStore } = require('./experience');
 const { EventBus } = require('./events');
 const { Metrics } = require('./metrics');
@@ -90,6 +92,7 @@ class Agent extends EventEmitter {
       this.tasks = new TaskManager({ store: this.store, log: this.log });
       this.approvals = new ApprovalQueue({ log: this.log });
       this.llm = new LlmClient({ config: this.config, log: this.log, metrics: this.metrics, events: this.events, experience: this.experience });
+      this.semantics = new SemanticInterpreter({ cognitive: this.cognitive, llm: this.llm, log: this.log, config: this.config });
       this.sandbox = new Sandbox({ config: this.config, log: this.log, paths: pathsModule });
       if (this.patches) this.patches.sandbox = this.sandbox;
       this.voice = new VoiceEngine({ config: this.config, log: this.log, paths: pathsModule });
@@ -123,6 +126,7 @@ class Agent extends EventEmitter {
         approvals: this.approvals,
         services: this.services,
       });
+      this.executor = null;
       this.brain = new Brain({
         config: this.config,
         log: this.log,
@@ -141,11 +145,28 @@ class Agent extends EventEmitter {
         paths: pathsModule,
         cognitive: this.cognitive,
         context: this.context,
+        semantics: this.semantics,
         patches: this.patches,
+        executor: this.executor,
         experience: this.experience,
         events: this.events,
         metrics: this.metrics,
+        executor: null,
       });
+      this.executor = new Executor({
+        tasks: this.tasks,
+        dispatcher: this.dispatcher,
+        tools: this.tools,
+        approvals: this.approvals,
+        agents: this.agents,
+        events: this.events,
+        metrics: this.metrics,
+        experience: this.experience,
+        log: this.log,
+        config: this.config,
+        replanner: async (context) => (this.brain && this.brain.proposeReplan ? this.brain.proposeReplan(context) : { steps: [] }),
+      });
+      this.brain.executor = this.executor;
       this.automation = new AutomationEngine({ store: this.store, log: this.log, config: this.config, commander: this.commander, brain: this.brain });
       this.healing = new SelfHeal({ config: this.config, log: this.log, paths: pathsModule, tools: this.tools, store: this.store, memory: this.memory, llm: this.llm, commander: this.commander });
       // The shared service bag is live: tools resolve these on every call.
@@ -243,8 +264,10 @@ class Agent extends EventEmitter {
             metrics: this.metrics || null,
             experience: this.experience || null,
             cognitive: this.cognitive || null,
+            semantics: this.semantics || null,
             context: this.context || null,
             patches: this.patches || null,
+            executor: this.executor || null,
             incidents: this.incidents || null,
             tasks: this.tasks || null,
           }
@@ -375,11 +398,13 @@ class Agent extends EventEmitter {
       llm: this.llm.stats(),
       healing: this.healing.stats(),
       cognitive: this.cognitive ? this.cognitive.stats() : null,
+      semantics: this.semantics ? this.semantics.stats() : null,
       context: this.context ? this.context.stats() : null,
       experience: this.experience ? this.experience.stats() : null,
       events: this.events ? this.events.stats() : null,
       metrics: this.metrics ? this.metrics.snapshot() : null,
       incidents: this.incidents ? this.incidents.stats() : null,
+      executor: this.executor ? { ...this.executor.counters } : null,
       watchdogs: (this.watchdogs || []).map((watchdog) => watchdog.status()),
       voice: this.voice.counters,
       vision: this.vision.counters,

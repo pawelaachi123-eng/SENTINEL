@@ -172,11 +172,18 @@ class TaskManager {
     const normalised = (steps || []).map((step, index) => ({
       id: step.id || `s${index + 1}`,
       title: step.title || step.goal || step.description || `step ${index + 1}`,
+      goal: step.goal || step.title || null,
       agent: step.agent || null,
       tool: step.tool || null,
       args: step.args || null,
+      inputs: step.inputs && typeof step.inputs === 'object' ? step.inputs : null,
+      outputs: step.outputs && typeof step.outputs === 'object' ? step.outputs : null,
+      idempotent: step.idempotent === true,
+      parallel: step.parallel !== false,
+      timeoutMs: Number(step.timeoutMs) || null,
+      preconditions: Array.isArray(step.preconditions) ? step.preconditions.slice(0, 6) : [],
+      acceptance: step.acceptance || step.acceptanceCriteria || null,
       dependsOn: Array.isArray(step.dependsOn) ? step.dependsOn : [],
-      acceptance: step.acceptance || null,
       status: 'pending',
       attempts: 0,
       maxAttempts: Math.max(1, Math.min(Number(step.maxAttempts || (policy && policy.maxAttempts) || DEFAULT_POLICY.maxAttempts), 5)),
@@ -343,6 +350,62 @@ class TaskManager {
     return { ok: true, task };
   }
 
+  /** Non-terminal state change used by the executor (waiting, verifying, retrying). */
+  setState(id, status, detail = null) {
+    const task = this.get(id);
+    if (!task) return null;
+    if (!STATUSES.includes(status)) return null;
+    if (TERMINAL.has(task.status)) return task;
+    task.status = status;
+    if (detail) task.stateDetail = String(detail).slice(0, 400);
+    this.persist(task);
+    return task;
+  }
+
+  /**
+   * Appends steps to a live task — used when replanning a failed subgraph.
+   * Existing ids are never replaced; a colliding id is rejected, because a
+   * silent overwrite would lose a completed result.
+   */
+  insertSteps(id, steps, { after = null } = {}) {
+    const task = this.get(id);
+    if (!task) throw Object.assign(new Error(`no task ${id}`), { code: 'NOT_FOUND' });
+    const list = Array.isArray(steps) ? steps : [];
+    if (!list.length) return { ok: false, code: 'EMPTY_PLAN', errors: ['no steps'] };
+    const existing = new Set(task.steps.map((step) => step.id));
+    for (const step of list) {
+      if (!step || !step.id) return { ok: false, code: 'INVALID_PLAN', errors: ['a new step has no id'] };
+      if (existing.has(step.id)) return { ok: false, code: 'INVALID_PLAN', errors: [`step ${step.id} already exists`] };
+      existing.add(step.id);
+    }
+    const combined = [...task.steps, ...list];
+    const valid = validateDag(combined, { maxSteps: Number(task.policy.maxSteps) || 64 });
+    if (!valid.ok) return { ok: false, code: 'INVALID_PLAN', errors: valid.errors };
+    const insertAt = after ? task.steps.findIndex((step) => step.id === after) : -1;
+    const normalised = list.map((step) => ({
+      ...step,
+      goal: step.goal || step.title || null,
+      inputs: step.inputs || null,
+      outputs: step.outputs || null,
+      idempotent: step.idempotent === true,
+      parallel: step.parallel !== false,
+      status: 'pending',
+      attempts: 0,
+      maxAttempts: step.maxAttempts || task.policy.maxAttempts,
+      dependsOn: step.dependsOn || [],
+      nextAttemptAt: null,
+      result: null,
+      error: null,
+    }));
+    if (insertAt >= 0) task.steps.splice(insertAt + 1, 0, ...normalised);
+    else task.steps.push(...normalised);
+    task.replans = (task.replans || 0) + 1;
+    if (TERMINAL.has(task.status)) task.status = 'running';
+    this.persist(task);
+    this.checkpoint(id, { event: 'replan', steps: normalised.map((step) => step.id) });
+    return { ok: true, task, added: normalised.map((step) => step.id) };
+  }
+
   stepStart(id, stepId) {
     const task = this.get(id);
     if (!task) return null;
@@ -374,6 +437,22 @@ class TaskManager {
    * Records a failure. If attempts remain, the step stays runnable after a
    * backoff instead of being retried in a tight loop.
    */
+  /** Marks a step as superseded by a replanned branch; its error is preserved. */
+  skipStep(id, stepId, reason = 'superseded by a replanned step') {
+    const task = this.get(id);
+    if (!task) return null;
+    const step = task.steps.find((entry) => entry.id === stepId);
+    if (!step) return null;
+    step.status = 'skipped';
+    step.superseded = true;
+    step.supersededReason = String(reason).slice(0, 200);
+    step.finishedAt = this.now();
+    task.progress = Math.round((task.steps.filter((entry) => entry.status === 'done' || entry.status === 'skipped').length / Math.max(1, task.steps.length)) * 100);
+    this.persist(task);
+    this.checkpoint(id, { event: 'step-skipped', step: stepId, reason: step.supersededReason });
+    return task;
+  }
+
   stepFailed(id, stepId, error, { retryable = true } = {}) {
     const task = this.get(id);
     if (!task) return null;

@@ -647,7 +647,141 @@ test('a dead provider trips its breaker and the next candidate answers', async (
   assert.ok(breakers.some((breaker) => breaker.name === 'ollama' && breaker.state === 'open'));
 });
 
+/* ── semantic interpretation (4.0) ────────────────────────────────────── */
+
+const { SemanticInterpreter, repairSpelling, detectLanguage } = require('../core/semantics');
+
+function fakeLlm(payload, { fail = false } = {}) {
+  const calls = [];
+  return {
+    calls,
+    async structured(options) {
+      calls.push(options);
+      if (fail) throw Object.assign(new Error('provider down'), { code: 'ALL_FAILED' });
+      return { data: typeof payload === 'function' ? payload(options) : payload, model: 'fake:1b', provider: 'fake', attempts: 1, usage: { prompt: 10, completion: 10 } };
+    },
+  };
+}
+
+const baseBrief = () => ({
+  intents: ['diagnostic'],
+  strategy: 'tool',
+  requestKind: 'execution',
+  goals: ['ustalić temperaturę GPU'],
+  entities: ['GPU'],
+  constraints: ['tylko odczyt'],
+  assumptions: ['system Windows 11'],
+  unresolvedQuestions: [],
+  acceptanceCriteria: ['podana zmierzona temperatura'],
+  riskFlags: [],
+  needsClarification: false,
+  confidence: 0.8,
+});
+
+test('Polish and English are detected without guessing on short input', () => {
+  assert.equal(detectLanguage('jaki mam procesor w komputerze'), 'pl');
+  assert.equal(detectLanguage('what is my cpu temperature right now'), 'en');
+  assert.equal(detectLanguage('ok'), 'unknown');
+});
+
+test('missing diacritics and small typos are repaired, whole sentences are not rewritten', () => {
+  const fix = repairSpelling('jaki mam procesro i ile pamieci');
+  const targets = fix.fixes.map((entry) => entry.to);
+  assert.ok(targets.includes('procesor'), JSON.stringify(fix.fixes));
+  assert.ok(targets.includes('pamięci'), JSON.stringify(fix.fixes));
+  assert.ok(!fix.fixes.some((entry) => entry.from === 'mam' || entry.from === 'ile'), JSON.stringify(fix.fixes));
+  assert.match(fix.text, /procesor/);
+  assert.equal(repairSpelling('zażółć gęślą jaźń').fixes.length, 0);
+});
+
+test('a correction keeps the replacement and points at the prior turn', () => {
+  const interpreter = new SemanticInterpreter({ cognitive: cognition, llm: null, config: null });
+  const resolution = interpreter.resolve({ text: 'nie, chodziło mi o dysk D', history: [{ role: 'user', text: 'sprawdź dysk C' }] });
+  assert.equal(resolution.corrections.length, 1);
+  assert.match(resolution.corrections[0].phrase, /chodziło mi o dysk D/i);
+  assert.equal(resolution.corrections[0].replacement, 'dysk D');
+  assert.equal(resolution.language, 'pl');
+});
+
+test('a follow-up is resolved from conversation state; without state it blocks', async () => {
+  const interpreter = new SemanticInterpreter({ cognitive: cognition, llm: null, config: null });
+  const resolved = await interpreter.interpret({ text: 'a to?', history: [{ role: 'user', text: 'jaki mam procesor?' }] });
+  assert.equal(resolved.needsClarification, true);
+  assert.match(resolved.clarificationQuestion, /procesor/);
+  assert.equal(resolved.references[0].resolved, 'procesor');
+
+  const blocking = await interpreter.interpret({ text: 'usuń to' });
+  assert.equal(blocking.blocking, true);
+  assert.ok(blocking.unresolved.length >= 1);
+});
+
+test('the model pass contributes meaning but cannot weaken safety fields', async () => {
+  const llm = fakeLlm(() => ({
+    ...baseBrief(),
+    strategy: 'retrieve',
+    riskFlags: ['zmiana sterownika'],
+    constraints: ['bez restartu'],
+    acceptanceCriteria: ['podana wersja sterownika'],
+    confidence: 0.7,
+  }));
+  const interpreter = new SemanticInterpreter({ cognitive: cognition, llm, config: { get: () => undefined } });
+  const brief = await interpreter.interpret({ text: 'sprawdź sterownik karty graficznej i powiedz czy jest aktualny', mode: 'deep' });
+  assert.equal(brief.semantic.source, 'hybrid');
+  assert.equal(llm.calls.length, 1);
+  assert.equal(brief.strategy, 'retrieve');
+  assert.equal(brief.risk.level !== 'low' || brief.risk.flags.some((flag) => flag.startsWith('model:')), true);
+  assert.ok(brief.constraints.some((entry) => /bez restartu/.test(entry.label || entry.text || '')));
+  assert.ok(brief.acceptanceCriteria.some((criterion) => /wersja sterownika/.test(criterion)));
+  assert.ok(brief.uncertainty > 0 && brief.uncertainty < 1);
+});
+
+test('a model cannot turn arithmetic into retrieval and cannot lower risk', async () => {
+  const llm = fakeLlm({ intents: ['retrieval'], strategy: 'retrieve', requestKind: 'information', riskFlags: [], confidence: 0.99 });
+  const interpreter = new SemanticInterpreter({ cognitive: cognition, llm, config: { get: () => undefined } });
+  const brief = await interpreter.interpret({ text: 'ile to 19*7', mode: 'deep' });
+  assert.equal(brief.strategy, 'compute');
+  assert.equal(brief.risk.level, 'low');
+  assert.equal(llm.calls.length, 0, 'deterministic computation must not spend a model call');
+});
+
+test('an unavailable or invalid model pass degrades to deterministic interpretation, labelled', async () => {
+  const failing = new SemanticInterpreter({ cognitive: cognition, llm: fakeLlm(baseBrief(), { fail: true }), config: { get: () => undefined } });
+  const brief = await failing.interpret({ text: 'dlaczego komputer jest wolny przy uruchamianiu gier?', mode: 'deep' });
+  assert.equal(brief.semantic.source, 'deterministic');
+  assert.equal(brief.semantic.degraded, true);
+  assert.equal(brief.semantic.modelError.code, 'ALL_FAILED');
+  assert.ok(brief.strategy, 'a degraded brief is still a brief');
+
+  const invalid = new SemanticInterpreter({ cognitive: cognition, llm: fakeLlm({ intents: ['nonsense'], strategy: 'conquer', confidence: 2 }), config: { get: () => undefined } });
+  const second = await invalid.interpret({ text: 'dlaczego komputer jest wolny przy uruchamianiu gier?', mode: 'deep' });
+  // llm.structured validates; our fake bypasses it, so the merger must sanitise.
+  assert.ok(['tool', 'direct', 'diagnose', 'retrieve', 'plan', 'research', 'compute', 'clarify'].includes(second.strategy));
+  assert.equal(second.semantic.source, 'hybrid');
+});
+
+test('identical interpretations are cached and fast mode never calls the model', async () => {
+  const llm = fakeLlm(baseBrief);
+  const interpreter = new SemanticInterpreter({ cognitive: cognition, llm, config: { get: () => undefined } });
+  await interpreter.interpret({ text: 'sprawdź temperaturę karty graficznej po długiej grze', mode: 'balanced' });
+  await interpreter.interpret({ text: 'sprawdź temperaturę karty graficznej po długiej grze', mode: 'balanced' });
+  assert.equal(llm.calls.length, 1);
+  const fast = await interpreter.interpret({ text: 'sprawdź temperaturę karty graficznej', mode: 'fast' });
+  assert.equal(llm.calls.length, 1);
+  assert.equal(fast.semantic.skipped, true);
+  assert.ok(interpreter.stats().cacheHits >= 1);
+});
+
+test('a model-requested clarification is a question, not an answer', async () => {
+  const llm = fakeLlm({ ...baseBrief(), needsClarification: true, clarificationQuestion: 'Który dysk — C czy D?', confidence: 0.6 });
+  const interpreter = new SemanticInterpreter({ cognitive: cognition, llm, config: { get: () => undefined } });
+  const brief = await interpreter.interpret({ text: 'sprawdź ten dysk jeszcze raz', mode: 'deep', history: [{ role: 'user', text: 'sprawdź dysk C' }] });
+  assert.equal(brief.needsClarification, true);
+  assert.match(brief.clarificationQuestion, /Który dysk/);
+  assert.equal(brief.strategy, 'clarify');
+});
+
 /* ── staged patches ───────────────────────────────────────────────────── */
+
 
 test('a staged patch is diffed without touching the file, and syntax is verified in isolation', () => {
   const { PatchManager } = require('../core/patching');
@@ -745,7 +879,239 @@ test('the tool layer blocks patch.apply without a consumed approval and allows i
   assert.equal(replay.ok, false, 'the same approval must not work twice');
 });
 
+/* ── execution engine (4.0) ───────────────────────────────────────────── */
+
+const { Executor } = require('../core/executor');
+const { ApprovalQueue } = require('../core/security/approvals');
+
+function harness({ tools = {}, agents = ['alpha', 'beta'], dispatcherDelay = 0 } = {}) {
+  const tasks = new TaskManager({ store });
+  const approvals = new ApprovalQueue({ log: null });
+  const events = new EventBus({ capacity: 200 });
+  const calls = { agents: [], tools: [] };
+  const agentMap = new Map(agents.map((name) => [name, { name, title: name, role: 'specialist' }]));
+  const toolMap = new Map(Object.entries(tools).map(([name, spec]) => [name, { name, permission: spec.permission || 'read', ...spec }]));
+  const dispatcher = {
+    route: () => ({ primary: agentMap.values().next().value, helpers: [] }),
+    createRuntime: (options) => ({ ...options, toolLog: [], approvals: [], results: {} }),
+    async runAgent(agent) {
+      calls.agents.push(agent.name);
+      if (dispatcherDelay) await new Promise((resolve) => setTimeout(resolve, dispatcherDelay));
+      return { ok: true, text: `${agent.name} did it`, toolsUsed: [], usage: { prompt: 1, completion: 1 } };
+    },
+  };
+  const registry = {
+    tools: toolMap,
+    async execute(name, args, options = {}) {
+      const spec = toolMap.get(name);
+      calls.tools.push({ name, args, approvalId: options.approvalId || null });
+      if (!spec) return { ok: false, code: 'UNKNOWN_TOOL', message: 'no tool' };
+      if (spec.requireApproval && !options.approvalId) {
+        const entry = approvals.request({ tool: name, args, permission: spec.permission, requestedBy: 'test' });
+        return { ok: false, code: 'APPROVAL_REQUIRED', approval: entry, message: 'needs approval' };
+      }
+      if (spec.implementation) return spec.implementation(args, options);
+      if (spec.failOnce && !spec.failed) {
+        spec.failed = true;
+        return { ok: false, code: spec.failCode || 'TIMEOUT', message: 'temporary failure' };
+      }
+      return { ok: true, data: spec.result === undefined ? { ok: true } : spec.result, text: JSON.stringify(spec.result === undefined ? { ok: true } : spec.result) };
+    },
+  };
+  const executor = new Executor({ tasks, dispatcher, tools: registry, approvals, agents: { agents: agentMap }, events, log: null });
+  return { tasks, executor, approvals, events, calls, registry, agentMap };
+}
+
+test('the executor runs a DAG in dependency order and injects typed outputs', async () => {
+  const h = harness({ tools: { 'fake.read': { permission: 'read', result: { value: 'measured' } } } });
+  const task = h.tasks.create({
+    title: 'order',
+    steps: [
+      { id: 'a', title: 'read', tool: 'fake.read' },
+      { id: 'b', title: 'consume', tool: 'fake.read', dependsOn: ['a'], inputs: { x: '$a' } },
+    ],
+  });
+  const result = await h.executor.run(task.id);
+  assert.equal(result.status, 'done', JSON.stringify(result.error));
+  assert.equal(result.steps.length, 2);
+  assert.deepEqual(result.steps.map((step) => step.ok), [true, true]);
+  const second = h.calls.tools.find((call) => call.args && call.args.x !== undefined);
+  assert.ok(second, 'the typed input was not injected');
+  assert.deepEqual(second.args.x, { value: 'measured' });
+  assert.equal(h.tasks.get(task.id).progress, 100);
+});
+
+test('read-only steps run concurrently; a write step is serialised', async () => {
+  const h = harness({ dispatcherDelay: 60 });
+  const parallel = h.tasks.create({
+    title: 'parallel',
+    steps: [
+      { id: 'a', title: 'one', agent: 'alpha' },
+      { id: 'b', title: 'two', agent: 'beta' },
+    ],
+  });
+  // Model steps are not read-only by design, so force concurrency on tool steps.
+  const toolsHarness = harness({ tools: { 'fake.slowread': { permission: 'read', implementation: async () => { await new Promise((r) => setTimeout(r, 80)); return { ok: true, data: { read: true } }; } } } });
+  const concurrent = toolsHarness.tasks.create({ title: 'parallel tools', steps: [{ id: 'a', title: 'one', tool: 'fake.slowread' }, { id: 'b', title: 'two', tool: 'fake.slowread' }] });
+  let maxActive = 0;
+  let active = 0;
+  const originalExecute = toolsHarness.registry.execute;
+  toolsHarness.registry.execute = async (...args) => {
+    active += 1;
+    maxActive = Math.max(maxActive, active);
+    try {
+      return await originalExecute(...args);
+    } finally {
+      active -= 1;
+    }
+  };
+  // The executor captured the registry object, not the method, so re-create it.
+  const executor = new Executor({ tasks: toolsHarness.tasks, dispatcher: toolsHarness.executor.dispatcher || { route: () => ({ primary: null }), createRuntime: (o) => o, runAgent: async () => ({ ok: true, text: '' }) }, tools: toolsHarness.registry, approvals: toolsHarness.approvals, agents: { agents: toolsHarness.agentMap }, events: toolsHarness.events });
+  const result = await executor.run(concurrent.id);
+  assert.equal(result.status, 'done');
+  assert.ok(maxActive >= 2, `independent read-only steps did not overlap (max ${maxActive})`);
+
+  const writes = harness({ tools: { 'fake.write': { permission: 'write', implementation: async () => { await new Promise((r) => setTimeout(r, 40)); return { ok: true, data: { wrote: true } }; } } } });
+  let maxWrites = 0;
+  let writeActive = 0;
+  const originalWrite = writes.registry.execute;
+  writes.registry.execute = async (...args) => {
+    writeActive += 1;
+    maxWrites = Math.max(maxWrites, writeActive);
+    try {
+      return await originalWrite(...args);
+    } finally {
+      writeActive -= 1;
+    }
+  };
+  const writeExecutor = new Executor({ tasks: writes.tasks, dispatcher: { route: () => ({ primary: null }), createRuntime: (o) => o, runAgent: async () => ({ ok: true, text: '' }) }, tools: writes.registry, approvals: writes.approvals, agents: { agents: writes.agentMap }, events: writes.events });
+  const writeTask = writes.tasks.create({ title: 'writes', steps: [{ id: 'a', title: 'w1', tool: 'fake.write' }, { id: 'b', title: 'w2', tool: 'fake.write' }] });
+  await writeExecutor.run(writeTask.id);
+  assert.equal(maxWrites, 1, 'two writes ran at the same time');
+
+  const agentTask = parallel;
+  const agentResult = await h.executor.run(agentTask.id);
+  assert.equal(agentResult.status, 'done');
+});
+
+test('cancellation propagates and leaves the task cancelled, not half-done', async () => {
+  const h = harness({ tools: { 'fake.read': { permission: 'read', implementation: async () => { await new Promise((r) => setTimeout(r, 50)); return { ok: true, data: { ok: true } }; } } } });
+  const controller = new AbortController();
+  const task = h.tasks.create({ title: 'cancel', steps: [{ id: 'a', title: 'a', tool: 'fake.read' }, { id: 'b', title: 'b', tool: 'fake.read', dependsOn: ['a'] }, { id: 'c', title: 'c', tool: 'fake.read', dependsOn: ['b'] }] });
+  setTimeout(() => controller.abort(), 20);
+  const result = await h.executor.run(task.id, { signal: controller.signal });
+  const final = h.tasks.get(task.id);
+  assert.ok(['cancelled', 'failed', 'timeout'].includes(result.status));
+  assert.equal(final.status, 'cancelled');
+  assert.ok(final.steps.filter((step) => step.status === 'done').length < 3);
+});
+
+test('transient failures retry only when the step is safe to repeat', async () => {
+  const h = harness({
+    tools: {
+      'fake.flaky': { permission: 'read', failOnce: true, failCode: 'TIMEOUT' },
+      'fake.writefail': { permission: 'write', failOnce: true, failCode: 'TIMEOUT' },
+    },
+  });
+  const readTask = h.tasks.create({ title: 'retry read', steps: [{ id: 'a', title: 'a', tool: 'fake.flaky', maxAttempts: 2 }], policy: { backoffMs: 1 } });
+  const readResult = await h.executor.run(readTask.id);
+  assert.equal(readResult.status, 'done', JSON.stringify(readResult.error));
+  assert.equal(h.tasks.get(readTask.id).steps[0].attempts, 2);
+
+  const writeTask = h.tasks.create({ title: 'no retry write', steps: [{ id: 'a', title: 'a', tool: 'fake.writefail', maxAttempts: 3 }], policy: { backoffMs: 1 } });
+  const writeResult = await h.executor.run(writeTask.id);
+  assert.equal(writeResult.status, 'failed');
+  assert.equal(h.tasks.get(writeTask.id).steps[0].attempts, 1, 'a side effect must not be replayed automatically');
+});
+
+test('an approval pauses the step, and denial stops it', async () => {
+  const h = harness({ tools: { 'fake.danger': { permission: 'write', requireApproval: true, result: { changed: true } } } });
+  const task = h.tasks.create({ title: 'approval', steps: [{ id: 'a', title: 'change', tool: 'fake.danger' }] });
+  const runPromise = h.executor.run(task.id);
+  // Wait until the executor is actually parked on the approval.
+  let approvalId = null;
+  for (let attempt = 0; attempt < 100 && !approvalId; attempt += 1) {
+    // eslint-disable-next-line no-await-in-loop
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    const pending = h.approvals.list();
+    if (pending.length) approvalId = pending[0].id;
+  }
+  assert.ok(approvalId, 'no approval was requested');
+  assert.equal(h.tasks.get(task.id).status, 'waiting_approval');
+  h.approvals.deny(approvalId, { reason: 'test denial' });
+  const result = await runPromise;
+  assert.equal(result.status, 'failed');
+  assert.match(String(result.error || ''), /approved|denied|failed/i);
+  assert.equal(h.tasks.get(task.id).steps[0].status, 'failed');
+});
+
+test('an approved step executes exactly once and consumes the approval', async () => {
+  const h = harness({ tools: { 'fake.danger': { permission: 'write', requireApproval: true, result: { changed: true } } } });
+  const task = h.tasks.create({ title: 'approve', steps: [{ id: 'a', title: 'change', tool: 'fake.danger' }] });
+  const runPromise = h.executor.run(task.id);
+  let approvalId = null;
+  for (let attempt = 0; attempt < 100 && !approvalId; attempt += 1) {
+    // eslint-disable-next-line no-await-in-loop
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    const pending = h.approvals.list();
+    if (pending.length) approvalId = pending[0].id;
+  }
+  h.approvals.approve(approvalId, { by: 'test' });
+  const result = await runPromise;
+  assert.equal(result.status, 'done', JSON.stringify(result.error));
+  const approvedCalls = h.calls.tools.filter((call) => call.approvalId);
+  assert.equal(approvedCalls.length, 1, 'the approved call was executed more than once');
+  assert.equal(approvedCalls[0].approvalId, approvalId);
+});
+
+test('a failed step can be replanned without losing completed results', async () => {
+  const h = harness({ tools: { 'fake.ok': { permission: 'read', result: { ok: true } } } });
+  let replans = 0;
+  const executor = new Executor({
+    tasks: h.tasks,
+    dispatcher: { route: () => ({ primary: null }), createRuntime: (o) => o, runAgent: async () => ({ ok: false, code: 'PROVIDER_ERROR', text: '' }) },
+    tools: h.registry,
+    approvals: h.approvals,
+    agents: { agents: h.agentMap },
+    events: h.events,
+    replanner: async () => {
+      replans += 1;
+      return { steps: [{ id: 'fix', title: 'alternative read', tool: 'fake.ok' }], reason: 'use a measured tool instead of the model' };
+    },
+  });
+  const task = h.tasks.create({
+    title: 'replan',
+    steps: [
+      { id: 'a', title: 'measured first', tool: 'fake.ok' },
+      { id: 'b', title: 'model step', agent: 'alpha', dependsOn: ['a'] },
+    ],
+  });
+  const result = await executor.run(task.id);
+  assert.equal(replans, 1);
+  assert.equal(result.status, 'done', JSON.stringify(result.error));
+  const final = h.tasks.get(task.id);
+  assert.equal(final.steps.find((step) => step.id === 'a').status, 'done', 'completed work was lost');
+  assert.equal(final.steps.find((step) => step.id === 'b').status, 'skipped');
+  assert.equal(final.steps.find((step) => step.id === 'b').superseded, true);
+  assert.match(String(final.steps.find((step) => step.id === 'b').error), /PROVIDER_ERROR/);
+  assert.equal(final.steps.find((step) => step.id === 'fix').status, 'done');
+  assert.equal(final.replans, 1);
+});
+
+test('the executor refuses an impossible plan and honours a step budget', async () => {
+  const h = harness();
+  const invalid = h.executor.validatePlan([{ id: 'a', title: 'x', agent: 'ghost' }, { id: 'b', title: 'y', tool: 'nope' }]);
+  assert.equal(invalid.ok, false);
+  assert.match(invalid.errors.join(' '), /unknown agent ghost/);
+  assert.match(invalid.errors.join(' '), /unknown tool nope/);
+  const task = h.tasks.create({ title: 'budget', steps: [{ id: 'a', title: 'a', tool: 'none', }, { id: 'b', title: 'b', tool: 'none', dependsOn: ['a'] }] });
+  const result = await h.executor.run(task.id, { budget: { maxSteps: 1 } });
+  assert.equal(result.status, 'failed');
+  assert.match(String(result.error || ''), /budget/i);
+});
+
 /* ── fault injection and the live agent ───────────────────────────────── */
+
 
 test('a corrupt config is reported by the doctor instead of crashing the agent', async () => {
   const brokenHome = fs.mkdtempSync(path.join(os.tmpdir(), 'sentinel-broken-'));

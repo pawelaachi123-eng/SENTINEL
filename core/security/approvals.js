@@ -94,6 +94,22 @@ class ApprovalQueue {
     if (waiter) waiter(entry);
   }
 
+  /**
+   * Marks a pending approval as granted by a human without executing it.
+   * Used by the task executor, which owns the execution and then consumes the
+   * approval itself. Consent stays a human action; `consume` still burns it.
+   */
+  approve(id, { by = 'user' } = {}) {
+    const entry = this.pending.get(id);
+    if (!entry) return { ok: false, code: 'NOT_FOUND', message: 'unknown, expired or already used approval' };
+    entry.approvedByUser = true;
+    entry.status = 'approved';
+    entry.decidedAt = this.now();
+    entry.decidedBy = by;
+    this.notify(id, entry);
+    return { ok: true, entry };
+  }
+
   deny(id, { by = 'user', reason = '' } = {}) {
     const entry = this.pending.get(id);
     if (!entry) return { ok: false, code: 'NOT_FOUND' };

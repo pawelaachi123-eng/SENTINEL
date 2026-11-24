@@ -135,7 +135,7 @@ const RULES = [
 const LEVEL_ORDER = { error: 0, warn: 1, info: 2 };
 
 class Brain {
-  constructor({ config, log, now = () => Date.now(), llm = null, memory = null, knowledge = null, tools = null, agents = null, tasks = null, dispatcher = null, store = null, approvals = null, commander = null, stats = null, link = null, tunnel = null, automation = null, paths = null, cognitive = null, context = null, experience = null, events = null, metrics = null } = {}) {
+  constructor({ config, log, now = () => Date.now(), llm = null, memory = null, knowledge = null, tools = null, agents = null, tasks = null, dispatcher = null, store = null, approvals = null, commander = null, stats = null, link = null, tunnel = null, automation = null, paths = null, cognitive = null, context = null, experience = null, events = null, metrics = null, semantics = null, executor = null } = {}) {
     this.config = config;
     this.log = log;
     this.now = now;
@@ -159,6 +159,8 @@ class Brain {
     // 3.0 cognition: analysis before retrieval, budgeted context, measured
     // experience. All optional so a bare Brain still runs the advisory rules.
     this.cognitive = cognitive;
+    this.semantics = semantics;
+    this.executor = executor;
     this.context = context;
     this.experience = experience;
     this.events = events;
@@ -370,9 +372,15 @@ class Brain {
 
     // 0. understand — before searching, decide what the question is, how risky
     // it is, what would count as done and whether it is answerable at all.
-    const brief = this.cognitive
-      ? this.cognitive.analyse({ text: question, mode: chosenMode, sessionId, plan, history })
-      : null;
+    // 4.0: interpretation is semantic when a provider is available and the
+    // request is not trivially deterministic; the deterministic brief is always
+    // computed first and keeps authority over safety-relevant fields.
+    let brief = null;
+    if (this.semantics) {
+      brief = await this.semantics.interpret({ text: question, mode: chosenMode, sessionId, plan, history });
+    } else if (this.cognitive) {
+      brief = this.cognitive.analyse({ text: question, mode: chosenMode, sessionId, plan, history });
+    }
     if (brief) {
       emitted('understanding', {
         intent: brief.intent,
@@ -380,13 +388,22 @@ class Brain {
         complexity: brief.complexity.level,
         risk: brief.risk.level,
         uncertainty: brief.uncertainty,
+        requestKind: brief.requestKind || null,
+        language: brief.language || null,
+        semantic: brief.semantic ? brief.semantic.source : 'deterministic',
+        references: brief.references ? brief.references.length : 0,
+        corrections: brief.corrections ? brief.corrections.length : 0,
       });
+      if (this.metrics && brief.semantic) {
+        this.metrics.increment(`brain.semantic.${brief.semantic.source}`);
+        if (brief.semantic.degraded) this.metrics.increment('brain.semantic.degraded');
+      }
       if (brief.needsClarification) {
         // Answering a question that has no subject is guessing. Ask instead,
         // cheaply, and say why.
         const clarification = {
           runId: id,
-          text: 'Nie wiem, czego dotyczy pytanie. Dopisz przedmiot — na przykład „stan komputera”, „ten plik” albo nazwę programu — a odpowiem od razu.',
+          text: (brief && brief.clarificationQuestion) || (brief && brief.unresolved && brief.unresolved[0]) || 'Nie wiem, czego dotyczy pytanie. Dopisz przedmiot — na przykład „stan komputera”, „ten plik” albo nazwę programu — a odpowiem od razu.',
           mode: chosenMode,
           agent: 'clarification',
           agentTitle: 'Clarification',
@@ -494,19 +511,51 @@ class Brain {
         this.tasks.start(task.id);
       }
       emitted('working', { steps: steps.length, taskId });
-      const planResults = await this.dispatcher.runPlan(steps, runtime, { onStage: stage });
-      for (const entry of planResults) {
-        if (entry?.result?.toolsUsed) runtime.toolLog.push(...entry.result.toolsUsed.map((name) => ({ name, ok: true })));
-      }
-      if (taskId && this.tasks) {
-        const failed = planResults.filter((entry) => !entry.ok && !entry.skipped);
-        this.tasks.finish(taskId, {
-          status: failed.length ? 'failed' : 'done',
-          result: { steps: planResults.map((entry) => ({ step: entry.step.title, ok: entry.ok, text: entry.result ? String(entry.result.text || '').slice(0, 500) : entry.message })) },
-          error: failed.length ? `${failed.length} step(s) failed` : null,
+      let planResults;
+      let executionReport = null;
+      if (taskId && this.executor) {
+        // 4.0: the DAG is executed by the executor, not by a parallel loop that
+        // ignored dependencies. Its status and counters are reported verbatim.
+        const execution = await this.executor.run(taskId, {
+          runtime,
+          signal,
+          question,
+          budget: (brief && brief.budget) || {},
+          replan: chosenMode !== 'fast',
         });
+        planResults = execution.steps;
+        executionReport = {
+          status: execution.status,
+          ok: execution.ok,
+          partial: Boolean(execution.partial),
+          counters: execution.counters,
+          error: execution.error || null,
+          ms: execution.ms || null,
+        };
+        const task = this.tasks.get(taskId);
+        if (task) {
+          runtime.toolLog.push(...task.steps.flatMap((step) => (step.result && step.result.tool ? [{ name: step.result.tool, ok: step.status === 'done' }] : [])));
+        }
+        emitted('execution', { status: execution.status, steps: planResults.length, partial: Boolean(execution.partial) });
+      } else {
+        planResults = await this.dispatcher.runPlan(steps, runtime, { onStage: stage });
+        for (const entry of planResults) {
+          if (entry?.result?.toolsUsed) runtime.toolLog.push(...entry.result.toolsUsed.map((name) => ({ name, ok: true })));
+        }
+        if (taskId && this.tasks) {
+          const failed = planResults.filter((entry) => !entry.ok && !entry.skipped);
+          this.tasks.finish(taskId, {
+            status: failed.length ? 'failed' : 'done',
+            result: { steps: planResults.map((entry) => ({ step: entry.step.title, ok: entry.ok, text: entry.result ? String(entry.result.text || '').slice(0, 500) : entry.message })) },
+            error: failed.length ? `${failed.length} step(s) failed` : null,
+          });
+        }
       }
       const composed = await this.composePlanAnswer({ question, planResults, runtime, mode: chosenMode, onToken, stage });
+      if (executionReport) {
+        composed.execution = executionReport;
+        if (!executionReport.ok) composed.degraded = composed.degraded || 'partial-plan';
+      }
       return this.finishRun({ run, answer: composed, runtime, memories, documents, intent, started, stage, risks, route, taskId, signal });
     }
 
@@ -606,6 +655,84 @@ class Brain {
       approvals: runtime.approvals.map((approval) => ({ id: approval.id, tool: approval.tool, permission: approval.permission, reason: approval.reason, expiresAt: approval.expiresAt })),
     };
     return this.finishRun({ run, answer, runtime, memories, documents, intent, started, stage, risks, route, taskId, signal });
+  }
+
+  /**
+   * Replanning after a failed step. Bounded to one proposal, validated against
+   * the agents and tools that actually exist, and additive: completed work is
+   * never thrown away.
+   */
+  async proposeReplan({ question, task, failedStep, error, completed = [] } = {}) {
+    if (!this.llm) return { steps: [], reason: 'no model available for replanning' };
+    const agentIds = this.agents ? [...this.agents.agents.keys()] : [];
+    const toolIds = this.tools ? [...this.tools.tools.keys()] : [];
+    const schema = {
+      type: 'object',
+      properties: {
+        reason: { type: 'string' },
+        steps: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'string' },
+              title: { type: 'string' },
+              goal: { type: 'string' },
+              agent: { type: 'string' },
+              tool: { type: 'string' },
+              args: { type: 'object' },
+              dependsOn: { type: 'array', items: { type: 'string' } },
+            },
+            required: ['id', 'title'],
+          },
+        },
+      },
+      required: ['steps'],
+    };
+    try {
+      const { data } = await this.llm.structured({
+        messages: [
+          {
+            role: 'system',
+            content: [
+              'You are replanning a failed step of a local Windows assistant.',
+              'Propose at most 3 replacement steps that achieve the same intent a different way.',
+              'Use only the listed agents and tools. Do not repeat the failed approach.',
+              'If no safe alternative exists, return an empty steps array.',
+              `Agents: ${agentIds.slice(0, 40).join(', ')}`,
+              `Tools: ${toolIds.slice(0, 120).join(', ')}`,
+            ].join('\n'),
+          },
+          {
+            role: 'user',
+            content: JSON.stringify({
+              question,
+              task: task ? task.title : null,
+              failedStep: { id: failedStep && failedStep.id, title: failedStep && failedStep.title, tool: failedStep && failedStep.tool, error: (error && (error.message || error.code)) || null },
+              completed: completed.map((entry) => ({ id: entry.id, title: entry.title })),
+            }),
+          },
+        ],
+        schema,
+        modelClass: 'fast',
+        attempts: 1,
+        maxTokens: 600,
+        validate: (value) => {
+          if (!Array.isArray(value.steps)) return { ok: false, reason: 'steps must be an array' };
+          if (value.steps.length > 3) return { ok: false, reason: 'too many steps' };
+          for (const step of value.steps) {
+            if (!step.id || !step.title) return { ok: false, reason: 'a step needs id and title' };
+            if (step.agent && !agentIds.includes(step.agent)) return { ok: false, reason: `unknown agent ${step.agent}` };
+            if (step.tool && !toolIds.includes(step.tool)) return { ok: false, reason: `unknown tool ${step.tool}` };
+          }
+          return { ok: true };
+        },
+      });
+      return { steps: data.steps || [], reason: data.reason || null };
+    } catch (err) {
+      if (this.log) this.log.debug('brain', `replan unavailable: ${err.message}`);
+      return { steps: [], reason: err.message };
+    }
   }
 
   /** Two independent specialists are merged with an explicit provenance line. */
@@ -749,12 +876,22 @@ class Brain {
             uncertainty: brief.uncertainty,
             uncertaintyReasons: brief.uncertaintyReasons,
             budget: brief.budget,
+            requestKind: brief.requestKind || null,
+            language: brief.language || null,
+            resolvedText: brief.resolvedText || brief.question,
+            references: (brief.references || []).map((reference) => ({ kind: reference.kind, phrase: reference.phrase, resolved: reference.resolved || null, confidence: reference.confidence || null })),
+            corrections: brief.corrections || [],
+            unresolved: brief.unresolved || [],
+            acceptanceCriteria: brief.acceptanceCriteria || brief.completionCriteria || [],
+            hypotheses: (brief.hypotheses || []).map((hypothesis) => ({ text: hypothesis.text, verified: false })),
+            semantic: brief.semantic || { source: 'deterministic', degraded: true },
           }
         : null,
       strategy: brief ? brief.strategy : null,
       assumptions: brief ? brief.assumptions : [],
       uncertainty: brief ? brief.uncertainty : null,
       reflection,
+      execution: answer.execution || null,
       context: contextReport
         ? { tokens: contextReport.tokens, budget: contextReport.budget, sections: contextReport.sections, dropped: contextReport.dropped, utilisation: contextReport.utilisation }
         : null,
@@ -837,9 +974,12 @@ class Brain {
       text: String(final.text || '').slice(0, 4000),
       brief,
       strategy: brief ? brief.strategy : null,
+      requestKind: brief ? brief.requestKind || null : null,
+      semantic: brief ? brief.semantic || null : null,
       context: contextReport || null,
       reflection: final.reflection || null,
       verification: { ok: verification.ok !== false, issues: verification.issues || [], confidence: final.confidence },
+      execution: final.execution || null,
       experience: final.experience || null,
       tools: (final.tools || []).slice(0, 40),
       agents: (run.agents || []).slice(0, 12),
