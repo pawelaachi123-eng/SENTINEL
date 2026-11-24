@@ -166,7 +166,7 @@ function makePage(url) {
 
     check(
       'every assistant section has a tab and a screen',
-      aiDoc.querySelectorAll('.tab').length === 14 && aiDoc.querySelectorAll('.screen').length === 14,
+      aiDoc.querySelectorAll('.tab').length === 15 && aiDoc.querySelectorAll('.screen').length === 15,
       `${aiDoc.querySelectorAll('.tab').length} tabs / ${aiDoc.querySelectorAll('.screen').length} screens`,
     );
 
@@ -195,6 +195,13 @@ function makePage(url) {
       'the answer carries its tool footnote',
       /math\.eval|Mathematics/.test(aiDoc.getElementById('chat-messages').textContent),
     );
+
+    aiDoc.querySelector('.tab[data-tab="cognition"]').click();
+    await sleep(700);
+    const cognitionText = aiDoc.querySelector('[data-panel="cognition"]').textContent;
+    check('the cognition panel shows the real brief of the last run', /Zamiar/.test(cognitionText) && /math/.test(cognitionText), cognitionText.slice(0, 90));
+    check('the event log shows typed events from the bus', aiDoc.querySelectorAll('[data-panel="eventlog"] .eventlog-row').length >= 3, `${aiDoc.querySelectorAll('[data-panel="eventlog"] .eventlog-row').length} events`);
+    check('the reliability panel reports breaker state without inventing metrics', /bezpieczniki|Bezpieczniki|online|closed/i.test(aiDoc.querySelector('[data-panel="reliability"]').textContent), aiDoc.querySelector('[data-panel="reliability"]').textContent.slice(0, 90));
 
     aiDoc.querySelector('.tab[data-tab="memory"]').click();
     await sleep(500);

@@ -28,6 +28,12 @@ const { Dispatcher } = require('./ai/dispatcher');
 const { VoiceEngine } = require('./voice');
 const { VisionEngine } = require('./vision');
 const { SelfHeal } = require('./selfheal');
+const { CognitiveCore } = require('./cognition');
+const { ContextManager } = require('./context');
+const { ExperienceStore } = require('./experience');
+const { EventBus } = require('./events');
+const { Metrics } = require('./metrics');
+const { IncidentLog, Watchdog } = require('./reliability');
 
 /**
  * The agent is the only component with authority over the PC.
@@ -65,8 +71,15 @@ class Agent extends EventEmitter {
      */
     this.aiReady = false;
     this.aiError = null;
+    const bootStarted = Date.now();
+    this.metrics = new Metrics({ log: this.log });
+    this.incidents = new IncidentLog();
     try {
       this.store = openStore({ dir: memoryDir(), log: this.log });
+      this.events = new EventBus({ log: this.log, store: this.store });
+      this.cognitive = new CognitiveCore({ config: this.config, log: this.log });
+      this.context = new ContextManager({ config: this.config, log: this.log });
+      this.experience = new ExperienceStore({ store: this.store, log: this.log });
       this.embedder = this.config.get('ai.useModelEmbeddings')
         ? new ModelEmbedder({ llm: null, model: this.config.get('ai.models.embed'), log: this.log })
         : new HashingEmbedder();
@@ -74,7 +87,7 @@ class Agent extends EventEmitter {
       this.knowledge = new Knowledge({ store: this.store, embedder: this.embedder, log: this.log, config: this.config });
       this.tasks = new TaskManager({ store: this.store, log: this.log });
       this.approvals = new ApprovalQueue({ log: this.log });
-      this.llm = new LlmClient({ config: this.config, log: this.log });
+      this.llm = new LlmClient({ config: this.config, log: this.log, metrics: this.metrics, events: this.events, experience: this.experience });
       this.sandbox = new Sandbox({ config: this.config, log: this.log, paths: pathsModule });
       this.voice = new VoiceEngine({ config: this.config, log: this.log, paths: pathsModule });
       this.vision = new VisionEngine({ config: this.config, log: this.log, llm: this.llm, paths: pathsModule });
@@ -123,6 +136,11 @@ class Agent extends EventEmitter {
         stats: this.stats,
         link: this.link,
         paths: pathsModule,
+        cognitive: this.cognitive,
+        context: this.context,
+        experience: this.experience,
+        events: this.events,
+        metrics: this.metrics,
       });
       this.automation = new AutomationEngine({ store: this.store, log: this.log, config: this.config, commander: this.commander, brain: this.brain });
       this.healing = new SelfHeal({ config: this.config, log: this.log, paths: pathsModule, tools: this.tools, store: this.store, memory: this.memory, llm: this.llm, commander: this.commander });
@@ -134,10 +152,46 @@ class Agent extends EventEmitter {
         dispatcher: this.dispatcher,
         automation: this.automation,
         healing: this.healing,
+        events: this.events,
+        metrics: this.metrics,
+        experience: this.experience,
       });
       this.commander.brain = this.brain;
+      // Reliability: a watchdog for the store and one for provider health.
+      this.watchdogs = [
+        new Watchdog({
+          name: 'store',
+          intervalMs: 120000,
+          probe: () => {
+            const stats = this.store.stats();
+            return { ok: true, detail: `${stats.driver}, ${stats.bytes || 0} B` };
+          },
+          onTransition: ({ to, detail }) => {
+            this.incidents.report({ subsystem: 'store', code: to ? 'RECOVERED' : 'UNHEALTHY', message: String(detail && detail.message || 'store probe failed'), severity: to ? 'info' : 'error' });
+          },
+        }),
+        new Watchdog({
+          name: 'providers',
+          intervalMs: 90000,
+          probe: async () => {
+            const health = await this.llm.health();
+            const up = Object.values(health).filter((entry) => entry.ok).length;
+            return { ok: up > 0, detail: `${up} provider(s) up`, health };
+          },
+          onTransition: ({ to }) => {
+            if (!to) this.incidents.report({ subsystem: 'llm', code: 'NO_PROVIDER', message: 'no model provider is reachable', severity: 'warn' });
+            else {
+              this.incidents.recover('llm', 'NO_PROVIDER');
+              this.events && this.events.publish('model', { action: 'provider-recovered' }, { severity: 'info' });
+            }
+          },
+        }),
+      ];
       this.aiReady = true;
-      this.log.info('ai', `cognitive core ready: ${this.agents.agents.size} agents, ${this.tools.tools.size} tools, store ${this.store.stats().driver}`);
+      const bootMs = Date.now() - bootStarted;
+      this.metrics.recordBaseline('agent-boot', { bootMs, idleMemoryMb: Math.round(process.memoryUsage().rss / 1048576) });
+      this.metrics.observe('agent.boot', bootMs);
+      this.log.info('ai', `cognitive core ready: ${this.agents.agents.size} agents, ${this.tools.tools.size} tools, store ${this.store.stats().driver}, boot ${bootMs} ms`);
     } catch (err) {
       this.aiError = err.message;
       this.brain = this.brain || new Brain({ config: this.config, log: this.log });
@@ -181,6 +235,13 @@ class Agent extends EventEmitter {
             dispatcher: this.dispatcher,
             ask: (options) => this.ask(options),
             status: () => this.aiStatus(),
+            events: this.events || null,
+            metrics: this.metrics || null,
+            experience: this.experience || null,
+            cognitive: this.cognitive || null,
+            context: this.context || null,
+            incidents: this.incidents || null,
+            tasks: this.tasks || null,
           }
         : null,
     });
@@ -246,7 +307,19 @@ class Agent extends EventEmitter {
     this.started = true;
     this.link.start();
     this.http.start();
-    if (this.aiReady) this.automation.start();
+    if (this.aiReady) {
+      this.automation.start();
+      // Watchdogs only start with the listening agent, not for one-shot CLI calls.
+      for (const watchdog of this.watchdogs || []) watchdog.start();
+      // Any task that was running when the process died is already marked
+      // interrupted by the TaskManager; report it where the user can see it.
+      const interrupted = [...this.tasks.tasks.values()].filter((task) => task.status === 'interrupted').length;
+      if (interrupted) {
+        this.incidents.report({ subsystem: 'tasks', code: 'INTERRUPTED', message: `${interrupted} task(s) were interrupted by a restart`, severity: 'warn' });
+        this.events.publish('task', { action: 'reconciled', interrupted }, { severity: 'warn' });
+      }
+      this.events.publish('system', { action: 'started', version: require('../package.json').version });
+    }
     this.log.info('agent', `SENTINEL ${require('../package.json').version} on ${os.hostname()} (${process.platform})`);
     const port = this.config.get('ports.ui');
     const token = this.config.get('uiToken');
@@ -296,6 +369,13 @@ class Agent extends EventEmitter {
       approvals: this.approvals.stats(),
       llm: this.llm.stats(),
       healing: this.healing.stats(),
+      cognitive: this.cognitive ? this.cognitive.stats() : null,
+      context: this.context ? this.context.stats() : null,
+      experience: this.experience ? this.experience.stats() : null,
+      events: this.events ? this.events.stats() : null,
+      metrics: this.metrics ? this.metrics.snapshot() : null,
+      incidents: this.incidents ? this.incidents.stats() : null,
+      watchdogs: (this.watchdogs || []).map((watchdog) => watchdog.status()),
       voice: this.voice.counters,
       vision: this.vision.counters,
     };
@@ -322,6 +402,8 @@ class Agent extends EventEmitter {
   stop() {
     clearInterval(this.brainTimer);
     if (this.automation) this.automation.stop();
+    for (const watchdog of this.watchdogs || []) watchdog.stop();
+    if (this.tasks) this.tasks.cancelAll('agent stopping');
     if (this.llm) this.llm.cancelAll('agent stopping');
     this.tunnel.stop();
     this.http.stop();

@@ -239,6 +239,7 @@
           <button type="button" class="mode-btn" data-mode="fast" title="Jedno przejście, najszybciej">Fast</button>
           <button type="button" class="mode-btn is-on" data-mode="balanced" title="Domyślny: jedno przejście + weryfikacja">Balanced</button>
           <button type="button" class="mode-btn" data-mode="deep" title="Plan, kilka kroków, audyt odpowiedzi">Deep</button>
+          <button type="button" class="mode-btn" data-mode="research" title="Wiele źródeł, cytowania, dłuższy budżet">Research</button>
         </div>
       </div>
 
@@ -315,6 +316,42 @@
     <section id="screen-diagnostics" class="screen" data-screen="diagnostics" hidden>
       <div class="section-head"><h2>Diagnostyka</h2><span class="muted">doctor, stos AI, backupy</span></div>
       <div data-panel="diagnostics" class="panel"></div>
+    </section>
+
+    <!-- COGNITION ----------------------------------------------------- -->
+    <section id="screen-cognition" class="screen" data-screen="cognition" hidden>
+      <div class="block-head sticky">
+        <h2>Poznanie</h2>
+        <span class="muted">co SENTINEL naprawdę zrobił w ostatnim przebiegu</span>
+      </div>
+      <div class="card">
+        <div class="block-head">
+          <h3>Ostatni przebieg</h3>
+          <button class="ghost-btn" id="btn-cognition-refresh" type="button">Odśwież</button>
+        </div>
+        <div data-panel="cognition" class="cognition-panel"></div>
+      </div>
+      <div class="card">
+        <div class="block-head">
+          <h3>Oś czasu zdarzeń</h3>
+          <span class="muted">typowane zdarzenia z magistrali</span>
+        </div>
+        <ol data-panel="eventlog" class="eventlog"></ol>
+      </div>
+      <div class="card">
+        <div class="block-head">
+          <h3>Doświadczenie</h3>
+          <span class="muted">strategie, które działają — z próbkami i wynikiem</span>
+        </div>
+        <div data-panel="experience" class="experience-panel"></div>
+      </div>
+      <div class="card">
+        <div class="block-head">
+          <h3>Niezawodność</h3>
+          <span class="muted">bezpieczniki, incydenty, watchdogi</span>
+        </div>
+        <div data-panel="reliability" class="reliability-panel"></div>
+      </div>
     </section>
 
     <section id="screen-activity" class="screen" data-screen="activity" hidden>
@@ -422,6 +459,10 @@
     <button class="tab" data-tab="models" type="button">
       <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 4v10l-7 4-7-4V7Z"/><path d="M12 12l7-4M12 12v9M12 12L5 8"/></svg>
       <span>Modele</span>
+    </button>
+    <button class="tab" data-tab="cognition" type="button">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 3a9 9 0 0 0-9 9M12 21a9 9 0 0 0 9-9M4.6 5.4l2 2M19.4 18.6l-2-2M12 3v3M12 21v-3"/></svg>
+      <span>Poznanie</span>
     </button>
     <button class="tab" data-tab="activity" type="button">
       <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2-5 3 10 2-5h7"/></svg>

@@ -42,6 +42,7 @@ class ToolRegistry {
     this.limits = new Map(); // name → timestamps
     this.sessionLimits = new Map(); // sessionId → timestamps
     this.recent = []; // last 50 calls, for Diagnostics
+    this.execution = new Map(); // name → { calls, ok, fail, ms, lastAt } — "verified" needs evidence
   }
 
   /* ── registration ───────────────────────────────────────────────────── */
@@ -89,6 +90,18 @@ class ToolRegistry {
     return this.tools.has(name);
   }
 
+  /** Platform availability, counted separately from "implemented". */
+  availability(tool) {
+    const platforms = tool.platform ? [].concat(tool.platform) : null;
+    if (platforms && !platforms.includes('all') && !platforms.includes(process.platform)) return { available: false, reason: `only on ${platforms.join('/')}` };
+    if (!tool.enabled) return { available: false, reason: 'switched off' };
+    return { available: true, reason: null };
+  }
+
+  executionStats(name) {
+    return this.execution.get(name) || { calls: 0, ok: 0, fail: 0, ms: 0, lastAt: null };
+  }
+
   list({ category = null, permission = null, tag = null, includeDisabled = false } = {}) {
     return [...this.tools.values()]
       .filter((tool) => (includeDisabled || tool.enabled))
@@ -106,6 +119,13 @@ class ToolRegistry {
         summary: describeParameters(tool.parameters),
         examples: tool.examples,
         timeoutMs: tool.timeoutMs,
+        risk: tool.permission === 'dangerous' || tool.permission === 'privileged' ? 'high' : tool.permission === 'write' || tool.permission === 'system' ? 'medium' : 'low',
+        platform: tool.platform || 'all',
+        available: this.availability(tool).available,
+        unavailableReason: this.availability(tool).reason,
+        dryRun: Boolean(tool.dryRun),
+        executions: this.executionStats(tool.name),
+        verified: this.executionStats(tool.name).ok > 0,
       }))
       .sort((a, b) => a.category.localeCompare(b.category) || a.name.localeCompare(b.name));
   }
@@ -126,8 +146,15 @@ class ToolRegistry {
   }
 
   stats() {
+    const tools = [...this.tools.values()];
+    const available = tools.filter((tool) => this.availability(tool).available).length;
+    const verified = tools.filter((tool) => this.executionStats(tool.name).ok > 0).length;
     return {
       tools: this.tools.size,
+      implemented: this.tools.size,
+      available,
+      verified,
+      dryRunnable: tools.filter((tool) => Boolean(tool.dryRun)).length,
       categories: this.categories(),
       counters: { ...this.counters },
       recent: this.recent.slice(-20),
@@ -177,6 +204,14 @@ class ToolRegistry {
     const { source = 'tool', sessionId = null, signal = null, approvalId = null, dryRun = false } = options;
     const tool = this.tools.get(name);
     const finish = (payload) => {
+      const ms = this.now() - started;
+      const stats = this.execution.get(name) || { calls: 0, ok: 0, fail: 0, ms: 0, lastAt: null };
+      stats.calls += 1;
+      stats.ms += ms;
+      stats.lastAt = this.now();
+      if (payload.ok) stats.ok += 1;
+      else if (!['APPROVAL_REQUIRED', 'CANCELLED', 'TOOL_DISABLED', 'RATE_LIMITED'].includes(payload.code)) stats.fail += 1;
+      this.execution.set(name, stats);
       const entry = {
         at: new Date(this.now()).toISOString(),
         tool: name,
@@ -284,7 +319,15 @@ class ToolRegistry {
     }
 
     if (dryRun) {
-      return finish({ ok: true, data: { dryRun: true, wouldRun: name, args: value }, dryRun: true });
+      if (typeof tool.dryRun === 'function') {
+        try {
+          const preview = await tool.dryRun(value, { ...this.services, config: this.config, sandbox: this.sandbox });
+          return finish({ ok: true, data: { dryRun: true, tool: name, preview }, dryRun: true });
+        } catch (err) {
+          return finish({ ok: false, code: err.code || 'DRY_RUN_FAILED', message: err.message });
+        }
+      }
+      return finish({ ok: true, data: { dryRun: true, wouldRun: name, args: value, note: 'this tool does not implement a dry run; nothing was executed' }, dryRun: true });
     }
 
     // Timeout + caller cancellation, combined into one signal.

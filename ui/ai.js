@@ -328,6 +328,8 @@
   function stageToOrb(stage) {
     switch (stage) {
       case 'thinking':
+      case 'understanding':
+      case 'constraints':
       case 'recall':
         return 'thinking';
       case 'routing':
@@ -680,6 +682,168 @@
     }
   }
 
+  async function loadCognition() {
+    const host = panel('cognition');
+    if (!host) return;
+    host.textContent = 'Czytam ostatni przebieg…';
+    try {
+      const report = await api('/api/cognition');
+      host.textContent = '';
+      const run = report.data;
+      if (!run) {
+        host.append(el('p', { class: 'empty-note', text: 'Brak przebiegów w tej sesji. Zadaj pytanie w czacie — tu pojawi się jego brief, strategia i weryfikacja.' }));
+      } else {
+        const brief = run.brief || {};
+        const rows = [
+          ['Pytanie', run.question],
+          ['Tryb', run.mode],
+          ['Zamiar', brief.intent || '—'],
+          ['Strategia', `${run.strategy || brief.strategy || '—'}${brief.strategyReason ? ` — ${brief.strategyReason}` : ''}`],
+          ['Złożoność', brief.complexity || '—'],
+          ['Ryzyko', brief.risk ? `${brief.risk.level}${brief.risk.flags && brief.risk.flags.length ? ` (${brief.risk.flags.join(', ')})` : ''}` : '—'],
+          ['Pewność', typeof run.verification.confidence === 'number' ? `${Math.round(run.verification.confidence * 100)}%` : '—'],
+          ['Kontekst', run.context ? `${run.context.tokens}/${run.context.budget} tokenów (${Math.round((run.context.utilisation || 0) * 100)}%), pominięto ${run.context.dropped ? run.context.dropped.length : 0}` : '—'],
+        ];
+        host.append(el('dl', { class: 'kv' }, rows.map(([key, value]) => el('div', {}, [el('dt', { text: key }), el('dd', { text: String(value) })]))));
+        host.append(el('p', { class: 'panel-note', text: `Kryteria ukończenia: ${(brief.completionCriteria || []).join(' · ') || '—'}` }));
+        if (brief.constraints && brief.constraints.length) {
+          host.append(el('p', { class: 'panel-note', text: `Ograniczenia: ${brief.constraints.map((entry) => entry.label || entry.id).join(' · ')}` }));
+        }
+        if (brief.assumptions && brief.assumptions.length) {
+          host.append(el('p', { class: 'panel-note', text: `Założenia: ${brief.assumptions.map((entry) => entry.text || entry).join(' · ')}` }));
+        }
+        if (run.context && run.context.sections) {
+          host.append(
+            el('div', { class: 'mini-card-tags' }, run.context.sections.map((section) => el('span', { class: `tag${section.truncated ? ' tag-warn' : ''}`, text: `${section.name} ${section.tokens}${section.truncated ? ' (ucięte)' : ''}` }))),
+          );
+        }
+        host.append(el('div', { class: 'row-actions' }, [
+          el('button', {
+            class: 'btn btn-ghost',
+            type: 'button',
+            text: 'Oceń odpowiedź',
+            onclick: async (event) => {
+              event.currentTarget.disabled = true;
+              const feedback = await api('/api/feedback', { method: 'POST', body: { runId: run.runId, rating: 0.8, note: 'ocena z panelu Poznanie' } });
+              event.currentTarget.textContent = feedback.ok ? 'Zapisano ocenę' : `Nie zapisano: ${feedback.message || feedback.code}`;
+            },
+          }),
+          el('span', { class: 'muted', text: `${run.ms} ms · ${(run.tools || []).length} narzędzi · ${(run.agents || []).join(', ') || 'bez agenta'}` }),
+        ]));
+      }
+    } catch (err) {
+      host.textContent = `Nie mogę wczytać przebiegu: ${err.message}`;
+    }
+    loadEventLog();
+    loadExperience();
+    loadReliability();
+  }
+
+  async function loadEventLog() {
+    const host = panel('eventlog');
+    if (!host) return;
+    try {
+      const data = await api('/api/eventlog?limit=40');
+      const events = data.data || [];
+      host.textContent = '';
+      if (!events.length) host.append(el('li', { class: 'empty-note', text: 'Brak zdarzeń.' }));
+      for (const event of events.slice().reverse()) {
+        const detail = event.payload && (event.payload.stage || event.payload.action || event.payload.name) ? String(event.payload.stage || event.payload.action || event.payload.name) : '';
+        host.append(
+          el('li', { class: `eventlog-row severity-${event.severity || 'info'}` }, [
+            el('time', { class: 'muted', text: new Date(event.at).toLocaleTimeString() }),
+            el('span', { class: 'tag', text: event.topic }),
+            el('span', { text: detail }),
+          ]),
+        );
+      }
+    } catch (err) {
+      host.textContent = `Nie mogę wczytać zdarzeń: ${err.message}`;
+    }
+  }
+
+  async function loadExperience() {
+    const host = panel('experience');
+    if (!host) return;
+    try {
+      const data = await api('/api/experience');
+      const snapshot = data.data || {};
+      const strategies = (snapshot.strategies || []).slice().sort((a, b) => b.score - a.score).slice(0, 8);
+      host.textContent = '';
+      if (!strategies.length) {
+        host.append(el('p', { class: 'empty-note', text: 'Brak danych — strategie pojawiają się po pierwszych przebiegach.' }));
+      } else {
+        host.append(
+          el('table', { class: 'data-table' }, [
+            el('thead', {}, [el('tr', {}, ['Zadanie', 'Strategia', 'Wynik', 'Próbki', 'Czas'].map((label) => el('th', { text: label })))]),
+            el('tbody', {}, strategies.map((entry) => el('tr', {}, [
+              el('td', { text: entry.taskClass }),
+              el('td', { text: entry.strategy }),
+              el('td', { text: entry.score.toFixed(2) }),
+              el('td', { text: String(entry.samples) }),
+              el('td', { text: `${Math.round(entry.avgMs || 0)} ms` }),
+            ]))),
+          ]),
+        );
+      }
+      if (snapshot.feedback && snapshot.feedback.length) {
+        const average = snapshot.feedback.reduce((sum, entry) => sum + entry.rating, 0) / snapshot.feedback.length;
+        host.append(el('p', { class: 'panel-note', text: `Opinie użytkownika: ${snapshot.feedback.length}, średnia ${average.toFixed(2)}` }));
+      }
+      if (snapshot.candidates && snapshot.candidates.length) {
+        host.append(
+          el('p', {
+            class: 'panel-note',
+            text: `Kandydaci na ulepszenia (nigdy nie wdrażani automatycznie): ${snapshot.candidates.map((entry) => `${entry.name}: ${entry.status}`).join(' · ')}`,
+          }),
+        );
+      }
+    } catch (err) {
+      host.textContent = `Nie mogę wczytać doświadczenia: ${err.message}`;
+    }
+  }
+
+  async function loadReliability() {
+    const host = panel('reliability');
+    if (!host) return;
+    try {
+      const data = await api('/api/reliability');
+      const info = data.data || {};
+      host.textContent = '';
+      const breakers = info.breakers || [];
+      host.append(
+        el('div', { class: 'mini-card-tags' }, breakers.length
+          ? breakers.map((breaker) => el('span', { class: `tag ${breaker.state === 'open' ? 'tag-warn' : ''}`, text: `${breaker.name}: ${breaker.state} (${breaker.failures || 0} błędów)` }))
+          : [el('span', { class: 'tag', text: 'bezpieczniki bezczynne' })]),
+      );
+      const incidents = info.incidents || { active: [], recent: [] };
+      if (incidents.active && incidents.active.length) {
+        host.append(el('p', { class: 'panel-note', text: `Aktywne incydenty: ${incidents.active.map((entry) => `${entry.subsystem}/${entry.code} ×${entry.count}`).join(' · ')}` }));
+      } else {
+        host.append(el('p', { class: 'panel-note', text: 'Brak aktywnych incydentów.' }));
+      }
+      const watchdogs = info.watchdogs || [];
+      if (watchdogs.length) {
+        host.append(el('p', { class: 'panel-note', text: `Watchdogi: ${watchdogs.map((entry) => `${entry.name}: ${entry.state === 'up' ? 'sprawny' : entry.state}${entry.lastDetail ? ` (${entry.lastDetail})` : ''}`).join(' · ')}` }));
+      }
+      if (incidents.recent && incidents.recent.length) {
+        host.append(
+          el('table', { class: 'data-table' }, [
+            el('thead', {}, [el('tr', {}, ['Czas', 'Podsystem', 'Kod', 'Opis'].map((label) => el('th', { text: label })))]),
+            el('tbody', {}, incidents.recent.slice(-6).reverse().map((entry) => el('tr', {}, [
+              el('td', { text: new Date(entry.at).toLocaleTimeString() }),
+              el('td', { text: entry.subsystem }),
+              el('td', { text: entry.code }),
+              el('td', { text: entry.message || '' }),
+            ]))),
+          ]),
+        );
+      }
+    } catch (err) {
+      host.textContent = `Nie mogę wczytać niezawodności: ${err.message}`;
+    }
+  }
+
   async function loadModels() {
     const host = panel('models');
     if (!host) return;
@@ -737,17 +901,42 @@
             el('div', { class: 'task-head' }, [el('h3', { text: task.title }), el('span', { class: `badge badge-${task.status}`, text: task.status })]),
             el('div', { class: 'progress' }, [el('div', { class: 'progress-fill', style: `width:${task.progress}%` })]),
             el('p', { class: 'muted', text: `${task.done}/${task.steps} kroków · ${new Date(task.createdAt).toLocaleString()}` }),
-            task.status === 'running' || task.status === 'pending'
-              ? el('button', {
-                  class: 'btn btn-ghost',
-                  type: 'button',
-                  text: 'Anuluj',
-                  onclick: async () => {
-                    await api('/api/tasks/cancel', { method: 'POST', body: { id: task.id } });
-                    loadTasks();
-                  },
-                })
-              : null,
+            el('p', { class: 'muted', text: `${task.failed ? `${task.failed} nieudanych · ` : ''}${task.retries ? `${task.retries} ponowień · ` : ''}${task.checkpoint ? `checkpoint #${task.checkpoint.seq} · ` : ''}${task.error || ''}` }),
+            el('div', { class: 'row-actions' }, [
+              ['running', 'pending', 'planning', 'verifying'].includes(task.status)
+                ? el('button', {
+                    class: 'btn btn-ghost',
+                    type: 'button',
+                    text: 'Pauza',
+                    onclick: async () => {
+                      await api('/api/tasks/pause', { method: 'POST', body: { id: task.id } });
+                      loadTasks();
+                    },
+                  })
+                : null,
+              ['paused', 'interrupted'].includes(task.status)
+                ? el('button', {
+                    class: 'btn btn-ghost',
+                    type: 'button',
+                    text: 'Wznów',
+                    onclick: async () => {
+                      await api('/api/tasks/resume', { method: 'POST', body: { id: task.id } });
+                      loadTasks();
+                    },
+                  })
+                : null,
+              ['running', 'pending', 'planning', 'verifying', 'paused', 'waiting_approval'].includes(task.status)
+                ? el('button', {
+                    class: 'btn btn-ghost',
+                    type: 'button',
+                    text: 'Anuluj',
+                    onclick: async () => {
+                      await api('/api/tasks/cancel', { method: 'POST', body: { id: task.id } });
+                      loadTasks();
+                    },
+                  })
+                : null,
+            ]),
           ]),
         );
       }
@@ -775,6 +964,17 @@
           text: `${stats.total || 0} ${plural(stats.total, 'wspomnienie', 'wspomnienia', 'wspomnień')} · ${stats.store ? `${stats.store.driver}, ${bytes(stats.store.bytes || 0)}` : ''} · embedder ${stats.embedder ? stats.embedder.name : '?'}`,
         }),
       );
+      const conflicts = el('div', { class: 'conflicts' });
+      api('/api/memory/conflicts').then((result) => {
+        const pairs = (result && result.data) || [];
+        if (!pairs.length) return;
+        conflicts.append(el('h3', { text: `Sprzeczności (${pairs.length})` }));
+        conflicts.append(el('p', { class: 'panel-note', text: 'SENTINEL zachowuje oba fakty i pokazuje je — nie nadpisuje po cichu.' }));
+        for (const pair of pairs.slice(0, 5)) {
+          conflicts.append(el('article', { class: 'card memory-row' }, [el('p', { text: `A: ${pair.a.text}` }), el('p', { text: `B: ${pair.b.text}` })]));
+        }
+        host.append(conflicts);
+      }).catch(() => {});
       const search = el('input', { class: 'field', type: 'search', placeholder: 'Szukaj w pamięci…' });
       const results = el('div', { class: 'memory-list' });
       const render = (items) => {
@@ -1147,6 +1347,26 @@
       });
     });
 
+    const cognitionRefresh = $('#btn-cognition-refresh');
+    if (cognitionRefresh) cognitionRefresh.addEventListener('click', loadCognition);
+
+    document.addEventListener('keydown', (event) => {
+      const typing = event.target && (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA' || event.target.isContentEditable);
+      // Ctrl/Cmd+K jumps to the composer from anywhere; Escape stops a run.
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        onTab('chat');
+        if (chatEls.input) chatEls.input.focus();
+      }
+      if (event.key === 'Escape' && state.running) {
+        event.preventDefault();
+        stopRun();
+      }
+      if (!typing && event.key === '?' && !event.ctrlKey && !event.metaKey) {
+        toast('Skróty: Ctrl+K — czat, Escape — stop, Enter — wyślij, Shift+Enter — nowa linia');
+      }
+    });
+
     const mic = $('#chat-mic');
     if (mic) {
       mic.addEventListener('click', () => toggleMic(mic));
@@ -1271,6 +1491,7 @@
     if (tab === 'agents') loadAgents();
     if (tab === 'tools') loadTools();
     if (tab === 'models') loadModels();
+    if (tab === 'cognition') loadCognition();
     if (tab === 'tasks') loadTasks();
     if (tab === 'memory') loadMemory();
     if (tab === 'knowledge') loadKnowledge();
@@ -1293,6 +1514,7 @@
     setInterval(refreshApprovals, 4000);
     setInterval(() => {
       if (state.tab === 'tasks') loadTasks();
+      if (state.tab === 'cognition') loadCognition();
       if (state.tab === 'computer') loadComputer();
     }, 8000);
   }

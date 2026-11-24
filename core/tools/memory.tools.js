@@ -359,4 +359,111 @@ module.exports = [
       return ctx.knowledge.reindex();
     },
   },
+  {
+    name: 'memory.conflicts',
+    title: 'Contradictions in memory',
+    description: 'Pairs of stored facts that disagree about the same subject, so you can ask the user which is true instead of silently overwriting.',
+    category: 'memory',
+    permission: 'read',
+    tags: ['memory', 'conflict', 'quality'],
+    parameters: { type: 'object', properties: {}, additionalProperties: false },
+    async run(args, ctx) {
+      if (!ctx.memory) throw Object.assign(new Error('memory is not available'), { code: 'NO_MEMORY' });
+      const pairs = ctx.memory.conflicts();
+      return { count: pairs.length, pairs };
+    },
+    format: (data) => (data.count ? data.pairs.map((pair) => `A: ${pair.a.text}\nB: ${pair.b.text}`).join('\n\n') : 'memory contains no contradictions'),
+  },
+  {
+    name: 'memory.integrity',
+    title: 'Check memory integrity',
+    description: 'Structural check of the memory store: dangling references, expired records, vector dimension and embedder mismatches.',
+    category: 'memory',
+    permission: 'read',
+    tags: ['memory', 'integrity', 'diagnostics'],
+    parameters: { type: 'object', properties: {}, additionalProperties: false },
+    async run(args, ctx) {
+      if (!ctx.memory) throw Object.assign(new Error('memory is not available'), { code: 'NO_MEMORY' });
+      return ctx.memory.integrity();
+    },
+    format: (data) => (data.ok ? `memory is consistent (${data.checked} records checked)` : `${data.problems.length} problem(s): ${data.problems.map((problem) => `${problem.id}:${problem.code}`).join(', ')}`),
+  },
+  {
+    name: 'memory.consolidate',
+    title: 'Consolidate episodic memory',
+    description: 'Group same-day episodic memories into one semantic summary, deterministically and without a model.',
+    category: 'memory',
+    permission: 'write',
+    tags: ['memory', 'consolidation', 'sleep'],
+    parameters: { type: 'object', properties: {}, additionalProperties: false },
+    async run(args, ctx) {
+      if (!ctx.memory) throw Object.assign(new Error('memory is not available'), { code: 'NO_MEMORY' });
+      return ctx.memory.consolidate();
+    },
+    format: (data) => (data.summaries ? `created ${data.summaries} summary record(s)` : 'nothing to consolidate yet'),
+  },
+  {
+    name: 'kb.coverage',
+    title: 'Knowledge base coverage',
+    description: 'What the index actually contains: documents, chunks, kinds, stale files, untrusted-content flags and embedder coverage.',
+    category: 'knowledge',
+    permission: 'read',
+    tags: ['knowledge', 'coverage', 'quality'],
+    parameters: { type: 'object', properties: {}, additionalProperties: false },
+    async run(args, ctx) {
+      if (!ctx.knowledge) throw Object.assign(new Error('the knowledge base is not available'), { code: 'NO_KNOWLEDGE' });
+      return ctx.knowledge.coverage();
+    },
+    format: (data) => `${data.documents} documents, ${data.chunks} chunks, ${data.stale} stale, ${data.withoutVectors} chunks without vectors`,
+  },
+  {
+    name: 'kb.stale',
+    title: 'Documents that changed',
+    description: 'Files whose content or existence no longer matches the index.',
+    category: 'knowledge',
+    permission: 'read',
+    tags: ['knowledge', 'stale', 'index'],
+    parameters: { type: 'object', properties: {}, additionalProperties: false },
+    async run(args, ctx) {
+      if (!ctx.knowledge) throw Object.assign(new Error('the knowledge base is not available'), { code: 'NO_KNOWLEDGE' });
+      const stale = ctx.knowledge.stale();
+      return { count: stale.length, stale };
+    },
+    format: (data) => (data.count ? data.stale.map((entry) => `${entry.path}: ${entry.reason}`).join('\n') : 'every indexed file is unchanged'),
+  },
+  {
+    name: 'kb.symbols',
+    title: 'Find code symbols',
+    description: 'Search functions, classes and methods by name in authorised code files. More precise than full-text search for code.',
+    category: 'knowledge',
+    permission: 'read',
+    tags: ['knowledge', 'code', 'symbols'],
+    parameters: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', minLength: 2, maxLength: 120 },
+        path: { type: 'string', description: 'file or folder to scan' },
+        limit: { type: 'number', default: 40, minimum: 1, maximum: 200 },
+      },
+      required: ['query'],
+      additionalProperties: false,
+    },
+    pathParams: [{ name: 'path', mode: 'read' }],
+    async run(args, ctx) {
+      if (!ctx.knowledge) throw Object.assign(new Error('the knowledge base is not available'), { code: 'NO_KNOWLEDGE' });
+      const fs = require('node:fs');
+      const { walk } = require('./helpers');
+      let files = [];
+      if (args.path) {
+        const stat = fs.statSync(args.path);
+        files = stat.isDirectory() ? await walk(args.path, { maxDepth: 6, maxFiles: 400 }) : [args.path];
+      } else {
+        files = ctx.knowledge.list({ limit: 200 }).map((doc) => doc.path).filter(Boolean);
+      }
+      const hits = ctx.knowledge.findSymbols(args.query, { files, limit: args.limit });
+      return { count: hits.length, hits };
+    },
+    format: (data) => (data.count ? data.hits.map((hit) => `${hit.kind} ${hit.name} — ${hit.file}:${hit.line}`).join('\n') : 'no symbol matched'),
+  },
 ];
+

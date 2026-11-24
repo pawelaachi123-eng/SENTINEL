@@ -17,12 +17,14 @@
  * skipped, which makes "index this folder again" cheap.
  */
 
+const fs = require('node:fs');
 const fsp = require('node:fs/promises');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { Bm25Index, hybridSearch } = require('../memory/search');
 const { HashingEmbedder, encodeVector, decodeVector, expandQuery } = require('../memory/embeddings');
 const { newId } = require('../memory/store');
+const { scan: scanInjection } = require('../security/injection');
 const { loadDocument } = require('./extract');
 const { walk, decodeText } = require('../tools/helpers');
 
@@ -177,6 +179,9 @@ class Knowledge {
       characters: text.length,
       chunks: pieces.length,
       tags: [...new Set(tags)].slice(0, 12),
+      untrusted: true,
+      trust: 'untrusted-data',
+      injectionFindings: scanInjection(text).findings.length,
       signature,
       hash,
       mtime: stat.mtime.toISOString(),
@@ -230,6 +235,9 @@ class Knowledge {
       characters: clean.length,
       chunks: pieces.length,
       tags: [...new Set(tags)].slice(0, 12),
+      untrusted: true,
+      trust: 'untrusted-data',
+      injectionFindings: scanInjection(clean).findings.length,
       hash: hashText(clean),
       signature: null,
       mtime: new Date().toISOString(),
@@ -336,24 +344,46 @@ class Knowledge {
       vectorName: this.embedder.name,
       limit: limit * 4,
     });
-    return hits
+    // A cheap, deterministic reranker: how much of the query's vocabulary the
+    // fragment actually contains. It costs microseconds and fixes the common
+    // failure where a semantically similar but useless chunk outranks the exact
+    // passage the user asked about.
+    const queryTerms = [...new Set(String(text).toLowerCase().split(/[^\p{L}\p{N}]+/u).filter((term) => term.length > 2))];
+    const reranked = hits
       .filter((hit) => hit.score >= minScore)
-      .slice(0, limit)
       .map((hit) => {
         const chunk = this.chunks.get(hit.record.id);
-        return {
-          id: chunk.id,
-          docId: chunk.docId,
-          title: chunk.title,
-          source: chunk.source,
-          kind: chunk.kind,
-          chunk: chunk.index + 1,
-          score: Number(hit.score.toFixed(4)),
-          excerpt: chunk.text.length > 400 ? `${chunk.text.slice(0, 400)}…` : chunk.text,
-          text: chunk.text,
-          start: chunk.start,
-        };
-      });
+        const body = String(chunk.text).toLowerCase();
+        const overlap = queryTerms.length ? queryTerms.filter((term) => body.includes(term)).length / queryTerms.length : 0;
+        return { hit, chunk, overlap, finalScore: hit.score * (0.75 + 0.5 * overlap) };
+      })
+      .sort((a, b) => b.finalScore - a.finalScore);
+
+    // Diversity: at most two fragments from one document, so a single long PDF
+    // cannot fill the whole evidence block.
+    const perDoc = new Map();
+    const selected = [];
+    for (const entry of reranked) {
+      const used = perDoc.get(entry.chunk.docId) || 0;
+      if (used >= 2) continue;
+      perDoc.set(entry.chunk.docId, used + 1);
+      selected.push(entry);
+      if (selected.length >= limit) break;
+    }
+    return selected.map(({ chunk, overlap, finalScore }) => ({
+      id: chunk.id,
+      docId: chunk.docId,
+      title: chunk.title,
+      source: chunk.source,
+      kind: chunk.kind,
+      chunk: chunk.index + 1,
+      score: Number(finalScore.toFixed(4)),
+      lexicalOverlap: Number(overlap.toFixed(2)),
+      untrusted: true,
+      excerpt: chunk.text.length > 400 ? `${chunk.text.slice(0, 400)}…` : chunk.text,
+      text: chunk.text,
+      start: chunk.start,
+    }));
   }
 
   list({ limit = 100 } = {}) {
@@ -395,6 +425,118 @@ class Knowledge {
     this.store.delete(this.docCollection, docId);
     this.counters.removed += 1;
     return true;
+  }
+
+
+  /* ── index health and code awareness ────────────────────────────────── */
+
+  /** Documents whose file changed, disappeared, or whose extraction failed. */
+  stale() {
+    this.load();
+    const out = [];
+    for (const doc of this.docs.values()) {
+      if (!doc.path) continue;
+      let stat = null;
+      try {
+        stat = fs.statSync(doc.path);
+      } catch {
+        out.push({ id: doc.id, title: doc.title, path: doc.path, reason: 'file is gone' });
+        continue;
+      }
+      const signature = `${stat.size}:${stat.mtimeMs}`;
+      if (doc.signature && doc.signature !== signature) out.push({ id: doc.id, title: doc.title, path: doc.path, reason: 'file changed since indexing', indexedAt: doc.indexedAt });
+    }
+    return out;
+  }
+
+  /** Honest coverage report: what the index actually contains. */
+  coverage() {
+    this.load();
+    const docs = [...this.docs.values()];
+    const byKind = {};
+    let chunks = 0;
+    let untrusted = 0;
+    let flagged = 0;
+    let withoutVectors = 0;
+    for (const doc of docs) {
+      byKind[doc.kind || 'text'] = (byKind[doc.kind || 'text'] || 0) + 1;
+      chunks += doc.chunks || 0;
+      if (doc.untrusted) untrusted += 1;
+      if (doc.injectionFindings) flagged += 1;
+    }
+    for (const chunk of this.chunks.values()) if (!chunk.vector) withoutVectors += 1;
+    const stale = this.stale();
+    return {
+      documents: docs.length,
+      chunks,
+      byKind,
+      untrusted,
+      flagged,
+      withoutVectors,
+      stale: stale.length,
+      staleDocs: stale.slice(0, 20),
+      characters: docs.reduce((sum, doc) => sum + (doc.characters || 0), 0),
+      newest: docs.length ? Math.max(...docs.map((doc) => doc.indexedAt || 0)) : null,
+      oldest: docs.length ? Math.min(...docs.map((doc) => doc.indexedAt || 0)) : null,
+      embedder: this.embedder.name,
+    };
+  }
+
+  /** Symbol index for code: functions, classes, exports, routes, tests. */
+  symbols(file) {
+    const text = fs.readFileSync(file, 'utf8').slice(0, 2 * 1024 * 1024);
+    const extension = path.extname(file).toLowerCase();
+    const patterns = [];
+    if (['.js', '.mjs', '.cjs', '.ts', '.tsx', '.jsx'].includes(extension)) {
+      patterns.push({ kind: 'function', re: /(?:^|\n)\s*(?:async\s+)?function\s+([A-Za-z_$][\w$]*)/g });
+      patterns.push({ kind: 'class', re: /(?:^|\n)\s*class\s+([A-Za-z_$][\w$]*)/g });
+      patterns.push({ kind: 'method', re: /(?:^|\n)\s{2,}(?:async\s+)?([A-Za-z_$][\w$]*)\s*\([^)]*\)\s*\{/g });
+      patterns.push({ kind: 'const', re: /(?:^|\n)\s*(?:const|let)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?\(/g });
+    }
+    if (['.py'].includes(extension)) {
+      patterns.push({ kind: 'function', re: /(?:^|\n)\s*def\s+([A-Za-z_]\w*)/g });
+      patterns.push({ kind: 'class', re: /(?:^|\n)\s*class\s+([A-Za-z_]\w*)/g });
+    }
+    if (['.ps1', '.sh', '.bat', '.cmd'].includes(extension)) {
+      patterns.push({ kind: 'function', re: /(?:^|\n)\s*(?:function\s+|)([A-Za-z_][\w-]*)\s*\(\s*\)\s*\{/g });
+    }
+    const found = [];
+    const seen = new Set();
+    for (const pattern of patterns) {
+      pattern.re.lastIndex = 0;
+      let match;
+      while ((match = pattern.re.exec(text)) && found.length < 400) {
+        const name = match[1];
+        const key = `${pattern.kind}:${name}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const line = text.slice(0, match.index).split('\n').length;
+        found.push({ kind: pattern.kind, name, line });
+      }
+    }
+    return { file, symbols: found, count: found.length };
+  }
+
+  /** FTS-like symbol search across authorised code files. */
+  findSymbols(query, { files = [], limit = 40 } = {}) {
+    const needle = String(query || '').toLowerCase().trim();
+    if (!needle) return [];
+    const out = [];
+    for (const file of files.slice(0, 400)) {
+      let result;
+      try {
+        result = this.symbols(file);
+      } catch {
+        continue;
+      }
+      for (const symbol of result.symbols) {
+        if (!symbol.name.toLowerCase().includes(needle)) continue;
+        out.push({ file, ...symbol });
+        if (out.length >= limit) break;
+      }
+      if (out.length >= limit) break;
+    }
+    return out;
   }
 
   stats() {

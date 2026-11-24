@@ -572,6 +572,109 @@ class HttpApi {
 
     /* ── diagnostics ───────────────────────────────────────────────────── */
 
+
+    /* ── 3.0: events, metrics, reliability, experience ─────────────────── */
+
+    // Note: /api/events is the live SSE log stream. The typed event bus is
+    // exposed separately as /api/eventlog so the two never shadow each other.
+    if (route === '/api/eventlog' && req.method === 'GET') {
+      if (!this.ai || !this.ai.events) return this.json(res, 200, { ok: true, data: [] });
+      const limit = Number(url.searchParams.get('limit')) || 100;
+      const topic = url.searchParams.get('topic');
+      const correlationId = url.searchParams.get('run') || null;
+      const since = Number(url.searchParams.get('since')) || 0;
+      return this.json(res, 200, { ok: true, data: this.ai.events.recent({ limit, topic, correlationId, sinceSeq: since }), stats: this.ai.events.stats() });
+    }
+
+    if (route === '/api/metrics' && req.method === 'GET') {
+      if (!this.ai || !this.ai.metrics) return this.json(res, 200, { ok: true, data: null });
+      return this.json(res, 200, { ok: true, data: { ...this.ai.metrics.snapshot(), brain: this.ai.brain ? this.ai.brain.status() : null, llm: this.ai.llm ? this.ai.llm.stats() : null } });
+    }
+
+    if (route === '/api/reliability' && req.method === 'GET') {
+      if (!this.ai) return this.json(res, 503, { ok: false, error: 'AI not ready' });
+      return this.json(res, 200, {
+        ok: true,
+        data: {
+          incidents: this.ai.incidents ? { active: this.ai.incidents.active(), recent: this.ai.incidents.list(20), stats: this.ai.incidents.stats() } : null,
+          breakers: this.ai.llm && this.ai.llm.stats ? this.ai.llm.stats().breakers : [],
+          tasks: this.ai.tasks ? this.ai.tasks.stats() : null,
+          watchdogs: this.ai.status ? (this.ai.status().watchdogs || []) : [],
+        },
+      });
+    }
+
+    if (route === '/api/experience' && req.method === 'GET') {
+      if (!this.ai || !this.ai.experience) return this.json(res, 200, { ok: true, data: null });
+      return this.json(res, 200, { ok: true, data: this.ai.experience.snapshot() });
+    }
+
+    if (route === '/api/feedback' && req.method === 'POST') {
+      if (!this.ai || !this.ai.experience) return this.json(res, 503, { ok: false, error: 'AI not ready' });
+      const body = await this.body(req);
+      try {
+        const entry = this.ai.experience.recordFeedback({ runId: body.runId || null, rating: body.rating, note: body.note || null, taskClass: body.taskClass || null });
+        return this.json(res, 200, { ok: true, data: entry });
+      } catch (err) {
+        return this.json(res, 200, { ok: false, code: err.code || 'BAD_ARGS', message: err.message });
+      }
+    }
+
+    if (route === '/api/tasks/pause' && req.method === 'POST') {
+      if (!this.ai) return this.json(res, 503, { ok: false, error: 'AI not ready' });
+      const body = await this.body(req);
+      try {
+        const result = this.ai.tasks.pause(String(body.id || ''), body.reason || 'paused in the UI');
+        return this.json(res, 200, { ok: Boolean(result.ok), data: result.task || null, code: result.code || null });
+      } catch (err) {
+        return this.json(res, 200, { ok: false, code: err.code || 'FAILED', message: err.message });
+      }
+    }
+
+    if (route === '/api/tasks/resume' && req.method === 'POST') {
+      if (!this.ai) return this.json(res, 503, { ok: false, error: 'AI not ready' });
+      const body = await this.body(req);
+      try {
+        const result = this.ai.tasks.resume(String(body.id || ''));
+        return this.json(res, 200, { ok: Boolean(result.ok), data: result.task || null, code: result.code || null });
+      } catch (err) {
+        return this.json(res, 200, { ok: false, code: err.code || 'FAILED', message: err.message });
+      }
+    }
+
+    if (route === '/api/memory/conflicts' && req.method === 'GET') {
+      if (!this.ai) return this.json(res, 503, { ok: false, error: 'AI not ready' });
+      return this.json(res, 200, { ok: true, data: this.ai.memory.conflicts() });
+    }
+
+    if (route === '/api/memory/integrity' && req.method === 'GET') {
+      if (!this.ai) return this.json(res, 503, { ok: false, error: 'AI not ready' });
+      return this.json(res, 200, { ok: true, data: this.ai.memory.integrity() });
+    }
+
+    if (route === '/api/memory/consolidate' && req.method === 'POST') {
+      if (!this.ai) return this.json(res, 503, { ok: false, error: 'AI not ready' });
+      return this.json(res, 200, { ok: true, data: await this.ai.memory.consolidate() });
+    }
+
+    if (route === '/api/cognition' && req.method === 'GET') {
+      if (!this.ai || !this.ai.brain) return this.json(res, 200, { ok: true, data: null });
+      return this.json(res, 200, {
+        ok: true,
+        data: this.ai.brain.lastReport || null,
+        stats: this.ai.cognitive ? this.ai.cognitive.stats() : null,
+        experience: this.ai.experience ? this.ai.experience.stats() : null,
+      });
+    }
+
+    if (route === '/api/cognition' && req.method === 'POST') {
+      if (!this.ai || !this.ai.cognitive) return this.json(res, 503, { ok: false, error: 'AI not ready' });
+      const body = await this.body(req);
+      const text = String(body.text || '').trim();
+      if (!text) return this.json(res, 200, { ok: false, code: 'EMPTY', message: 'nothing to analyse' });
+      return this.json(res, 200, { ok: true, data: this.ai.cognitive.analyse({ text, mode: body.mode || 'balanced', sessionId: body.sessionId || 'default' }) });
+    }
+
     if (route === '/api/diagnostics' && req.method === 'GET') {
       const snapshot = await this.snapshot();
       return this.json(res, 200, { ok: true, data: { snapshot, ai: this.ai ? this.ai.status() : null } });

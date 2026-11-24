@@ -18,6 +18,7 @@
 
 const { createOllama, createOpenAICompat, ProviderError } = require('./providers');
 const { estimateTokens, trimMessages } = require('./prompt');
+const { CircuitBreaker } = require('../reliability');
 
 const HEALTH_TTL_MS = 30000;
 
@@ -69,10 +70,15 @@ function combineSignals(signals) {
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 class LlmClient {
-  constructor({ config, log, fetchImpl = globalThis.fetch }) {
+  constructor({ config, log, fetchImpl = globalThis.fetch, metrics = null, events = null, experience = null }) {
     this.config = config;
     this.log = log;
     this.fetchImpl = fetchImpl;
+    this.metrics = metrics;
+    this.events = events;
+    this.experience = experience;
+    this.breakers = new Map();
+    this.capabilities = new Map();
     this.providers = new Map();
     this.healthCache = new Map();
     this.queue = new PriorityQueue();
@@ -115,6 +121,16 @@ class LlmClient {
       createOpenAICompat({ baseUrl: entry.baseUrl, name: 'external', fetchImpl: this.fetchImpl, apiKey: entry.apiKey }),
     );
     this.healthCache.clear();
+    this.breakers.clear();
+    for (const name of this.providers.keys()) this.breakerFor(name);
+  }
+
+  /** One breaker per provider: a dead Ollama must not block every request. */
+  breakerFor(name) {
+    if (!this.breakers.has(name)) {
+      this.breakers.set(name, new CircuitBreaker({ name, failureThreshold: 3, recoveryMs: 30000 }));
+    }
+    return this.breakers.get(name);
   }
 
   /** Test seam: register a deterministic provider (never used in normal runs). */
@@ -143,6 +159,8 @@ class LlmClient {
         const value = await provider.health({ signal: controller.signal });
         const record = { ...value, provider: provider.kind, baseUrl: provider.baseUrl, at: Date.now() };
         this.healthCache.set(name, { at: Date.now(), value: record });
+        this.breakerFor(name).success();
+        if (this.metrics) this.metrics.gauge(`provider.${name}.ok`, 1);
         out[name] = record;
       } catch (err) {
         const value = {
@@ -155,6 +173,8 @@ class LlmClient {
           at: Date.now(),
         };
         this.healthCache.set(name, { at: Date.now(), value });
+        this.breakerFor(name).failure(err);
+        if (this.metrics) this.metrics.gauge(`provider.${name}.ok`, 0);
         out[name] = value;
       } finally {
         clearTimeout(timer);
@@ -171,6 +191,7 @@ class LlmClient {
       ...this.counters,
       lastError: this.lastError,
       healthCache: this.healthCache.size,
+      breakers: [...this.breakers.values()].map((breaker) => breaker.status()),
     };
   }
 
@@ -203,6 +224,8 @@ class LlmClient {
       queued: this.queue.length,
       runs: [...this.runs.values()].map((run) => ({ id: run.id, modelClass: run.modelClass, startedAt: run.startedAt, chars: run.text.length })),
       lastError: this.lastError,
+      breakers: [...this.breakers.values()].map((breaker) => breaker.status()),
+      capabilities: Object.fromEntries(this.capabilities),
     };
   }
 
@@ -291,6 +314,72 @@ class LlmClient {
   }
 
   /**
+   * Capabilities per model: context window, vision, tool calling.
+   * Sources, in order: explicit config (`ai.capabilities.<model>`), provider
+   * metadata, then conservative name heuristics. Never assume — an unknown model
+   * gets the smallest safe context window.
+   */
+  capabilitiesFor(model, providerName = null) {
+    if (!model) return { contextTokens: 4096, vision: false, tools: true, source: 'default' };
+    const cached = this.capabilities.get(model);
+    if (cached) return cached;
+    const ai = this.ai();
+    const configured = (ai.capabilities && ai.capabilities[model]) || null;
+    let capability;
+    if (configured) {
+      capability = { contextTokens: Number(configured.contextTokens) || 4096, vision: Boolean(configured.vision), tools: configured.tools !== false, source: 'config' };
+    } else {
+      const meta = this.healthCache.size
+        ? Object.values(Object.fromEntries(this.healthCache)).map((entry) => (entry && entry.value && entry.value.models) || []).flat().find((item) => item && item.id === model)
+        : null;
+      const details = (meta && meta.details) || {};
+      const family = String(details.family || '').toLowerCase();
+      const vision = /(vl|vision|llava|bakllava|moondream)/i.test(model);
+      const tools = !/(llava|moondream)/i.test(model);
+      const contextTokens = Number((configured && configured.contextTokens) || (meta && meta.context_length) || 0) || (vision ? 4096 : 8192);
+      capability = { contextTokens, vision, tools, family: family || null, parameters: details.parameter_size || null, source: meta ? 'provider' : 'heuristic' };
+    }
+    this.capabilities.set(model, capability);
+    return capability;
+  }
+
+  /**
+   * JSON with a schema, validated in code and repaired at most once.
+   * Models are good at roughly following a shape and bad at guaranteeing it;
+   * the guarantee has to live on this side of the wire.
+   */
+  async structured({ messages, schema, modelClass = 'balanced', attempts = 2, validate = null, ...rest }) {
+    const describe = JSON.stringify(schema);
+    let lastError = null;
+    for (let attempt = 1; attempt <= attempts; attempt += 1) {
+      const guided = attempt === 1
+        ? messages
+        : [
+            ...messages,
+            { role: 'system', content: `Your previous reply was not valid JSON for the required schema. Reply with JSON only, no prose, no code fences. Schema: ${describe}` },
+          ];
+      // eslint-disable-next-line no-await-in-loop
+      const result = await this.chat({ ...rest, messages: guided, modelClass, json: true, temperature: 0 });
+      let parsed = null;
+      try {
+        parsed = parseJsonLoose(result.text);
+      } catch (err) {
+        lastError = err;
+      }
+      if (parsed && validate) {
+        const verdict = validate(parsed);
+        if (verdict && verdict.ok === false) {
+          lastError = Object.assign(new Error(verdict.reason || 'schema validation failed'), { code: 'INVALID_OUTPUT' });
+          parsed = null;
+        }
+      }
+      if (parsed) return { data: parsed, raw: result.text, model: result.model, provider: result.provider, attempts: attempt, usage: result.usage };
+      this.counters.invalidOutputs = (this.counters.invalidOutputs || 0) + 1;
+    }
+    throw new ProviderError(`model did not produce schema-valid JSON: ${lastError ? lastError.message : 'unknown'}` , { code: 'INVALID_OUTPUT' });
+  }
+
+  /**
    * @returns {Promise<{text, toolCalls, usage, model, provider, ms, finish, runId, modelClass, substituted, streamed}>}
    */
   async chat({
@@ -313,10 +402,12 @@ class LlmClient {
 
     const limits = ai.limits || {};
     const budget = Number(maxTokens) || Number(limits.maxOutputTokens) || 1024;
-    const trimmed = trimMessages(messages, {
-      maxTokens: Number(limits.maxContextTokens) || 8192,
-      reserve: budget,
-    });
+    const configuredModel = model || (ai.models && ai.models[modelClass]) || null;
+    const capability = this.capabilitiesFor(configuredModel);
+    // The configured ceiling wins when it is lower than the model's window;
+    // a 9B model with 8k context must not be fed a 14k prompt.
+    const contextLimit = Math.min(Number(limits.maxContextTokens) || 8192, capability.contextTokens || 8192);
+    const trimmed = trimMessages(messages, { maxTokens: contextLimit, reserve: budget });
     if (images && trimmed.length) {
       const last = trimmed[trimmed.length - 1];
       if (last.role === 'user') last.images = images;
@@ -340,8 +431,14 @@ class LlmClient {
       for (const candidate of chain) {
         for (let attempt = 0; attempt <= retries; attempt += 1) {
           const timeout = setTimeout(() => controller.abort(Object.assign(new Error('model timeout'), { code: 'TIMEOUT' })), Number(limits.timeoutMs) || 120000);
+          const breaker = this.breakerFor(candidate.name);
+          if (!breaker.canAttempt()) {
+            attemptErrors.push(`${candidate.name}: circuit open (${breaker.lastError || 'errors'})`);
+            continue;
+          }
           try {
             this.counters.calls += 1;
+            const firstTokenAt = { at: null };
             const result = await candidate.provider.chat({
               model: candidate.model,
               messages: trimmed,
@@ -352,6 +449,7 @@ class LlmClient {
               keepAlive: (ai.providers && ai.providers.ollama && ai.providers.ollama.keepAlive) || '30m',
               signal: combined.signal,
               onToken: (piece) => {
+                if (firstTokenAt.at === null) firstTokenAt.at = Date.now();
                 const run = this.runs.get(id);
                 if (run) run.text += piece;
                 if (onToken) onToken(piece);
@@ -359,10 +457,20 @@ class LlmClient {
             });
             clearTimeout(timeout);
             const ms = Date.now() - started;
-            this.counters.tokensIn += (result.usage && result.usage.prompt) || estimateTokens(trimmed.map((m) => m.content).join(' '));
-            this.counters.tokensOut += (result.usage && result.usage.completion) || estimateTokens(result.text);
+            breaker.success();
+            const tokensIn = (result.usage && result.usage.prompt) || estimateTokens(trimmed.map((m) => m.content).join(' '));
+            const tokensOut = (result.usage && result.usage.completion) || estimateTokens(result.text);
+            this.counters.tokensIn += tokensIn;
+            this.counters.tokensOut += tokensOut;
             if (candidate.substituted) this.counters.fallbacks += 1;
             this.lastError = null;
+            if (this.metrics) {
+              this.metrics.observe('llm.latency', ms);
+              if (firstTokenAt.at) this.metrics.observe('llm.firstToken', firstTokenAt.at - started);
+              if (ms > 0) this.metrics.observe('llm.tokensPerSecond', Number(((tokensOut / ms) * 1000).toFixed(2)));
+              this.metrics.increment(`llm.calls.${candidate.name}`);
+            }
+            if (this.events) this.events.model(id, 'answered', { provider: candidate.name, model: candidate.model, ms, tokensIn, tokensOut });
             return {
               ...result,
               model: candidate.model,
@@ -385,6 +493,9 @@ class LlmClient {
             }
             attemptErrors.push(`${candidate.name}/${candidate.model}: ${err.message}`);
             this.lastError = err.message;
+            if (!(err instanceof ProviderError) || !['CANCELLED', 'INVALID_OUTPUT'].includes(err.code)) breaker.failure(err);
+            if (this.metrics) this.metrics.increment('llm.errors');
+            if (this.events) this.events.model(id, 'failed', { provider: candidate.name, model: candidate.model, code: err.code || 'FAILED', message: err.message });
             const retryable = !(err instanceof ProviderError) || ['TIMEOUT', 'HTTP_ERROR', 'UNREACHABLE', 'MODEL_MISSING'].includes(err.code);
             if (attempt < retries && retryable) {
               await sleep(300 * (attempt + 1));
@@ -467,4 +578,25 @@ function pickModel(models, modelClass) {
   return models[0] ? models[0].id : null;
 }
 
-module.exports = { LlmClient, PriorityQueue, ProviderError, pickModel, combineSignals };
+function parseJsonLoose(text) {
+  const value = String(text || '').trim();
+  if (!value) throw Object.assign(new Error('empty output'), { code: 'INVALID_OUTPUT' });
+  const fenced = value.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const candidate = fenced ? fenced[1] : value;
+  try {
+    return JSON.parse(candidate);
+  } catch {
+    const start = candidate.indexOf('{');
+    const end = candidate.lastIndexOf('}');
+    if (start >= 0 && end > start) {
+      try {
+        return JSON.parse(candidate.slice(start, end + 1));
+      } catch {
+        /* fall through */
+      }
+    }
+    throw Object.assign(new Error('output is not JSON'), { code: 'INVALID_OUTPUT' });
+  }
+}
+
+module.exports = { LlmClient, PriorityQueue, ProviderError, pickModel, combineSignals, parseJsonLoose };

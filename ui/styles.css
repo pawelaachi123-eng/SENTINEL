@@ -936,3 +936,17 @@ input.field::placeholder { color: var(--text-faint); }
   .progress-fill { transition: none; }
   .tab.is-on svg { filter: none; }
 }
+
+/* ── 3.0: cognition, event log, tables ─────────────────────────────────── */
+.eventlog { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; max-height: 340px; overflow-y: auto; }
+.eventlog-row { display: grid; grid-template-columns: auto auto 1fr; gap: 10px; align-items: center; padding: 6px 8px; border-radius: 10px; background: color-mix(in srgb, currentColor 6%, transparent); font-size: 0.85rem; }
+.eventlog-row.severity-warn { border-left: 3px solid var(--warn, #e0a83c); }
+.eventlog-row.severity-error { border-left: 3px solid var(--danger, #e05c5c); }
+.data-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+.data-table th, .data-table td { text-align: left; padding: 6px 8px; border-bottom: 1px solid color-mix(in srgb, currentColor 12%, transparent); }
+.data-table th { font-weight: 600; opacity: 0.7; }
+.tag-warn { border-color: var(--warn, #e0a83c); color: var(--warn, #e0a83c); }
+.cognition-panel, .experience-panel, .reliability-panel, .conflicts { display: grid; gap: 10px; }
+@media (prefers-reduced-motion: reduce) {
+  .eventlog-row, .data-table tr { transition: none; }
+}
