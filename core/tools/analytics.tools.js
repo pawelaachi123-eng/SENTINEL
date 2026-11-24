@@ -707,7 +707,7 @@ module.exports = [
       }
       return { ok: true, size: Math.min(args.size, values.length), seed: args.seed || 42, algorithm: 'LCG + Fisher-Yates', sample: values.slice(0, Math.min(args.size, values.length)) };
     },
-    format: (data) => `${data.sample.length} z ${data.values || ''}`,
+    format: (data) => `${data.sample.length} z ${data.size}, seed ${data.seed}`,
   },
   {
     name: 'stats.mean_ci',

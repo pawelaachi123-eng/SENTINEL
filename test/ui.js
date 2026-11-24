@@ -230,6 +230,25 @@ function makePage(url) {
     const mcpText = aiDoc.querySelector('[data-panel="mcp"]').textContent;
     check('the MCP panel reports that it is opt-in', /Wyłączone w ustawieniach/.test(mcpText), mcpText.slice(0, 100));
 
+    aiDoc.querySelector('.tab[data-tab="models"]').click();
+    await sleep(700);
+    const labText = aiDoc.querySelector('[data-panel="lab"]').textContent;
+    check('the learning-lab panel shows the real dataset and honesty note', /346 przykładów/.test(labText) && /synthetic/.test(labText), labText.slice(0, 140));
+    check('the lab panel says nothing is active before promotion', /Brak aktywnego modelu/.test(labText), labText.slice(0, 140));
+    check('the neural and research boxes are fed by real APIs', /Neural runtime/.test(labText) && /Sesje badawcze/.test(labText), labText.slice(0, 160));
+
+    const unauth = await globalThis.fetch(`http://127.0.0.1:${port}/api/lab`);
+    check('the lab API rejects requests without the token', unauth.status === 401, `HTTP ${unauth.status}`);
+    const emptyClassify = await globalThis.fetch(`http://127.0.0.1:${port}/api/lab/classify?t=${token}`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text: '' }),
+    });
+    check('the classifier rejects empty input', emptyClassify.status === 400, `HTTP ${emptyClassify.status}`);
+    const noModel = await globalThis.fetch(`http://127.0.0.1:${port}/api/lab/classify?t=${token}`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text: 'sprawdz ile mam ramu' }),
+    });
+    const noModelBody = await noModel.json();
+    check('classification without a promoted model refuses instead of guessing', noModelBody.data && noModelBody.data.code === 'NO_MODEL', JSON.stringify(noModelBody).slice(0, 120));
+
     aiDoc.querySelector('.tab[data-tab="memory"]').click();
     await sleep(500);
     check(

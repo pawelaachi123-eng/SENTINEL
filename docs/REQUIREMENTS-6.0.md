@@ -9,7 +9,7 @@ Measured baseline at the start of 6.0: 31 agents, 219 tools, **14** tools
 executed by the audit, mock-only model evaluation, 117 deep checks. End of this
 slice: 31 agents, **270 tools / 24 categories**, **59 executed** and 211
 unexecuted by the audit, **131 deep checks**, **76 deterministic evaluation
-cases**. No live model or GPU was available. Windows CI is green for `e6edd44`.
+cases**, **41 UI checks** including new-endpoint refusal cases. No live model or GPU was available. Windows CI is green for `e6edd44`.
 
 | # | Requirement | Status | Evidence | Outstanding |
 | --- | --- | --- | --- | --- |
@@ -28,10 +28,10 @@ cases**. No live model or GPU was available. Windows CI is green for `e6edd44`.
 | 13 | Tool ecosystem and MCP | partial | 270 tools/24 categories, 0 structural problems, 59 executed; 5.0 MCP negotiated version additions | 500+ genuinely tested capabilities and 1000+ registry scale; provider UI; more MCP mock tests |
 | 14 | Coding and engineering intelligence | partial | 5.0 repo map/symbols/imports/impact/tests; SHA-256 patch verification binding | parser-backed symbols, multi-file patches, hostile fixture suite, transactional multi-file apply |
 | 15 | Windows, reliability and self-healing | partial | 4.0 reliability/self-heal; green Windows behaviour+eval+audit CI at `d995bf7`; 5.0 Windows fixes | new fault-injection cases (outages, full disk, interrupted writes); incident correlation |
-| 16 | Security and privacy invariants | partial | deterministic approvals, use-once, sandbox, secret refusal in memory, immutable patch verification, negative tests from 4.0/5.0 | negative tests for every new endpoint (lab/research/UI); UI/API authorization review |
+| 16 | Security and privacy invariants | partial | deterministic approvals, use-once, sandbox, secret refusal in memory, immutable patch verification; UI test proves `/api/lab` needs a token, empty classify is 400 and no-model classify refuses | negative tests for `/api/research`, `/api/neural`, all CLI approvals; full UI/API authorization review |
 | 17 | Multimodal, Android and ESP32 | partial | existing local voice/vision/Android/ESP32 preserved; UI/API untouched | new STT/TTS/OCR fixtures, measured Polish quality, device integration tests |
 | 18 | UI and observability | partial | 5.0 panels preserved; 6.0 lab/neural/research panel with real API data, honest labels | orb states, workflow DAG, training metrics streaming, full panel coverage |
-| 19 | Verification and cognitive benchmark lab | partial | 131 deep checks, 76 eval cases, 35 UI, 25 AI, 23 core; deterministic/mock separated; ML gradient and reproducibility tests | 1000+ meaningful cases, property/fault-injection/migration/security suites, live Ollama comparison |
+| 19 | Verification and cognitive benchmark lab | partial | 131 deep checks, 76 eval cases, 41 UI (incl. lab API negatives), 25 AI, 23 core; deterministic/mock separated; ML gradient and reproducibility tests | 1000+ meaningful cases, property/fault-injection/migration/security suites, live Ollama comparison |
 | 20 | Installer, continuity and delivery | partial | installer still preserves data, stages/backs up/health-checks/rolls back; 6.0 adds read-only lab/neural checks and CLI commands; artifacts built by CI | 6.0-specific installer recovery tests and artifact verification; installer not executed in this sandbox |
 
 ## Hard constraints that remain in force

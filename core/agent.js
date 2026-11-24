@@ -316,6 +316,9 @@ class Agent extends EventEmitter {
             mcp: this.mcp || null,
             runtime: this.runtime || null,
             org: this.org || null,
+            lab: this.lab || null,
+            neural: this.neural || null,
+            research: this.research || null,
             incidents: this.incidents || null,
             tasks: this.tasks || null,
           }

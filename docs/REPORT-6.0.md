@@ -14,7 +14,7 @@ work. Those remain in `docs/REQUIREMENTS-6.0.md`.
 | --- | --- |
 | `node test/run.js` | 23 passed |
 | `node test/ai.js` | 25 passed |
-| `node test/ui.js` | 35/35 |
+| `node test/ui.js` | **41/41** (includes lab panel + unauthenticated/empty/no-model API negatives) |
 | `node test/deep.js` | **131/131** (was 117) |
 | `node scripts/check.js` | all checks passed |
 | `node scripts/eval.js` | **76/76**, score 1, **mode mock** — not model quality |
@@ -68,7 +68,12 @@ weights and metrics.
    arithmetic, base64/hex/URL/hash/UUID.
 6. **Tool/data safety.** All 38 new tools are read-only (`read`); none reads files or the network. Tool audit executed all 38 (plus 21
    existing calls) successfully: **59/59**.
-7. **API/UI/CLI.** `/api/lab`, `/api/lab/classify`, `/api/neural`,
+7. **API/UI/CLI.** The UI test now also asserts that `/api/lab` rejects a
+   missing token, that `/api/lab/classify` rejects empty text, and that
+   classification without a promoted model refuses with `NO_MODEL` instead of
+   guessing. The first run of that test exposed a real wiring bug (the HTTP
+   layer was not given the lab/neural/research services); it is fixed in
+   `core/agent.js`. `/api/lab`, `/api/lab/classify`, `/api/neural`,
    `/api/research`; a “Laboratorium i badania” panel with real dataset
    provenance, experiment artifacts and research sessions; CLI
    `lab|train|research` with meaningful exit codes.
@@ -79,7 +84,7 @@ weights and metrics.
 ## Source size
 
 First-party source lines (JS/HTML/CSS/INO/CPP/PS1, excluding dependencies,
-weights, caches and generated assets): **53,403**, up from 45,684 at 5.0.
+weights, caches and generated assets): **53,465**, up from 45,684 at 5.0.
 The new ML/lab/research/tool files account for 2,872 lines by themselves; the
 rest is tests, wiring, UI and documentation.
 

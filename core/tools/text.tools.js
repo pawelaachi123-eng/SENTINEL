@@ -142,11 +142,14 @@ module.exports = [
     },
     async run(args) {
       const separator = args.separator || '-';
-      let slug = fold(args.text).replace(/[^a-z0-9]+/g, separator).replace(new RegExp(`\\${separator}{2,}`, 'g'), separator);
-      slug = slug.replace(new RegExp(`^\\${separator}|\\${separator}$`, 'g'), '');
+      let slug = fold(args.text).split(/[^a-z0-9]+/).filter(Boolean).join(separator);
       const maxLength = args.maxLength || 80;
       const truncated = slug.length > maxLength;
-      if (truncated) slug = slug.slice(0, maxLength).replace(new RegExp(`\\${separator}$`), '');
+      if (truncated) {
+        slug = slug.slice(0, maxLength);
+        // Never end on a separator, whatever separator the caller chose.
+        while (slug.endsWith(separator) && slug.length) slug = slug.slice(0, -separator.length);
+      }
       return { ok: true, slug, length: slug.length, truncated };
     },
     format: (data) => data.slug,

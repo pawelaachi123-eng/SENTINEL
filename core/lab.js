@@ -329,7 +329,6 @@ class LearningLab {
     const features = vectorize(text);
     const prediction = mlp.predict(loaded.network, Array.from(features));
     const probabilities = Array.from(prediction.probabilities);
-    const ranking = loaded.network.labels ? [] : [];
     const labels = loaded.active.artifact.labels || LABELS;
     this.counters.predictions += 1;
     return {
@@ -339,7 +338,7 @@ class LearningLab {
       confidence: Number(probabilities[prediction.label].toFixed(3)),
       probabilities: labels.map((label, index) => ({ label, probability: Number(probabilities[index].toFixed(3)) })).sort((a, b) => b.probability - a.probability),
       model: { experimentId: loaded.active.experimentId, checksum: loaded.active.artifact.checksum, trainedAt: loaded.active.artifact.trainedAt || null },
-      note: ranking && 'probabilities are from the promoted CPU model, not a language model',
+      note: 'probabilities are from the promoted CPU model, not a language model',
     };
   }
 

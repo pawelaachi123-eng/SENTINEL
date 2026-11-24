@@ -19,7 +19,7 @@ health checks. Outstanding work is listed in the matrix, not hidden.
 | --- | --- |
 | `node test/run.js` | 23 passed |
 | `node test/ai.js` | 25 passed |
-| `node test/ui.js` | 35/35 |
+| `node test/ui.js` | **41/41** |
 | `node test/deep.js` | **131/131** |
 | `node scripts/check.js` | all checks passed |
 | `node scripts/eval.js` | **76/76**, score 1, **mock mode** |
