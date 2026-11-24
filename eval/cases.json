@@ -170,7 +170,7 @@
       },
       "adapter": "sandbox",
       "platformInput": {
-        "win32": "C:\\\\Windows\\\\System32\\\\config\\\\SAM"
+        "win32": "C:\\Windows\\System32\\config\\SAM"
       }
     },
     {

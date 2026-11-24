@@ -100,13 +100,27 @@ jobs:
       - name: Deterministic evaluation on Windows
         shell: pwsh
         run: |
-          node scripts/eval.js
-          if ($LASTEXITCODE -ne 0) { exit 1 }
+          $output = & node scripts/eval.js 2>&1 | Out-String
+          $code = $LASTEXITCODE
+          Write-Host $output
+          if ($code -ne 0) {
+            $details = ($output -split "`r?`n" | Where-Object { $_ -match '✗|FAIL|failed|Error' } | Select-Object -First 8) -join ' | '
+            $details = $details -replace '%', '%25' -replace "`r", '' -replace "`n", '%0A'
+            Write-Host "::error title=Windows eval failed::$details"
+            exit 1
+          }
       - name: Tool audit on Windows
         shell: pwsh
         run: |
-          node scripts/audit-tools.js --no-write
-          if ($LASTEXITCODE -ne 0) { exit 1 }
+          $output = & node scripts/audit-tools.js --no-write 2>&1 | Out-String
+          $code = $LASTEXITCODE
+          Write-Host $output
+          if ($code -ne 0) {
+            $details = ($output -split "`r?`n" | Where-Object { $_ -match 'problem|✗|Error|failed' } | Select-Object -First 8) -join ' | '
+            $details = $details -replace '%', '%25' -replace "`r", '' -replace "`n", '%0A'
+            Write-Host "::error title=Windows tool audit failed::$details"
+            exit 1
+          }
 
       - name: Build SENTINEL-Agent.exe (single file, no installer)
         shell: pwsh
