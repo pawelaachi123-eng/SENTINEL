@@ -116,7 +116,11 @@ class PatchManager {
     this.now = now;
     this.store = store;
     this.config = config;
-    this.runner = runner || ((command, args, options) => spawnSync(command, args, { ...options, shell: false, encoding: 'utf8', timeout: options.timeoutMs || 60000 }));
+    this.runner = runner || ((command, args, options) => {
+      // .cmd/.bat shims (npm on Windows) can only be run through a shell.
+      const shell = process.platform === 'win32' && /\.(cmd|bat)$/i.test(command);
+      return spawnSync(command, args, { ...options, shell, encoding: 'utf8', timeout: options.timeoutMs || 60000 });
+    });
     this.collection = 'patch_sessions';
     this.sessions = new Map();
     this.load();

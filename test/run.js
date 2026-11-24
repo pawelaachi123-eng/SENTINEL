@@ -118,8 +118,12 @@ test('a fresh config generates distinct secrets and stays private', () => {
   assert.equal(config.get('psk').length, 64);
   assert.equal(config.get('uiToken').length, 48);
   assert.notEqual(config.get('psk'), config.get('uiToken'));
-  const mode = fs.statSync(file).mode & 0o777;
-  assert.equal(mode, 0o600, `config file mode is ${mode.toString(8)}`);
+  if (process.platform !== 'win32') {
+    // Windows has no POSIX mode bits; the ACL is the platform's privacy
+    // mechanism and is not asserted here rather than pretending 0o600 holds.
+    const mode = fs.statSync(file).mode & 0o777;
+    assert.equal(mode, 0o600, `config file mode is ${mode.toString(8)}`);
+  }
   const second = new Config(file);
   assert.equal(second.get('psk'), config.get('psk'), 'secrets must persist across restarts');
 });
