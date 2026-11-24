@@ -728,6 +728,46 @@ class HttpApi {
       }
     }
 
+
+    /* ── 4.0: knowledge graph ──────────────────────────────────────────── */
+
+    if (route === '/api/graph' && req.method === 'GET') {
+      if (!this.ai || !this.ai.graph) return this.json(res, 200, { ok: true, data: { nodes: [], edges: [] } });
+      const query = url.searchParams.get('q');
+      const node = url.searchParams.get('node');
+      const hops = Number(url.searchParams.get('hops')) || 2;
+      if (query) return this.json(res, 200, { ok: true, data: this.ai.graph.contextFor(String(query), { limit: 10, depth: Math.min(3, hops) }) });
+      if (node) return this.json(res, 200, { ok: true, data: this.ai.graph.explore(String(node), { depth: Math.min(3, hops) }) });
+      return this.json(res, 200, { ok: true, data: this.ai.graph.export({ limit: 200 }) });
+    }
+
+    if (route === '/api/graph' && req.method === 'POST') {
+      if (!this.ai || !this.ai.graph) return this.json(res, 503, { ok: false, error: 'AI not ready' });
+      const body = await this.body(req);
+      try {
+        if (body.action === 'add') return this.json(res, 200, { ok: true, data: this.ai.graph.upsertNode({ type: body.type, label: body.label, props: body.props || {}, source: 'ui' }) });
+        if (body.action === 'link') {
+          const from = this.ai.graph.find(String(body.from || ''), { type: body.fromType || null }) || this.ai.graph.upsertNode({ type: body.fromType || 'concept', label: String(body.from || ''), source: 'ui' });
+          const to = this.ai.graph.find(String(body.to || ''), { type: body.toType || null }) || this.ai.graph.upsertNode({ type: body.toType || 'concept', label: String(body.to || ''), source: 'ui' });
+          return this.json(res, 200, { ok: true, data: this.ai.graph.link(from, to, String(body.relation || 'related'), { source: 'ui' }) });
+        }
+        if (body.action === 'sync') {
+          const graph = this.ai.graph;
+          const memory = graph.ingestMemory(this.ai.memory);
+          const knowledge = graph.ingestKnowledge(this.ai.knowledge);
+          return this.json(res, 200, { ok: true, data: { memory, knowledge, stats: graph.stats() } });
+        }
+        if (body.action === 'remove') {
+          const node = this.ai.graph.find(String(body.node || ''));
+          if (!node) return this.json(res, 200, { ok: false, code: 'NOT_FOUND', message: 'unknown node' });
+          return this.json(res, 200, { ok: true, data: this.ai.graph.removeNode(node.id) });
+        }
+        return this.json(res, 200, { ok: false, code: 'BAD_ACTION', message: 'action must be add, link, sync or remove' });
+      } catch (err) {
+        return this.json(res, 200, { ok: false, code: err.code || 'GRAPH_FAILED', message: err.message });
+      }
+    }
+
     if (route === '/api/diagnostics' && req.method === 'GET') {
       const snapshot = await this.snapshot();
       return this.json(res, 200, { ok: true, data: { snapshot, ai: this.ai ? this.ai.status() : null } });

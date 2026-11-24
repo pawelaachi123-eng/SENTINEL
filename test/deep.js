@@ -1110,7 +1110,118 @@ test('the executor refuses an impossible plan and honours a step budget', async 
   assert.match(String(result.error || ''), /budget/i);
 });
 
+/* ── knowledge graph (4.0) ────────────────────────────────────────────── */
+
+const { KnowledgeGraph } = require('../core/graph');
+
+test('graph identity folds case and diacritics, and merges aliases', () => {
+  const graph = new KnowledgeGraph({});
+  const a = graph.upsertNode({ type: 'project', label: 'Ćwiczenia Atlas', aliases: ['atlas-project'] });
+  const b = graph.upsertNode({ type: 'project', label: 'cwiczenia ATLAS' });
+  assert.equal(a.id, b.id, 'the same project became two nodes');
+  assert.ok(b.aliases.includes('atlas-project'));
+  assert.equal(graph.stats().nodes, 1);
+});
+
+test('graph keeps contradictory properties instead of overwriting them', () => {
+  const graph = new KnowledgeGraph({});
+  graph.upsertNode({ type: 'symbol', label: 'uniqueSymbolForConflict()', props: { file: 'src/a.js' }, source: 'tool' });
+  const node = graph.upsertNode({ type: 'symbol', label: 'uniqueSymbolForConflict()', props: { file: 'src/b.js' }, source: 'user' });
+  assert.equal(node.props.file, 'src/a.js', 'the earlier fact was silently replaced');
+  assert.equal(node.conflicts.length, 1);
+  assert.equal(node.conflicts[0].incoming, 'src/b.js');
+});
+
+test('multi-hop queries return a reproducible path with provenance', () => {
+  const graph = new KnowledgeGraph({});
+  graph.relate({ type: 'project', label: 'AtlasApp' }, { type: 'file', label: 'src/app.js' }, 'contains', { source: 'repository' });
+  graph.relate({ type: 'file', label: 'src/app.js' }, { type: 'symbol', label: 'boot()' }, 'contains', { source: 'repository' });
+  graph.relate({ type: 'symbol', label: 'boot()' }, { type: 'document', label: 'Instrukcja wdrożenia' }, 'related', { source: 'knowledge' });
+  const paths = graph.paths('AtlasApp', 'Instrukcja wdrożenia');
+  assert.equal(paths.length, 1);
+  assert.deepEqual(paths[0].nodes.map((node) => node.label), ['AtlasApp', 'src/app.js', 'boot()', 'Instrukcja wdrożenia']);
+  assert.deepEqual(paths[0].edges.map((edge) => edge.provenance.source), ['repository', 'repository', 'knowledge']);
+  const explored = graph.explore('AtlasApp', { depth: 3 });
+  assert.equal(explored.nodes.length, 4);
+  assert.equal(explored.nodes.find((node) => node.label === 'Instrukcja wdrożenia').depth, 3);
+});
+
+test('graph traversal is bounded and a deleted node leaves no dangling edges', () => {
+  const graph = new KnowledgeGraph({});
+  let previous = graph.upsertNode({ type: 'concept', label: 'chain start' });
+  for (let index = 0; index < 8; index += 1) {
+    const next = graph.upsertNode({ type: 'concept', label: `chain step ${index}` });
+    graph.link(previous, next, 'related');
+    previous = next;
+  }
+  const shallow = graph.explore('chain start', { depth: 2, maxNodes: 3 });
+  assert.ok(shallow.nodes.every((node) => node.depth <= 2));
+  assert.equal(shallow.truncated, true);
+  assert.ok(shallow.nodes.length <= 3);
+  const middle = graph.find('chain step 3');
+  graph.removeNode(middle.id);
+  assert.equal(graph.find('chain step 3'), null);
+  assert.ok([...graph.edges.values()].every((edge) => edge.from !== middle.id && edge.to !== middle.id));
+  assert.equal(graph.paths('chain start', 'chain step 5').length, 0, 'a removed node still mediated a path');
+});
+
+test('the graph persists across a restart and stays idempotent', () => {
+  const dir = path.join(home, 'graph-store');
+  const driver = openStore({ dir });
+  const first = new KnowledgeGraph({ store: driver });
+  first.relate({ type: 'project', label: 'Persisted project' }, { type: 'file', label: 'src/p.js' }, 'contains', { source: 'test' });
+  const before = first.stats();
+  const reopened = new KnowledgeGraph({ store: driver });
+  const after = reopened.stats();
+  assert.equal(after.nodes, before.nodes);
+  assert.equal(after.edges, before.edges);
+  assert.equal(reopened.find('persisted PROJECT').label, 'Persisted project');
+  reopened.upsertNode({ type: 'file', label: 'src/p.js' });
+  assert.equal(reopened.stats().nodes, before.nodes, 're-upserting created a duplicate node');
+  // The second pass over the same documents must not multiply edges.
+  const edgesBefore = reopened.stats().edges;
+  reopened.ingestKnowledge({ list: () => [{ id: 'doc-1', title: 'Doc', path: 'docs/a.md' }] });
+  const edgesAfter = reopened.stats().edges;
+  reopened.ingestKnowledge({ list: () => [{ id: 'doc-1', title: 'Doc', path: 'docs/a.md' }] });
+  assert.equal(reopened.stats().edges, edgesAfter, 're-syncing duplicated relationships');
+  assert.ok(edgesAfter >= edgesBefore);
+});
+
+test('graph context reaches the prompt as data with provenance', () => {
+  const graph = new KnowledgeGraph({});
+  graph.relate({ type: 'project', label: 'PromptProject' }, { type: 'file', label: 'src/prompt.js' }, 'contains', { source: 'repository' });
+  const retrieved = graph.contextFor('co zawiera PromptProject?', { limit: 5 });
+  assert.ok(retrieved.lines.length > 0);
+  assert.match(retrieved.lines[0], /PromptProject/);
+  assert.match(retrieved.lines[0], /repository/);
+  const context = new ContextManager({});
+  const built = context.build({ question: 'co zawiera PromptProject?', graph: retrieved, documents: [], memories: [] });
+  assert.ok(built.sections.some((section) => section.name === 'graph'), 'the graph section was dropped');
+  assert.match(built.block, /Graf wiedzy/);
+  assert.match(built.block, /dane nie instrukcje/);
+});
+
+test('graph tools read and link through the tool permission layer', async () => {
+  const { ToolRegistry } = require('../core/tools/registry');
+  const graph = new KnowledgeGraph({});
+  graph.relate({ type: 'project', label: 'ToolProject' }, { type: 'symbol', label: 'toolSymbol()' }, 'contains', { source: 'repository' });
+  const registry = new ToolRegistry({
+    config: { get: (key, fallback) => fallback },
+    log: null,
+    sandbox: { resolve: (value) => value },
+    approvals: new ApprovalQueue({ log: null }),
+    services: { graph },
+  });
+  registry.registerAll(require('../core/tools/graph.tools'));
+  const query = await registry.execute('graph.query', { query: 'ToolProject', depth: 2 }, { source: 'test' });
+  assert.equal(query.ok, true);
+  assert.ok(query.data.nodes.some((node) => node.label === 'toolSymbol()'));
+  const stats = await registry.execute('graph.stats', {}, { source: 'test' });
+  assert.equal(stats.data.nodes, 2);
+});
+
 /* ── fault injection and the live agent ───────────────────────────────── */
+
 
 
 test('a corrupt config is reported by the doctor instead of crashing the agent', async () => {

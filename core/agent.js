@@ -33,6 +33,7 @@ const { ContextManager } = require('./context');
 const { PatchManager } = require('./patching');
 const { SemanticInterpreter } = require('./semantics');
 const { Executor } = require('./executor');
+const { KnowledgeGraph } = require('./graph');
 const { ExperienceStore } = require('./experience');
 const { EventBus } = require('./events');
 const { Metrics } = require('./metrics');
@@ -97,8 +98,12 @@ class Agent extends EventEmitter {
       if (this.patches) this.patches.sandbox = this.sandbox;
       this.voice = new VoiceEngine({ config: this.config, log: this.log, paths: pathsModule });
       this.vision = new VisionEngine({ config: this.config, log: this.log, llm: this.llm, paths: pathsModule });
+      this.graph = new KnowledgeGraph({ store: this.store, log: this.log });
       this.services = {
         paths: pathsModule,
+        // The tools and the brain share one instance, so a graph written by a
+        // tool is immediately visible to retrieval (and vice versa).
+        graph: this.graph,
         stats: this.stats,
         commander: this.commander,
         link: this.link,
@@ -148,10 +153,12 @@ class Agent extends EventEmitter {
         semantics: this.semantics,
         patches: this.patches,
         executor: this.executor,
+        graph: this.graph,
         experience: this.experience,
         events: this.events,
         metrics: this.metrics,
         executor: null,
+        graph: this.graph,
       });
       this.executor = new Executor({
         tasks: this.tasks,
@@ -268,6 +275,7 @@ class Agent extends EventEmitter {
             context: this.context || null,
             patches: this.patches || null,
             executor: this.executor || null,
+            graph: this.graph || null,
             incidents: this.incidents || null,
             tasks: this.tasks || null,
           }
@@ -405,6 +413,7 @@ class Agent extends EventEmitter {
       metrics: this.metrics ? this.metrics.snapshot() : null,
       incidents: this.incidents ? this.incidents.stats() : null,
       executor: this.executor ? { ...this.executor.counters } : null,
+      graph: this.graph ? this.graph.stats() : null,
       watchdogs: (this.watchdogs || []).map((watchdog) => watchdog.status()),
       voice: this.voice.counters,
       vision: this.vision.counters,

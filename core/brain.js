@@ -135,7 +135,7 @@ const RULES = [
 const LEVEL_ORDER = { error: 0, warn: 1, info: 2 };
 
 class Brain {
-  constructor({ config, log, now = () => Date.now(), llm = null, memory = null, knowledge = null, tools = null, agents = null, tasks = null, dispatcher = null, store = null, approvals = null, commander = null, stats = null, link = null, tunnel = null, automation = null, paths = null, cognitive = null, context = null, experience = null, events = null, metrics = null, semantics = null, executor = null } = {}) {
+  constructor({ config, log, now = () => Date.now(), llm = null, memory = null, knowledge = null, tools = null, agents = null, tasks = null, dispatcher = null, store = null, approvals = null, commander = null, stats = null, link = null, tunnel = null, automation = null, paths = null, cognitive = null, context = null, experience = null, events = null, metrics = null, semantics = null, executor = null, graph = null } = {}) {
     this.config = config;
     this.log = log;
     this.now = now;
@@ -161,6 +161,7 @@ class Brain {
     this.cognitive = cognitive;
     this.semantics = semantics;
     this.executor = executor;
+    this.graph = graph;
     this.context = context;
     this.experience = experience;
     this.events = events;
@@ -462,11 +463,28 @@ class Brain {
         : Promise.resolve([]),
     ]);
 
+    // 1b. structural recall: typed relationships with provenance. This is how a
+    // question about a project can reach a file, a symbol and the test that
+    // covers it without the model inventing the chain.
+    let graphContext = null;
+    if (this.graph) {
+      try {
+        graphContext = this.graph.contextFor(question, { limit: 6, depth: 1 });
+        if (graphContext && graphContext.lines && graphContext.lines.length) emitted('graph', { nodes: graphContext.nodes.length, edges: graphContext.edges.length });
+        else graphContext = null;
+      } catch (err) {
+        this.log && this.log.debug('brain', `graph lookup failed: ${err.message}`);
+        graphContext = null;
+      }
+      if (this.runMeta && this.runMeta.has(id)) this.runMeta.get(id).graph = graphContext;
+    }
+
     const historyForContext = history || (this.memory ? this.memory.turns(sessionId, 20) : []);
     const contextReport = this.context
       ? this.context.build({
           question,
           brief,
+          graph: graphContext,
           memories,
           documents,
           history: historyForContext,
@@ -838,6 +856,7 @@ class Brain {
       : null;
     // A tool produced this text and no model touched it: measured, not generated.
     const exact = !cancelled && !answer.model && !answer.provider && text.length > 0 && text.length <= 400 && runtime.toolLog.some((entry) => entry.ok);
+    const graphContext = (this.runMeta && this.runMeta.get(run.id) && this.runMeta.get(run.id).graph) || null;
     const final = {
       runId: run.id,
       text,
@@ -892,6 +911,14 @@ class Brain {
       uncertainty: brief ? brief.uncertainty : null,
       reflection,
       execution: answer.execution || null,
+      graph: graphContext
+        ? {
+            seeds: graphContext.seeds,
+            nodes: graphContext.nodes.slice(0, 20).map((node) => ({ id: node.id, type: node.type, label: node.label, depth: node.depth, provenance: node.provenance })),
+            edges: graphContext.edges.slice(0, 20).map((edge) => ({ from: edge.from, to: edge.to, type: edge.type, provenance: edge.provenance })),
+            lines: graphContext.lines.slice(0, 12),
+          }
+        : null,
       context: contextReport
         ? { tokens: contextReport.tokens, budget: contextReport.budget, sections: contextReport.sections, dropped: contextReport.dropped, utilisation: contextReport.utilisation }
         : null,

@@ -93,6 +93,7 @@ const STOPWORDS = new Set(
 
 function stripDiacritics(text) {
   return String(text || '')
+    .toLowerCase()
     .replace(/ą/g, 'a')
     .replace(/ć/g, 'c')
     .replace(/ę/g, 'e')
