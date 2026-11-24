@@ -16,6 +16,7 @@
  */
 
 const fs = require('node:fs');
+const { removeHome } = require('./lib/cleanup');
 const os = require('node:os');
 const path = require('node:path');
 const { Agent } = require('../core/agent');
@@ -135,25 +136,7 @@ async function main() {
     return result.failed === 0 ? 0 : 1;
   } finally {
     await agent.stop?.();
-    // Windows keeps SQLite handles briefly after close; retry instead of
-    // turning a fully passing evaluation into a red build.
-    try {
-      agent.store?.close?.();
-    } catch {
-      /* already closed */
-    }
-    for (let attempt = 0; attempt < 6; attempt += 1) {
-      try {
-        fs.rmSync(home, { recursive: true, force: true });
-        break;
-      } catch (err) {
-        if (!['EBUSY', 'EPERM', 'ENOTEMPTY'].includes(err.code) || attempt === 5) {
-          if (process.platform === 'win32') console.warn(`warning: could not remove ${home}: ${err.message}`);
-          break;
-        }
-        await new Promise((resolve) => setTimeout(resolve, 150 * (attempt + 1)));
-      }
-    }
+    await removeHome(home, { agent });
   }
 }
 

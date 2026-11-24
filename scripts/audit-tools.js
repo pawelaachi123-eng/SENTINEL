@@ -16,6 +16,7 @@
  */
 
 const fs = require('node:fs');
+const { removeHome } = require('./lib/cleanup');
 const os = require('node:os');
 const path = require('node:path');
 const { Agent } = require('../core/agent');
@@ -104,7 +105,7 @@ async function main() {
     return structural.problems.length ? 1 : 0;
   } finally {
     agent.stop();
-    fs.rmSync(home, { recursive: true, force: true });
+    await removeHome(home, { agent });
   }
 }
 
