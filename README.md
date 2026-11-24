@@ -117,8 +117,7 @@ and `node scripts/audit-tools.js` (**270** tools, **0** structural problems,
 Counts, measurements and the full delivery report are in
 [`docs/REPORT-6.0.md`](docs/REPORT-6.0.md), [`docs/REPORT-5.0.md`](docs/REPORT-5.0.md), [`docs/REPORT-4.0.md`](docs/REPORT-4.0.md) and
 [`docs/PROGRESS.md`](docs/PROGRESS.md); research and licences in
-[`docs/research.md`](docs/research.md). The last Windows CI run was green at `d995bf7` (5.0); the 6.0 revision has not
-yet been run on Windows; no GPU was available, no live model
+[`docs/research.md`](docs/research.md). Windows CI is green for 6.0 at `e6edd44`; no GPU was available, no live model
 evaluation was run, and 211 tools remain unexecuted. Those limits are stated
 there rather than glossed over.
 

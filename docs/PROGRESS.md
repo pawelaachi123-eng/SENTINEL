@@ -26,8 +26,8 @@ health checks. Outstanding work is listed in the matrix, not hidden.
 | `node scripts/audit-tools.js --no-write` | **270 tools / 24 categories / 0 problems / 59 executed / 211 unexecuted** |
 | `sentinel train --approve tester` | candidate, test 0.796 vs baseline 0.755, 197,681-byte checkpoint |
 
-**Windows CI for 6.0 has not been run yet.** The last green Windows run was
-`d995bf7` for 5.0. No GPU or live model was available, and the installer was not
+**Windows CI is green for 6.0** at `e6edd44` (behaviour tests, deterministic
+evaluation and tool audit). No GPU or live model was available, and the installer was not
 executed here.
 
 # Historical: SENTINEL 5.0 progress log

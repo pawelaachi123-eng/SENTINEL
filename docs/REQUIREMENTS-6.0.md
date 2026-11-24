@@ -9,8 +9,7 @@ Measured baseline at the start of 6.0: 31 agents, 219 tools, **14** tools
 executed by the audit, mock-only model evaluation, 117 deep checks. End of this
 slice: 31 agents, **270 tools / 24 categories**, **59 executed** and 211
 unexecuted by the audit, **131 deep checks**, **76 deterministic evaluation
-cases**. No live model or GPU was available, and Windows CI for 6.0 has not been
-run yet.
+cases**. No live model or GPU was available. Windows CI is green for `e6edd44`.
 
 | # | Requirement | Status | Evidence | Outstanding |
 | --- | --- | --- | --- | --- |
@@ -46,7 +45,8 @@ run yet.
 - Verification is bound to immutable candidate/baseline hashes.
 - Contradictory facts are kept, not overwritten.
 - No automatic merge to `main`; PR #1 stays open.
-- Windows CI must be re-run for this revision before claiming it green.
+- Windows CI is green for `e6edd44`; any later source change requires a re-run
+  before claiming it green again.
 
 ## Next milestones (ordered)
 
