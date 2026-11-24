@@ -291,6 +291,18 @@ class Memory {
       boost: boostImportance ? (record) => 1 + this.rank(this.cache.get(record.id) || {}) : null,
     });
 
+    // Exact-token rescue. Hybrid scoring is good at meaning and can miss a rare
+    // identifier, a serial number or an acronym. SQLite FTS5 answers that in
+    // microseconds, so any exact hit that the blend did not surface is added
+    // with an explicit `fts` provenance instead of being silently lost.
+    let ftsHits = [];
+    try {
+      ftsHits = this.store.searchFts ? this.store.searchFts(text, { collection: this.collection, limit: limit * 2 }) : [];
+    } catch {
+      ftsHits = [];
+    }
+    const seen = new Set(results.map((hit) => hit.record.id));
+
     const now = this.now();
     const out = [];
     for (const hit of results) {
@@ -311,6 +323,29 @@ class Memory {
         conflicted: Boolean((record.conflictWith || []).length),
       });
       if (out.length >= limit) break;
+    }
+
+    for (const hit of ftsHits) {
+      if (seen.has(hit.id) || out.length >= limit) continue;
+      const record = this.cache.get(hit.id);
+      if (!record) continue;
+      if (kinds && kinds.length && !kinds.includes(record.kind)) continue;
+      if (scope && (record.scope || 'global') !== scope) continue;
+      if (!includeSuperseded && (record.supersededBy || (record.expiresAt && record.expiresAt < this.now()))) continue;
+      if (at && (record.createdAt || 0) > at) continue;
+      record.lastAccess = now;
+      record.accessCount = (record.accessCount || 0) + 1;
+      this.store.put(this.collection, record.id, record);
+      out.push({
+        record,
+        score: minScore + 1e-4,
+        sources: ['fts'],
+        lexical: 1,
+        vector: null,
+        provenance: record.provenance || { source: record.source, capturedAt: record.createdAt },
+        confidence: record.confidence ?? null,
+        conflicted: Boolean((record.conflictWith || []).length),
+      });
     }
     return out;
   }

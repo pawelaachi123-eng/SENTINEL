@@ -483,6 +483,43 @@ test('episodic memory consolidates into a deterministic summary', async () => {
   assert.match(summary.text, /Podsumowanie dnia/);
 });
 
+test('FTS5 lexical index lives beside the records and cleans up after deletes', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sentinel-fts-'));
+  const driver = openStore({ dir });
+  assert.equal(driver.kind, 'sqlite');
+  assert.equal(driver.fts, true, driver.ftsError || 'FTS5 unavailable in this SQLite build');
+  driver.put('memory', 'm1', { text: 'Karta RTX 4060 Ti ma 8 GB VRAM', tags: ['gpu'] });
+  driver.put('memory', 'm2', { text: 'Zasilacz Seasonic 650 W', tags: ['psu'] });
+  assert.equal(driver.searchFts('VRAM').length, 1);
+  assert.equal(driver.searchFts('vram').length, 1, 'the index must be case-insensitive');
+  driver.delete('memory', 'm1');
+  assert.equal(driver.searchFts('VRAM').length, 0, 'a deleted record must leave the index');
+  driver.put('memory', 'm3', { text: 'Notatka o VRAM i trybie WDDM' });
+  assert.equal(driver.searchFts('VRAM').length, 1);
+  const report = driver.stats();
+  assert.equal(report.fts, true);
+  driver.close();
+  const reopened = openStore({ dir });
+  assert.equal(reopened.searchFts('WDDM').length, 1, 'the index must survive a restart');
+  reopened.close();
+});
+
+test('the journal driver reports no lexical index instead of pretending', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sentinel-jsonl-'));
+  const driver = openStore({ dir, prefer: 'jsonl' });
+  assert.equal(driver.fts, false);
+  assert.deepEqual(driver.searchFts('anything'), []);
+  assert.deepEqual(driver.backfillFts(), { fts: false, indexed: 0 });
+});
+
+test('a rare identifier is retrievable even when the semantic blend misses it', async () => {
+  const memory = new Memory({ store, embedder });
+  await memory.remember({ text: 'Numer seryjny zasilacza to ZR-4471-QX.', kind: 'long_term', scope: 'fts-recall' });
+  const hits = await memory.recall('ZR-4471-QX', { scope: 'fts-recall' });
+  assert.ok(hits.length >= 1, 'the identifier was not found');
+  assert.match(hits[0].record.text, /ZR-4471-QX/);
+});
+
 /* ── knowledge ────────────────────────────────────────────────────────── */
 
 test('documents are marked untrusted and search returns citations', async () => {

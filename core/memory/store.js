@@ -53,6 +53,7 @@ class SqliteDriver {
     }
     this.kind = 'sqlite';
     this.file = file;
+    this.fts = false;
     this.db.exec('PRAGMA journal_mode = WAL');
     this.db.exec('PRAGMA synchronous = NORMAL');
     this.db.exec('PRAGMA busy_timeout = 4000');
@@ -77,6 +78,26 @@ class SqliteDriver {
     this.countStatement = this.db.prepare('SELECT COUNT(*) AS n FROM records WHERE collection = ?');
     this.clearStatement = this.db.prepare('DELETE FROM records WHERE collection = ?');
     this.setMeta('schema', String(SCHEMA_VERSION));
+
+    // FTS5 is a real lexical index living beside the JSON records: it survives
+    // restarts, so a cold start can still search before every row is re-read.
+    // It is optional — an SQLite build without FTS5 simply keeps the in-memory
+    // BM25 path, and the store reports `fts: false` instead of pretending.
+    try {
+      this.db.exec(
+        "CREATE VIRTUAL TABLE IF NOT EXISTS records_fts USING fts5(collection UNINDEXED, id UNINDEXED, body, tokenize='unicode61 remove_diacritics 2')",
+      );
+      this.ftsInsert = this.db.prepare('INSERT INTO records_fts (collection, id, body) VALUES (?, ?, ?)');
+      this.ftsDelete = this.db.prepare('DELETE FROM records_fts WHERE collection = ? AND id = ?');
+      this.ftsSearch = this.db.prepare(
+        'SELECT collection, id, bm25(records_fts) AS rank FROM records_fts WHERE records_fts MATCH ? AND collection = ? ORDER BY rank LIMIT ?',
+      );
+      this.fts = true;
+      // A store created before 3.0 is backfilled once, idempotently.
+      if (this.getMeta('fts') !== '1') this.backfillFts();
+    } catch (err) {
+      this.ftsError = err.message;
+    }
   }
 
   get schemaVersion() {
@@ -95,7 +116,54 @@ class SqliteDriver {
 
   put(collection, id, doc) {
     this.putStatement.run(collection, id, JSON.stringify(doc), Date.now());
+    this.syncFts(collection, id, doc);
     return doc;
+  }
+
+  /** Keeps the lexical index in step; metadata rows are skipped. */
+  syncFts(collection, id, doc) {
+    if (!this.fts || !doc) return;
+    const body = [doc.text, doc.title, doc.path, doc.error, (doc.tags || []).join(' ')].filter(Boolean).join(' ');
+    if (!body) return;
+    try {
+      this.ftsDelete.run(collection, id);
+      this.ftsInsert.run(collection, id, body.slice(0, 200000));
+    } catch (err) {
+      this.ftsError = err.message;
+    }
+  }
+
+  searchFts(query, { collection = 'memory', limit = 20 } = {}) {
+    if (!this.fts) return [];
+    const terms = String(query || '')
+      .toLowerCase()
+      .split(/[^\p{L}\p{N}]+/u)
+      .filter((term) => term.length > 1)
+      .slice(0, 12)
+      .map((term) => `"${term.replace(/"/g, '""')}"`);
+    if (!terms.length) return [];
+    try {
+      return this.ftsSearch.all(terms.join(' OR '), collection, limit).map((row) => ({ collection: row.collection, id: row.id, rank: row.rank }));
+    } catch {
+      return [];
+    }
+  }
+
+  /** One-off backfill for stores created before the FTS index existed. */
+  backfillFts() {
+    if (!this.fts) return { fts: false, indexed: 0 };
+    const rows = this.db.prepare('SELECT collection, id, doc FROM records').all();
+    let indexed = 0;
+    for (const row of rows) {
+      try {
+        this.syncFts(row.collection, row.id, JSON.parse(row.doc));
+        indexed += 1;
+      } catch {
+        /* a single bad row must not abort the migration */
+      }
+    }
+    this.setMeta('fts', '1');
+    return { fts: true, indexed };
   }
 
   putMany(collection, entries) {
@@ -117,6 +185,13 @@ class SqliteDriver {
 
   delete(collection, id) {
     const info = this.deleteStatement.run(collection, id);
+    if (this.fts) {
+      try {
+        this.ftsDelete.run(collection, id);
+      } catch {
+        /* the lexical index is an optimisation, never a source of truth */
+      }
+    }
     return info.changes > 0;
   }
 
@@ -133,6 +208,13 @@ class SqliteDriver {
 
   clear(collection) {
     this.clearStatement.run(collection);
+    if (this.fts) {
+      try {
+        this.db.prepare('DELETE FROM records_fts WHERE collection = ?').run(collection);
+      } catch {
+        /* ignore */
+      }
+    }
   }
 
   collections() {
@@ -141,7 +223,7 @@ class SqliteDriver {
   }
 
   stats() {
-    return { driver: 'sqlite', file: this.file, bytes: fileSize(this.file), collections: this.collections() };
+    return { driver: 'sqlite', file: this.file, bytes: fileSize(this.file), collections: this.collections(), fts: this.fts, ftsError: this.ftsError || null };
   }
 
   backup(destination) {
@@ -175,6 +257,17 @@ class SqliteDriver {
 /* ── JSONL driver ──────────────────────────────────────────────────────── */
 
 class JsonlDriver {
+  // The journal driver has no lexical index; callers check `fts` and fall back.
+  fts = false;
+
+  searchFts() {
+    return [];
+  }
+
+  backfillFts() {
+    return { fts: false, indexed: 0 };
+  }
+
   constructor({ file }) {
     this.kind = 'jsonl';
     this.file = file;
