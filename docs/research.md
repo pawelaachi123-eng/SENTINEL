@@ -282,3 +282,19 @@ names the models the user is expected to pull themselves.
 | MCP by default? | No | Untrusted third-party code; opt-in, scoped, out of process |
 | Cloud models? | Opt-in only | Local-first is the product; external APIs are a configuration choice |
 | Model-reported confidence? | No | Verification is deterministic checks plus tool evidence, not self-report |
+
+---
+
+## 13. 4.0 research notes and what changed as a result
+
+| Topic | Finding that mattered | Implementation decision |
+| --- | --- | --- |
+| MCP revision drift | 2024-11-05 → 2025-03-26 (Streamable HTTP) → 2025-06-18 (structured output, OAuth, elicitation) → later drafts add Tasks | client requests 2025-06-18, accepts two older revisions, records the negotiated one per server, and does not claim Tasks/sampling/elicitation |
+| MemGPT / Letta | memory hierarchy + explicit state beats a longer transcript | deterministic conversation summaries with source turns; secrets skipped |
+| GraphRAG | multi-hop retrieval needs entities and typed relations, with provenance | graph section in the context budget; bounded paths; conflicts retained |
+| LangGraph | checkpoints, interrupts, resumable execution | executor persists every transition; approval parks a step; interrupted runs reconcile on restart |
+| OpenHands / SWE-bench practice | verification must be isolated and reproducible | full-copy verification; staged patch workflow unchanged |
+| Agent evaluation literature | held-out splits, no self-grading, overestimation risk | stable-hash split, observable scoring, mock-impossible gates, regression veto |
+| Local inference (Ollama) | keep-alive controls VRAM; 8 GB is the real constraint | runtime profiles, feasibility refusal, unload through `/api/ps` + `keep_alive: 0` |
+| sqlite-vec | MIT OR Apache-2.0, useful ANN | deferred: hashed+lexical retrieval met the measured corpus; a native Windows dependency needs packaging work first |
+| LM Studio | proprietary | never bundled; the `lms` CLI is MIT but the runtime is not shipped |

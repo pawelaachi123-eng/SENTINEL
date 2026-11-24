@@ -1,6 +1,6 @@
 {
   "name": "sentinel",
-  "version": "3.0.0",
+  "version": "4.0.0",
   "private": true,
   "description": "SENTINEL \u2014 your own local AI assistant that actually operates this PC, from the machine itself or from your phone over an encrypted direct channel (no cloud, no account)",
   "author": "pawelaachi123-eng",

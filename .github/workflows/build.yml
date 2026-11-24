@@ -34,8 +34,15 @@ jobs:
         run: node test/ui.js
       - name: Assistant stack test (HTTP API, mocked model)
         run: node test/ai.js
-      - name: Deep checks (cognition, tasks, memory, knowledge, reliability)
+      - name: Deep checks (cognition, executor, graph, MCP, evaluation)
         run: node test/deep.js
+      - name: Deterministic evaluation suite (providers disabled)
+        run: node scripts/eval.js
+      - name: Tool inventory audit (structure + real executions)
+        run: node scripts/audit-tools.js --no-write
+      - name: Measurement run (informational, not a gate)
+        continue-on-error: true
+        run: node scripts/bench.js
 
   # ── Windows executables: headless agent + desktop console ───────────────
   windows:
@@ -51,6 +58,28 @@ jobs:
         run: |
           npm install --no-audit --no-fund *>&1 | Tee-Object -FilePath install.log
           if ($LASTEXITCODE -ne 0) { ./scripts/ci-fail.ps1 -LogFile install.log -Label windows-install }
+      - name: Behaviour tests on Windows
+        shell: pwsh
+        run: |
+          node test/run.js
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          node scripts/check.js
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          node test/ai.js
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          node test/deep.js
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+      - name: Deterministic evaluation on Windows
+        shell: pwsh
+        run: |
+          node scripts/eval.js
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+      - name: Tool audit on Windows
+        shell: pwsh
+        run: |
+          node scripts/audit-tools.js --no-write
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+
       - name: Build SENTINEL-Agent.exe (single file, no installer)
         shell: pwsh
         run: |

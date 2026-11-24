@@ -1,6 +1,6 @@
 {
-  "version": "3.0.0",
-  "at": "2026-11-24T03:03:11.766Z",
+  "version": "4.0.0",
+  "at": "2026-11-24T03:05:57.970Z",
   "environment": {
     "platform": "linux/x64",
     "node": "v22.22.3",
@@ -12,47 +12,47 @@
   },
   "measurements": {
     "boot": {
-      "ms": 32.1,
+      "ms": 28.8,
       "what": "constructing the agent, opening the store and building subsystems"
     },
     "arithmetic": {
       "iterations": 10,
-      "p50": 4.33,
-      "p95": 34.76,
-      "max": 34.76,
+      "p50": 3.55,
+      "p95": 37.27,
+      "max": 37.27,
       "what": "full brain.ask through routing, the mathematics agent and math.eval; providers disabled",
       "example": "100 / 8 = 12.5"
     },
     "semantics": {
       "iterations": 60,
       "p50": 0.24,
-      "p95": 0.96,
+      "p95": 0.98,
       "what": "deterministic interpretation only (spelling, language, references); model pass is skipped without a provider"
     },
     "memory": {
       "records": 150,
-      "p50": 1.16,
-      "p95": 6.43,
+      "p50": 0.98,
+      "p95": 5.65,
       "what": "written to a temporary store in this run, then recalled 30 times"
     },
     "retrieval": {
-      "documents": 80,
-      "p50": 0.28,
-      "p95": 1.21,
-      "what": "knowledge search over 80 generated documents; lexical + hashed embeddings, not a model"
+      "documents": 40,
+      "p50": 0.29,
+      "p95": 1.23,
+      "what": "knowledge search over 40 generated documents; lexical + hashed embeddings, not a model"
     },
     "graph": {
       "nodes": 200,
       "edges": 199,
-      "p50": 0.6,
-      "p95": 1.4,
+      "p50": 0.58,
+      "p95": 1.32,
       "what": "200-node chain, bounded two-hop expansion with seed matching"
     },
     "executor": {
       "stepsPerRun": 5,
       "runs": 5,
-      "p50": 6.12,
-      "p95": 9.71,
+      "p50": 6.85,
+      "p95": 9.18,
       "status": "done",
       "what": "five read-only tool steps through the real DAG executor (persistence, transitions, batching)"
     }

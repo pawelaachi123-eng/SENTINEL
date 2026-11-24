@@ -478,6 +478,20 @@ if (Test-Path $cli) {
   }
 }
 
+# 4.0: verify the deterministic core on the installed copy. This runs without a
+# model and without network; a failure is reported, not hidden, but it does not
+# roll back a working install.
+$evalScript = Join-Path $InstallDir "scripts\eval.js"
+if (Test-Path $evalScript) {
+  Say "Weryfikuję rdzeń deterministyczny (4.0)" "step"
+  Push-Location $InstallDir
+  try {
+    $evalOutput = & node $evalScript 2>&1
+    $evalOutput | ForEach-Object { if (-not $Quiet) { Write-Host "  $_" } }
+    if ($LASTEXITCODE -ne 0) { Add-Warning "deterministic evaluation reported failures (see above); the install is otherwise usable" }
+  } catch { Add-Warning "evaluation could not run: $($_.Exception.Message)" } finally { Pop-Location }
+}
+
 Say "Done" "step"
 if ($script:Failures.Count -eq 0) {
   Say "SENTINEL is installed and running." "ok"
@@ -485,6 +499,7 @@ if ($script:Failures.Count -eq 0) {
   Say "Terminal: sentinel ask `"jaki mam GPU?`""
   Say "  sentinel status · doctor · models --benchmark · agents · tools · tasks · memory"
   Say "  sentinel benchmark · test · backup · rollback · update · migrate · chat"
+  Say "  sentinel runtime [idle|balanced|deep|gaming] · graph · org · mcp"
   Say "  backups live in $dataDir\backups; rollback keeps the previous files"
   if ($script:Warnings.Count) {
     Say "$($script:Warnings.Count) optional piece(s) were skipped:" "warn"

@@ -53,6 +53,10 @@ const HELP = `SENTINEL ${require('../package.json').version} — your own assist
   sentinel voice transcribe <file> [--lang pl]
   sentinel voice speak "<text>"
   sentinel status [--json]                this machine and the AI stack
+  sentinel runtime [profil]               idle / balanced / deep / gaming
+  sentinel graph [zapytanie]              knowledge graph stats or a multi-hop query
+  sentinel org [zdolność]                 organisation chart or a delegation preview
+  sentinel mcp [status|connect|disconnect] [serwer]   opt-in MCP servers
   sentinel benchmark [--json]             measured latency and memory of this install
   sentinel test [--all] [--json]          run the deterministic test suites
   sentinel backup [list|<label>]          back up config, memory and database
@@ -537,6 +541,85 @@ async function main() {
         console.log(`  pamięć: ${agent.memory.stats().total} rekordów, integralność ${integrity.ok ? green('OK') : red(`${integrity.problems.length} problemów`)}`);
         console.log(`  wiedza: ${knowledge.documents} dokumentów, ${knowledge.chunks} fragmentów, ${knowledge.stale} nieaktualnych`);
         return done(integrity.ok ? 0 : 4);
+      }
+
+      case 'runtime': {
+        if (rest[0]) {
+          const applied = await agent.runtime.apply(rest[0], { reason: 'cli' });
+          if (!applied.ok) {
+            console.error(red(`✗ ${applied.code}: ${applied.message}`));
+            return done(4);
+          }
+          console.log(green(`✓ profil ${applied.profile}${applied.unloaded.length ? `, wyładowano ${applied.unloaded.filter((entry) => entry.ok).length}/${applied.unloaded.length} modeli` : ''}`));
+        }
+        const status = await agent.runtime.status();
+        if (args.json) {
+          console.log(JSON.stringify(status, null, 2));
+          return done(0);
+        }
+        const hw = status.hardware;
+        console.log(bold(`Profil ${status.profile}`) + dim(` — ${status.profileDetail.description}`));
+        console.log(`  CPU  ${hw.cpu} · ${hw.cores} wątków · RAM ${hw.memoryGb} GB`);
+        console.log(`  GPU  ${hw.gpu ? `${hw.gpu.name} · ${hw.gpu.vramGb} GB` : dim('nie wykryto')}`);
+        console.log(`  model ${status.feasibility.model || '?'}${status.feasibility.estimate ? dim(` (~${status.feasibility.estimate.totalGb} GB, szacunek)`) : ''}`);
+        console.log(`  w pamięci ${status.resident.supported ? (status.resident.models.map((model) => `${model.name} ${model.vramGb} GB`).join(', ') || dim('brak')) : dim(status.resident.reason || 'nie wiem')}`);
+        console.log(dim(`  profile: ${status.profiles.map((entry) => entry.name).join(', ')}`));
+        return done(0);
+      }
+
+      case 'graph': {
+        const query = rest.join(' ').trim();
+        if (query) {
+          const result = agent.graph.contextFor(query, { limit: 8, depth: 2 });
+          if (args.json) console.log(JSON.stringify(result, null, 2));
+          else if (!result.lines.length) console.log(dim('brak powiązań'));
+          else for (const line of result.lines) console.log(`  ${line}`);
+          return done(result.lines.length ? 0 : 5);
+        }
+        const stats = agent.graph.stats();
+        if (args.json) {
+          console.log(JSON.stringify(stats, null, 2));
+          return done(0);
+        }
+        console.log(`${stats.nodes} węzłów · ${stats.edges} krawędzi`);
+        console.log(dim(`  typy: ${Object.entries(stats.byType).map(([type, count]) => `${type} ${count}`).join(' · ') || 'brak'}`));
+        return done(0);
+      }
+
+      case 'org': {
+        const chart = rest[0] ? agent.org.planDelegation({ capability: rest.join(' ') }) : agent.org.chart();
+        if (args.json) {
+          console.log(JSON.stringify(chart, null, 2));
+          return done(0);
+        }
+        if (rest[0]) {
+          if (!chart.ok) {
+            console.error(red(`✗ ${chart.message}`));
+            return done(5);
+          }
+          console.log(`${bold(chart.lead)} (${chart.leadTier}) + ${chart.workers.map((worker) => worker.name).join(', ') || 'bez wsparcia'} · głębokość ${chart.depth}/${chart.maxDepth}`);
+          return done(0);
+        }
+        console.log(`${chart.total} agentów · ${Object.entries(chart.counts).map(([tier, count]) => `${tier} ${count}`).join(' · ')}`);
+        for (const [domain, info] of Object.entries(chart.domains)) console.log(`  ${domain.padEnd(14)} ${info.lead} ${dim(`(${info.members.join(', ')})`)}`);
+        return done(0);
+      }
+
+      case 'mcp': {
+        const action = rest[0] || 'status';
+        if (action === 'connect' || action === 'disconnect') {
+          const result = action === 'connect' ? await agent.mcp.connect(rest[1]) : await agent.mcp.disconnect(rest[1]);
+          console.log(result.ok ? green(`✓ ${action}: ${rest[1]}`) : red(`✗ ${result.code}: ${result.message}`));
+          return done(result.ok ? 0 : 4);
+        }
+        const status = agent.mcp.status();
+        if (args.json) {
+          console.log(JSON.stringify(status, null, 2));
+          return done(0);
+        }
+        console.log(`${status.enabled ? green('włączone') : dim('wyłączone')} · protokół ${status.preferredVersion} · ${status.servers.length} serwerów`);
+        for (const server of status.servers) console.log(`  ${server.id.padEnd(16)} ${server.status} ${dim(server.protocolVersion || '')} ${server.tools} narzędzi`);
+        return done(0);
       }
 
       case 'status': {

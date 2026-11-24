@@ -109,7 +109,7 @@ async function main() {
       what: 'written to a temporary store in this run, then recalled 30 times',
     };
     report.measurements.retrieval = {
-      documents: 80,
+      documents: 40,
       p50: percentile(retrieval.samples, 50),
       p95: percentile(retrieval.samples, 95),
       what: 'knowledge search over 40 generated documents; lexical + hashed embeddings, not a model',

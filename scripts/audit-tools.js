@@ -41,6 +41,7 @@ const SAFE_CALLS = [
 ];
 
 async function main() {
+  const noWrite = process.argv.includes('--no-write');
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'sentinel-audit-'));
   process.env.SENTINEL_HOME = home;
   fs.mkdirSync(path.join(home, 'workspace'), { recursive: true });
@@ -92,12 +93,14 @@ async function main() {
       unexecuted: structural.total - executed.filter((entry) => entry.ok).length,
     };
     const target = path.join(__dirname, '..', 'docs', 'tool-audit-4.0.json');
-    fs.mkdirSync(path.dirname(target), { recursive: true });
-    fs.writeFileSync(target, `${JSON.stringify(report, null, 2)}\n`);
+    if (!noWrite) {
+      fs.mkdirSync(path.dirname(target), { recursive: true });
+      fs.writeFileSync(target, `${JSON.stringify(report, null, 2)}\n`);
+    }
     console.log(`tools: ${report.tools} in ${report.categoryCount} categories`);
     console.log(`structural problems: ${structural.problems.length}`);
     console.log(`executed successfully: ${report.execution.verified}/${report.execution.attempted} (verified), unexecuted: ${report.unexecuted}`);
-    console.log(`written: ${target}`);
+    console.log(noWrite ? 'report not written (--no-write)' : `written: ${target}`);
     return structural.problems.length ? 1 : 0;
   } finally {
     agent.stop();

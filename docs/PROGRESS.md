@@ -1,4 +1,71 @@
-# SENTINEL 3.0 — progress and verification log
+# SENTINEL 4.0 — progress and verification log
+
+Branch: `arena/15fbea48-sentinel`. Everything below was executed in this
+repository. Items that could not be executed here are listed as not verified.
+
+## 4.0 verified gates
+
+| Suite | Checks | What it covers |
+| --- | --- | --- |
+| `node test/run.js` | **23 passed** | protocol, approvals, CLI, installer helpers |
+| `node test/ui.js` | **35/35** | pairing, chat over HTTP, cognition, patches, runtime, graph, organisation, MCP, diagnostics |
+| `node test/ai.js` | **25 passed** | assistant stack over the real HTTP API with mocks |
+| `node test/deep.js` | **99 passed** | semantics, executor, isolated verification, graph, MCP, runtime, evaluation, organisation, conversation state + 3.0 checks |
+| `node scripts/check.js` | all checks passed | syntax, assets, boot |
+| `node scripts/eval.js` | **23/23** | deterministic core with every provider disabled |
+| `node scripts/audit-tools.js` | 0 structural problems | 206 tools, 14 executed successfully, 192 unexecuted |
+| `node scripts/bench.js` | completed | numbers in `docs/bench-4.0.json` |
+
+Registered: **31 agents**, **206 tools** in **22 categories**
+(139 read, 40 write, 23 system, 3 network, 1 privileged). `verified` means a
+real successful execution: the audit ran **14** tools; the other 192 are
+unexecuted, not "verified".
+
+Source size: **45,684 lines** first-party (JS/HTML/CSS/INO/CPP/PS1, excluding
+dependencies and generated assets); `core/`, `bin/`, `ui/`, `desktop/`,
+`firmware/src/` and `scripts/` alone: **42,685**.
+
+## 4.0 work items
+
+| # | Item | Status | Evidence |
+| --- | --- | --- | --- |
+| 1 | Research then implement (MemGPT, GraphRAG, LangGraph, MCP, OpenHands, eval practice, local inference) | done | `docs/research.md` §13, `docs/REPORT-4.0.md` §5 |
+| 2 | Hybrid deterministic/LLM semantic engine | done | `core/semantics.js`, 9 semantics tests |
+| 3 | Persistent execution engine (DAG → dispatcher) | done | `core/executor.js`, 9 executor tests, Brain plan path |
+| 4 | Hierarchical multi-agent organisation | done as structure, not head-count | `core/org.js`; 31 agents in 4 tiers, bounded delegation |
+| 5 | Model runtime profiles for i7-13700F / RTX 4060 Ti / 32 GB | done, GPU path unverified on hardware | `core/runtime.js`, 5 tests |
+| 6 | Memory 3.0+ and structured conversation state | done | summaries in `core/memory/memory.js`, 4 tests |
+| 7 | Knowledge graph + advanced RAG with multi-hop tests | done | `core/graph.js`, 3-hop provenance test |
+| 8 | Experience learning with held-out evaluation and gates | done | `core/evaluation.js`, 5 tests, `scripts/eval.js` |
+| 9 | Universal tool audit | done with honest limits | 206 tools, 0 structural problems, 14 executed |
+| 10 | Optional MCP client | done | `core/mcp.js`, 6 tests against HTTP + stdio fixtures |
+| 11 | Repository-aware coding with isolated verification | isolation done; repo map not yet | `core/patching.js`, copy-isolation tests |
+| 12 | Research/evidence with citations | preserved from 3.0, graph adds provenance | no new citations engine in 4.0 |
+| 13 | Windows assistance + security audit with negative tests | negative tests done; Windows matrix not run here | injection/secret/shutdown/sandbox tests |
+| 14 | Reliability/recovery | existing breakers/incidents + persisted executor transitions | deep suite |
+| 15 | Voice/vision/Android/ESP32 preserved | protocol tests pass, firmware untouched | `test/run.js`, `test/ai.js` |
+| 16 | Functional UI/observability from real APIs | done | runtime, graph, org, MCP panels; UI 35/35 |
+| 17 | Benchmark suite + Windows CI | benchmark executed; CI configured, not executed here | `scripts/bench.js`, `.github/workflows/build.yml` |
+| 18 | Installer + report | done | `INSTALL_SENTINEL_FULL.ps1`, `docs/REPORT-4.0.md` |
+
+## 4.0 measurements (Linux sandbox, no GPU, providers disabled)
+
+| Measurement | Value |
+| --- | --- |
+| Agent construction | 32.1 ms |
+| Deterministic `brain.ask` | p50 4.33 ms / p95 34.76 ms |
+| Semantic interpretation | p50 0.24 ms / p95 0.96 ms |
+| Memory recall (150 records) | p50 1.16 ms / p95 6.43 ms |
+| Knowledge search (40 docs) | p50 0.29 ms / p95 1.23 ms |
+| Graph query (200 nodes, 2 hops) | p50 0.60 ms / p95 1.40 ms |
+| Executor (5 steps) | p50 6.12 ms / p95 9.71 ms |
+
+Not measured: tokens/s, time-to-first-token, VRAM on the target GPU, Windows
+boot. No model was called in any 4.0 measurement.
+
+---
+
+# SENTINEL 3.0 — historical log (kept for comparison)
 
 Branch: `arena/15fbea48-sentinel`. Everything below was executed in this
 repository; nothing is projected or simulated unless the row says so.

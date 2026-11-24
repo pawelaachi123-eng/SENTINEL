@@ -1,4 +1,4 @@
-# SENTINEL 3.0
+# SENTINEL 4.0
 
 **Your own assistant for your own machine — it runs on the PC, answers with measurements instead of guesses, and can still be driven from your phone over a direct encrypted channel. No account, no cloud.**
 
@@ -24,7 +24,7 @@ Three situations, one app:
 
 ## The assistant
 
-SENTINEL 3.0 is a cognitive assistant that can *operate this computer*, not
+SENTINEL 4.0 is a cognitive assistant that can *operate this computer*, not
 just talk about it — with a real brief, bounded plans, verified answers and a
 memory that admits when two facts contradict each other. Ask in the UI, on the phone, or in a terminal:
 
@@ -35,7 +35,7 @@ sentinel doctor --fix
 ```
 
 * **It measures before it speaks.** Hardware, processes, files, documents, logs
-  and the ESP32 are read through 188 audited tools; every answer carries its
+  and the ESP32 are read through 206 audited tools; every answer carries its
   tool calls, citations and a verification report.
 * **It runs on your machine.** Ollama / LM Studio / llama.cpp / any
   OpenAI-compatible endpoint you configure. No telemetry, no request leaves the
@@ -53,6 +53,20 @@ sentinel doctor --fix
   strategy, risk, constraints, assumptions, completion criteria and a
   calibrated uncertainty with reasons. Vague follow-ups get a question back
   instead of a guess ([`docs/research.md`](docs/research.md)).
+* **Understanding is hybrid, not hopeful** — a deterministic brief keeps
+  authority; a schema-validated model pass may refine it, and a failed pass
+  degrades to a labelled deterministic answer instead of a guess.
+* **Plans are executed as a DAG** — typed step outputs, read-only concurrency,
+  serialised writes, cancellation, approvals, budgets and one bounded replan that
+  never discards completed work.
+* **Knowledge is a graph** — typed relationships with provenance, bounded
+  multi-hop queries and contradictory facts kept side by side.
+* **Learning needs evidence** — candidates are promoted only on a live held-out
+  split, with mocks rejected and regressions vetoed.
+* **The model runtime respects the GPU** — idle/balanced/deep/gaming profiles,
+  VRAM feasibility checks and real unloading, so a game does not fight Ollama.
+* **Verification never touches your tree** — test verification runs on a full
+  copy, and the original file is byte-identical afterwards.
 * **Durable plans** — tasks are a validated DAG with retries, checkpoints,
   idempotency keys, pause/resume and restart reconciliation; a task interrupted
   by a crash is never silently repeated.
@@ -77,15 +91,22 @@ code blocks, and approvals appear at the top of the screen wherever you are.
 
 ---
 
-### What 3.0 verifies, and what it does not
+### What 4.0 verifies, and what it does not
 
-`npm test` runs four suites: **23** protocol/CLI checks, **30** UI checks,
-**25** assistant-stack checks and **49** deep checks (cognition, context budget,
-events, metrics, breakers, retry, experience gates, DAG engine, memory 3.0,
-knowledge, structured output, provider failover, corrupt config, benchmark).
-Counts and measured numbers are in [`docs/PROGRESS.md`](docs/PROGRESS.md);
-research and licences in [`docs/research.md`](docs/research.md). Untested
-hardware, unfinished MCP support and the absence of a GPU in CI are stated
+`npm test` runs four suites: **23** protocol/CLI checks, **35** UI checks,
+**25** assistant-stack checks and **99** deep checks (semantics, executor,
+isolated verification, graph, MCP, runtime profiles, held-out evaluation,
+organisation, conversation state, plus the 3.0 checks). Two gates run on top:
+`node scripts/eval.js` (**23/23** deterministic cases, every provider disabled)
+and `node scripts/audit-tools.js` (**206** tools, **0** structural problems,
+**14** executed successfully, **192** explicitly unexecuted).
+
+Counts, measurements and the full delivery report are in
+[`docs/REPORT-4.0.md`](docs/REPORT-4.0.md) and
+[`docs/PROGRESS.md`](docs/PROGRESS.md); research and licences in
+[`docs/research.md`](docs/research.md). Windows CI is configured but was not run
+in the sandbox that produced this report; no GPU was available, no live model
+evaluation was run, and 192 tools remain unexecuted. Those limits are stated
 there rather than glossed over.
 
 ## Download
@@ -195,7 +216,7 @@ and tested against itself:
 
 ## Install (Windows)
 
-1. **PC** — either run `SENTINEL-Setup-3.0.0-x64.exe` (agent + tray + console),
+1. **PC** — either run `SENTINEL-Setup-4.0.0-x64.exe` (agent + tray + console),
    or take the whole thing in one go:
 
    ```powershell
