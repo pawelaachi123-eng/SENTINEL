@@ -39,7 +39,7 @@ for (const file of jsFiles) {
     fail(`${path.relative(root, file)}: ${String(err.stderr || err.message).split('\n').slice(0, 3).join(' ')}`);
   }
 }
-const uiScripts = ['app.js', 'transport.js', 'sw.js'].map((name) => path.join(root, 'ui', name));
+const uiScripts = ['app.js', 'transport.js', 'ai.js', 'sw.js'].map((name) => path.join(root, 'ui', name));
 for (const script of uiScripts) {
   try {
     execFileSync(process.execPath, ['--check', script], { stdio: 'pipe' });

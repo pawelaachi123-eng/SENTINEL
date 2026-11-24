@@ -1,26 +1,28 @@
 {
   "name": "sentinel",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "private": true,
-  "description": "SENTINEL \u2014 control your own PC from your phone over an encrypted direct channel (no VPN, no cloud)",
+  "description": "SENTINEL \u2014 your own local AI assistant that actually operates this PC, from the machine itself or from your phone over an encrypted direct channel (no cloud, no account)",
   "author": "pawelaachi123-eng",
   "license": "MIT",
   "main": "desktop/main.js",
   "bin": {
-    "sentinel-agent": "bin/sentinel-agent.js"
+    "sentinel-agent": "bin/sentinel-agent.js",
+    "sentinel": "bin/sentinel.js"
   },
   "scripts": {
     "start": "node bin/sentinel-agent.js --open",
     "agent": "node bin/sentinel-agent.js",
     "pair": "node bin/sentinel-agent.js --pair",
-    "test": "node test/run.js && node test/ui.js",
+    "test": "node test/run.js && node test/ui.js && node test/ai.js",
     "check": "node scripts/check.js",
     "build:exe": "pkg bin/sentinel-agent.js --targets node22-win-x64 --compress GZip --output dist/SENTINEL-Agent.exe",
     "build:desktop": "electron-builder --win --x64",
     "build:all": "npm run build:exe && npm run build:desktop",
     "mobile:sync": "node scripts/sync-mobile.js",
     "test:core": "node test/run.js",
-    "test:ui": "node test/ui.js"
+    "test:ui": "node test/ui.js",
+    "test:ai": "node test/ai.js"
   },
   "pkg": {
     "assets": [

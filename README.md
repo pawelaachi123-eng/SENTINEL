@@ -1,6 +1,6 @@
-# SENTINEL 2.1
+# SENTINEL 2.2
 
-**Control your own PC from your phone over a direct encrypted channel — no VPN, no account, no cloud.**
+**Your own assistant for your own machine — it runs on the PC, answers with measurements instead of guesses, and can still be driven from your phone over a direct encrypted channel. No account, no cloud.**
 
 ```
    phone                         your own network                       your PC
@@ -21,6 +21,45 @@ Three situations, one app:
 | PC running, agent up | phone → agent tunnel (`:7878`) | everything: shutdown, lock, screenshot, typing, macros, live metrics |
 | PC running, ESP32 paired | phone → ESP32 tunnel → agent link | everything, relayed through the ESP32 |
 | PC off / agent down | phone → ESP32 tunnel | **power on**, power cycle, hard reset, PC power state |
+
+## The assistant
+
+SENTINEL 2.2 adds a local assistant that can *operate this computer*, not just
+talk about it. Ask in the UI, on the phone, or in a terminal:
+
+```bash
+sentinel ask "jaki mam GPU i ile VRAM jest zajęte?"
+sentinel ask "znajdź w dokumentach co pisze o gwarancji" --deep
+sentinel doctor --fix
+```
+
+* **It measures before it speaks.** Hardware, processes, files, documents, logs
+  and the ESP32 are read through 176 audited tools; every answer carries its
+  tool calls, citations and a verification report.
+* **It runs on your machine.** Ollama / LM Studio / llama.cpp / any
+  OpenAI-compatible endpoint you configure. No telemetry, no request leaves the
+  box unless you point it somewhere.
+* **It says when it does not know.** No model installed? You get the measured
+  facts, labelled as such. A tool failed? The answer must mention it or
+  verification flags it. STOP really stops the run.
+* **Dangerous actions need a real approval.** One approval authorises one call
+  with exactly the arguments you saw; replay and argument swaps are refused.
+* **Memory and documents stay local** — and memory refuses secrets and text that
+  looks like instructions to the assistant.
+* **31 specialists, one dispatcher** — routing, planning, verification and an
+  optional model audit, not a single prompt doing everything.
+* **Self-healing** — `sentinel doctor` diagnoses config, storage, ports, models
+  and the ESP32 link; repairs are proposed, backed up and approval-gated.
+
+Full detail: [`docs/assistant.md`](docs/assistant.md).
+
+### The new interface
+
+Home, Chat, Agents, Tools, Tasks, Memory, Knowledge, Automations, Computer,
+Devices, Models, Activity, Diagnostics, Settings — plus a blue orb that reflects
+the real state of the run (thinking, planning, working, verifying, error) instead
+of looping an animation. Answers stream token by token, code blocks are real
+code blocks, and approvals appear at the top of the screen wherever you are.
 
 ---
 
@@ -131,9 +170,18 @@ and tested against itself:
 
 ## Install (Windows)
 
-1. **PC** — run `SENTINEL-Setup-2.1.0-x64.exe`. It starts the agent, opens the
-   console, and keeps running in the tray. Tick *Start with Windows* so it is
-   always listening.
+1. **PC** — either run `SENTINEL-Setup-2.2.0-x64.exe` (agent + tray + console),
+   or take the whole thing in one go:
+
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File .\INSTALL_SENTINEL_FULL.ps1
+   ```
+
+   The full script installs Node 22, the agent, Ollama plus the configured
+   models, whisper.cpp with a model, Tesseract and autostart, then runs
+   `sentinel doctor` and prints the truth about what worked. Anything optional
+   that fails becomes a warning, not a broken install (`-SkipModels`,
+   `-SkipSpeech`, `-SkipOcr`, `-NoAutostart` to opt out).
 2. **ESP32** — flash `firmware.bin` (or `pio run -t upload`). On first boot it
    opens `SENTINEL-Setup-esp32-xxxx`; join it, open <http://192.168.4.1>, paste
    the agent address and the pairing key, save. It reboots onto your Wi-Fi as
@@ -166,6 +214,10 @@ the machine cannot do.
 - **Macros** — chain commands into one tap ("Morning setup").
 - **Live truth** — CPU, memory, uptime, ESP32 link quality, chip temperature,
   PC power state, and an activity log as it happens.
+- **An assistant** — natural language in, measured answers out, with tools for
+  hardware, processes, files, code, documents, Windows settings, Git, tasks,
+  automations, speech, OCR and self-repair. See
+  [`docs/assistant.md`](docs/assistant.md).
 
 ## What it will not do (by design)
 
@@ -218,6 +270,7 @@ Icons are generated from code: `python3 scripts/make-icons.py` (Pillow).
 
 ## Documentation
 
+- [`docs/assistant.md`](docs/assistant.md) — the assistant: modes, agents, tools, memory, API, CLI
 - [`docs/architecture.md`](docs/architecture.md) — components, data flow, why SSE
 - [`docs/tunnel.md`](docs/tunnel.md) — ST1: handshake, frames, threat model
 - [`docs/security.md`](docs/security.md) — threat model, keys, what each secret unlocks
@@ -230,12 +283,14 @@ Icons are generated from code: `python3 scripts/make-icons.py` (Pillow).
 
 State lives outside the install directory:
 
-- Windows `%APPDATA%\SENTINEL\config.json`
+- Windows `%APPDATA%\SENTINEL\config.json` (or `%APPDATA%\sentinel-data\` when
+  installed by `INSTALL_SENTINEL_FULL.ps1`)
 - Linux `~/.config/sentinel/config.json`
 - macOS `~/Library/Application Support/SENTINEL/config.json`
 
 `config.json` holds the pairing key, the UI token, the policy, allow-listed apps,
-scripts and macros. Keep it out of backups you share. Deleting it rotates every
+scripts, macros and the assistant settings (`ai.providers`, `ai.models`,
+`ai.mode`, `ai.voice`). Keep it out of backups you share. Deleting it rotates every
 secret (and unpairs every device).
 
 ## License
