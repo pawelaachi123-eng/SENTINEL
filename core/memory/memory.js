@@ -1,0 +1,497 @@
+'use strict';
+
+/**
+ * Persistent memory.
+ *
+ * Eight kinds, one store:
+ *
+ *   short_term  — the current conversation, pruned aggressively
+ *   working     — scratch space for the task being executed right now
+ *   long_term   — durable facts about the user, machine and preferences
+ *   episodic    — "what happened": task, strategy, outcome, duration
+ *   semantic    — concepts and relations ("4060 Ti has 8 GB VRAM")
+ *   procedural  — how to do something that worked before
+ *   project     — repository/domain knowledge
+ *   errors      — failures and the fix that actually worked
+ *
+ * Retrieval is hybrid (BM25 + vector, fused with RRF) and ranking adds recency,
+ * importance and how often a memory has been useful. Duplicates collapse.
+ *
+ * Secrets are never stored: a memory that looks like a key, token, password or
+ * card number is refused and reported, because "remember this" is exactly how a
+ * credential ends up in a database nobody rotates.
+ */
+
+const { Bm25Index, hybridSearch } = require('./search');
+const { HashingEmbedder, encodeVector, decodeVector, cosine, expandQuery } = require('./embeddings');
+const { newId } = require('./store');
+
+const KINDS = ['short_term', 'working', 'long_term', 'episodic', 'semantic', 'procedural', 'project', 'errors'];
+
+const { scan: scanInjection } = require('../security/injection');
+
+const SECRET_PATTERNS = [
+  { name: 'hex key', re: /\b[0-9a-fA-F]{48,}\b/ },
+  { name: 'openai-style key', re: /\b(sk|pk|rk)-[A-Za-z0-9_-]{20,}\b/ },
+  { name: 'bearer token', re: /\bbearer\s+[A-Za-z0-9._-]{20,}/i },
+  { name: 'jwt', re: /\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/ },
+  { name: 'private key', re: /-----BEGIN [A-Z ]*PRIVATE KEY-----/ },
+  // Polish puts a word between the label and the value: "hasło to abc123".
+  { name: 'password assignment', re: /\b(password|passwd|hasło|haslo|secret|api[_-]?key|token|klucz)\b\s*(?:[:=]|to|jest|=)\s*\S{6,}/i },
+  { name: 'aws key', re: /\bAKIA[0-9A-Z]{16}\b/ },
+  { name: 'card number', re: /\b(?:\d[ -]*?){13,19}\b/ },
+];
+
+function looksSecret(text) {
+  const value = String(text || '');
+  for (const pattern of SECRET_PATTERNS) {
+    if (pattern.re.test(value)) return pattern.name;
+  }
+  return null;
+}
+
+const HALF_LIFE_DAYS = 21;
+
+class Memory {
+  constructor({ store, embedder, log, config, now = () => Date.now() }) {
+    this.store = store;
+    this.embedder = embedder || new HashingEmbedder();
+    this.log = log;
+    this.config = config;
+    this.now = now;
+    this.collection = 'memory';
+    this.turnCollection = 'turns';
+    this.index = new Bm25Index();
+    this.cache = new Map(); // id → record
+    this.loaded = false;
+    this.maxPerKind = 4000;
+    this.vectorCache = new Map(); // id → Float32Array
+    this.counters = { writes: 0, reads: 0, merges: 0, rejected: 0 };
+  }
+
+  /* ── internals ──────────────────────────────────────────────────────── */
+
+  load() {
+    if (this.loaded) return;
+    for (const record of this.store.list(this.collection)) {
+      this.cache.set(record.id, record);
+      this.index.add(record.id, `${record.text} ${(record.tags || []).join(' ')}`);
+    }
+    this.loaded = true;
+  }
+
+  vectorOf(record) {
+    if (!record || !record.vector) return null;
+    let vector = this.vectorCache.get(record.id);
+    if (!vector || vector.length !== record.dim) {
+      vector = decodeVector(record.vector);
+      this.vectorCache.set(record.id, vector);
+    }
+    return vector;
+  }
+
+  async embedTexts(texts) {
+    try {
+      return await this.embedder.embed(texts);
+    } catch (err) {
+      if (this.log) this.log.warn('memory', `embedding failed (${err.message}); using local hashing`);
+      const local = new HashingEmbedder();
+      return local.embed(texts);
+    }
+  }
+
+  /* ── writing ────────────────────────────────────────────────────────── */
+
+  /**
+   * @returns {Promise<{record: object|null, merged?: boolean, rejected?: string}>}
+   */
+  async remember({
+    kind = 'long_term',
+    text,
+    tags = [],
+    importance = 0.5,
+    source = 'user',
+    meta = {},
+    sessionId = null,
+    dedupe = true,
+  } = {}) {
+    this.load();
+    const clean = String(text || '').trim();
+    if (!clean) return { record: null, rejected: 'empty' };
+    if (!KINDS.includes(kind)) kind = 'long_term';
+
+    const secret = looksSecret(clean);
+    if (secret) {
+      this.counters.rejected += 1;
+      if (this.log) this.log.warn('memory', `refused to store a ${secret} as a memory`, { source });
+      return { record: null, rejected: `looks like a ${secret}` };
+    }
+
+    // "Remember this" is also how a hostile page gets instructions into future
+    // turns, so memory is screened like any other untrusted text.
+    const injection = scanInjection(clean);
+    if (injection.findings.length && injection.risk >= 0.35) {
+      this.counters.rejected += 1;
+      if (this.log) this.log.warn('memory', 'refused to store text that looks like instructions to an AI', { source, ids: injection.findings.map((finding) => finding.id) });
+      return { record: null, rejected: 'looks like an instruction to the assistant, not a fact' };
+    }
+
+    const [vector] = await this.embedTexts([clean]);
+    const now = this.now();
+
+    if (dedupe) {
+      const duplicate = this.findDuplicate(kind, vector, clean);
+      if (duplicate) {
+        duplicate.accessCount = (duplicate.accessCount || 0) + 1;
+        duplicate.lastAccess = now;
+        duplicate.importance = Math.min(1, (duplicate.importance || 0.5) + 0.05);
+        duplicate.tags = [...new Set([...(duplicate.tags || []), ...tags])].slice(0, 12);
+        if (meta && Object.keys(meta).length) duplicate.meta = { ...duplicate.meta, ...meta };
+        duplicate.updatedAt = now;
+        this.persist(duplicate);
+        this.counters.merges += 1;
+        return { record: duplicate, merged: true };
+      }
+    }
+
+    const record = {
+      id: newId('mem'),
+      kind,
+      text: clean,
+      tags: [...new Set(tags.filter(Boolean))].slice(0, 12),
+      source,
+      importance: clamp01(importance),
+      sessionId,
+      meta,
+      createdAt: now,
+      updatedAt: now,
+      accessCount: 0,
+      lastAccess: now,
+      dim: vector ? vector.length : 0,
+      vectorName: this.embedder.name || 'unknown',
+      vector: vector ? encodeVector(vector) : null,
+    };
+    this.cache.set(record.id, record);
+    if (vector) this.vectorCache.set(record.id, vector);
+    this.index.add(record.id, `${record.text} ${record.tags.join(' ')}`);
+    this.store.put(this.collection, record.id, record);
+    this.counters.writes += 1;
+    this.enforceKindLimit(kind);
+    return { record };
+  }
+
+  findDuplicate(kind, vector, text) {
+    if (!vector) return null;
+    let best = null;
+    let bestScore = 0;
+    for (const record of this.cache.values()) {
+      if (record.kind !== kind) continue;
+      let similarity = 0;
+      const other = this.vectorOf(record);
+      if (other && record.dim === vector.length) similarity = cosine(vector, other);
+      else similarity = record.text.trim().toLowerCase() === text.trim().toLowerCase() ? 1 : 0;
+      if (similarity > bestScore) {
+        bestScore = similarity;
+        best = record;
+      }
+    }
+    // Very short memories ("ok", "yes") would merge with everything; require a
+    // near-exact match there.
+    const threshold = text.length < 24 ? 0.99 : 0.93;
+    return bestScore >= threshold ? best : null;
+  }
+
+  persist(record) {
+    this.store.put(this.collection, record.id, record);
+    this.counters.writes += 1;
+  }
+
+  enforceKindLimit(kind) {
+    const ofKind = [...this.cache.values()].filter((record) => record.kind === kind);
+    if (ofKind.length <= this.maxPerKind) return;
+    ofKind
+      .sort((a, b) => this.rank(b) - this.rank(a))
+      .slice(this.maxPerKind)
+      .forEach((record) => this.forget(record.id, { quiet: true }));
+  }
+
+  /* ── reading ────────────────────────────────────────────────────────── */
+
+  rank(record, now = this.now()) {
+    const ageDays = Math.max(0, (now - (record.updatedAt || record.createdAt || now)) / 86400000);
+    const recency = Math.pow(0.5, ageDays / HALF_LIFE_DAYS);
+    const importance = clamp01(record.importance ?? 0.5);
+    const frequency = Math.min(1, Math.log1p(record.accessCount || 0) / Math.log(11));
+    return 0.18 * recency + 0.14 * importance + 0.08 * frequency;
+  }
+
+  /**
+   * Hybrid recall. Returns records with the reason they matched, so the
+   * assistant can cite them and the user can see why something surfaced.
+   */
+  async recall(query, { kinds = null, limit = 8, minScore = 0.0008, sessionId = null, boostImportance = true } = {}) {
+    this.load();
+    this.counters.reads += 1;
+    const text = String(query || '').trim();
+    const candidates = [...this.cache.values()].filter((record) => {
+      if (kinds && kinds.length && !kinds.includes(record.kind)) return false;
+      if (sessionId && record.sessionId && record.sessionId !== sessionId && record.kind === 'short_term') return false;
+      return true;
+    });
+    if (!candidates.length) return [];
+    if (!text) {
+      return candidates
+        .sort((a, b) => this.rank(b) - this.rank(a))
+        .slice(0, limit)
+        .map((record) => ({ record, score: this.rank(record), sources: ['recent'] }));
+    }
+
+    const [queryVector] = await this.embedTexts([expandQuery(text)]);
+    const results = hybridSearch({
+      query: text,
+      records: candidates.map((record) => ({
+        id: record.id,
+        text: `${record.text} ${record.tags.join(' ')}`,
+        vector: this.vectorOf(record),
+        dim: record.dim,
+        vectorName: record.vectorName,
+      })),
+      index: this.index,
+      queryVector,
+      vectorName: this.embedder.name,
+      limit: limit * 3,
+      boost: boostImportance ? (record) => 1 + this.rank(this.cache.get(record.id) || {}) : null,
+    });
+
+    const now = this.now();
+    const out = [];
+    for (const hit of results) {
+      const record = this.cache.get(hit.record.id);
+      if (!record) continue;
+      record.lastAccess = now;
+      record.accessCount = (record.accessCount || 0) + 1;
+      this.store.put(this.collection, record.id, record);
+      if (hit.score < minScore) continue;
+      out.push({ record, score: hit.score, sources: hit.sources, lexical: hit.lexicalScore, vector: hit.vectorScore });
+      if (out.length >= limit) break;
+    }
+    return out;
+  }
+
+  get(id) {
+    this.load();
+    return this.cache.get(id) || null;
+  }
+
+  list({ kind = null, limit = 100 } = {}) {
+    this.load();
+    return [...this.cache.values()]
+      .filter((record) => (kind ? record.kind === kind : true))
+      .sort((a, b) => (b.updatedAt || b.createdAt) - (a.updatedAt || a.createdAt))
+      .slice(0, limit);
+  }
+
+  forget(id, { quiet = false } = {}) {
+    this.load();
+    const record = this.cache.get(id);
+    if (!record) return false;
+    this.cache.delete(id);
+    this.vectorCache.delete(id);
+    this.index.remove(id);
+    this.store.delete(this.collection, id);
+    if (!quiet && this.log) this.log.info('memory', `forgot ${record.kind} memory ${id}`);
+    return true;
+  }
+
+  forgetKind(kind) {
+    let count = 0;
+    for (const record of [...this.cache.values()]) {
+      if (record.kind === kind && this.forget(record.id, { quiet: true })) count += 1;
+    }
+    return count;
+  }
+
+  /* ── conversation ───────────────────────────────────────────────────── */
+
+  appendTurn(sessionId, role, text, meta = {}) {
+    const clean = String(text || '').slice(0, 8000);
+    if (!clean) return null;
+    const turn = {
+      id: newId('turn'),
+      sessionId: sessionId || 'default',
+      role,
+      text: clean,
+      meta,
+      at: this.now(),
+    };
+    this.store.put(this.turnCollection, turn.id, turn);
+    return turn;
+  }
+
+  turns(sessionId = 'default', limit = 20) {
+    return this.store
+      .list(this.turnCollection)
+      .filter((turn) => turn.sessionId === sessionId)
+      .sort((a, b) => a.at - b.at)
+      .slice(-limit);
+  }
+
+  conversations(limit = 50) {
+    const bySession = new Map();
+    for (const turn of this.store.list(this.turnCollection)) {
+      const entry = bySession.get(turn.sessionId) || { sessionId: turn.sessionId, turns: 0, first: turn.at, last: turn.at, preview: '' };
+      entry.turns += 1;
+      entry.last = Math.max(entry.last, turn.at);
+      if (turn.role === 'user' && !entry.preview) entry.preview = turn.text.slice(0, 120);
+      bySession.set(turn.sessionId, entry);
+    }
+    return [...bySession.values()].sort((a, b) => b.last - a.last).slice(0, limit);
+  }
+
+  clearTurns(sessionId) {
+    let count = 0;
+    for (const turn of this.store.list(this.turnCollection)) {
+      if (turn.sessionId === sessionId) {
+        this.store.delete(this.turnCollection, turn.id);
+        count += 1;
+      }
+    }
+    return count;
+  }
+
+  /* ── summaries ──────────────────────────────────────────────────────── */
+
+  async summarizeConversation(sessionId, { llm = null, keep = 12 } = {}) {
+    const turns = this.turns(sessionId, 200);
+    if (turns.length < keep) return null;
+    const older = turns.slice(0, -keep);
+    const transcript = older.map((turn) => `${turn.role}: ${turn.text}`).join('\n').slice(0, 12000);
+    let summary = null;
+    if (llm) {
+      try {
+        const result = await llm.chat({
+          messages: [
+            { role: 'system', content: 'Summarise this conversation for future recall. Keep facts, decisions, names, file paths and open questions. Max 200 words. Answer in the language of the conversation.' },
+            { role: 'user', content: transcript },
+          ],
+          modelClass: 'fast',
+          maxTokens: 400,
+        });
+        summary = result.text;
+      } catch (err) {
+        if (this.log) this.log.warn('memory', `summary model failed: ${err.message}`);
+      }
+    }
+    if (!summary) {
+      // Deterministic fallback: first sentences of each older turn.
+      summary = older
+        .slice(-20)
+        .map((turn) => `${turn.role}: ${turn.text.replace(/\s+/g, ' ').slice(0, 140)}`)
+        .join('\n');
+    }
+    const { record } = await this.remember({
+      kind: 'long_term',
+      text: `Summary of conversation ${sessionId} (${older.length} turns):\n${summary}`,
+      tags: ['summary', 'conversation'],
+      source: 'summarizer',
+      importance: 0.6,
+      meta: { sessionId, turns: older.length },
+    });
+    for (const turn of older) this.store.delete(this.turnCollection, turn.id);
+    return record;
+  }
+
+  /* ── housekeeping ───────────────────────────────────────────────────── */
+
+  stats() {
+    this.load();
+    const counts = {};
+    for (const kind of KINDS) counts[kind] = 0;
+    for (const record of this.cache.values()) counts[record.kind] = (counts[record.kind] || 0) + 1;
+    return {
+      kinds: counts,
+      total: this.cache.size,
+      turns: this.store.count(this.turnCollection),
+      vectors: this.vectorCache.size,
+      embedder: { name: this.embedder.name, provider: this.embedder.provider || 'local', dim: this.embedder.dim || null },
+      counters: { ...this.counters },
+      store: this.store.stats(),
+    };
+  }
+
+  exportAll() {
+    return {
+      version: 1,
+      exportedAt: new Date(this.now()).toISOString(),
+      memories: [...this.cache.values()],
+      turns: this.store.list(this.turnCollection),
+    };
+  }
+
+  importAll(payload, { merge = true } = {}) {
+    if (!payload || !Array.isArray(payload.memories)) throw new Error('not a SENTINEL memory export');
+    let added = 0;
+    let skipped = 0;
+    if (!merge) this.forgetKind('long_term');
+    for (const record of payload.memories) {
+      if (!record || !record.id || !record.text) {
+        skipped += 1;
+        continue;
+      }
+      if (looksSecret(record.text)) {
+        skipped += 1;
+        continue;
+      }
+      if (this.cache.has(record.id) && !merge) {
+        skipped += 1;
+        continue;
+      }
+      this.cache.set(record.id, record);
+      if (record.vector) this.vectorCache.set(record.id, decodeVector(record.vector));
+      this.index.add(record.id, `${record.text} ${(record.tags || []).join(' ')}`);
+      this.store.put(this.collection, record.id, record);
+      added += 1;
+    }
+    for (const turn of payload.turns || []) {
+      if (turn && turn.id && !this.store.get(this.turnCollection, turn.id)) this.store.put(this.turnCollection, turn.id, turn);
+    }
+    return { added, skipped };
+  }
+
+  async backup(destination) {
+    return this.store.backupAsync(destination);
+  }
+
+  prune({ maxAgeDays = 365, keepShortTerm = 300 } = {}) {
+    const now = this.now();
+    let removed = 0;
+    for (const record of [...this.cache.values()]) {
+      if (record.kind === 'short_term') continue;
+      if (record.kind === 'working' && now - record.updatedAt > 86400000) {
+        this.forget(record.id, { quiet: true });
+        removed += 1;
+        continue;
+      }
+      if (now - (record.updatedAt || record.createdAt) > maxAgeDays * 86400000 && (record.importance || 0.5) < 0.4) {
+        this.forget(record.id, { quiet: true });
+        removed += 1;
+      }
+    }
+    const shortTerm = [...this.cache.values()]
+      .filter((record) => record.kind === 'short_term')
+      .sort((a, b) => b.createdAt - a.createdAt);
+    for (const record of shortTerm.slice(keepShortTerm)) {
+      this.forget(record.id, { quiet: true });
+      removed += 1;
+    }
+    return removed;
+  }
+}
+
+function clamp01(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return 0.5;
+  return Math.max(0, Math.min(1, number));
+}
+
+module.exports = { Memory, KINDS, looksSecret, clamp01 };

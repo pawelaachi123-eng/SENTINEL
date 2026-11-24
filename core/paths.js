@@ -32,6 +32,23 @@ function configFile() {
   return path.join(ensureDir(dataDir()), 'config.json');
 }
 
+/** Everything the assistant is allowed to touch by default. */
+function workspaceDir() {
+  return path.join(ensureDir(dataDir()), 'workspace');
+}
+
+function knowledgeDir() {
+  return path.join(ensureDir(dataDir()), 'knowledge');
+}
+
+function backupsDir() {
+  return path.join(ensureDir(dataDir()), 'backups');
+}
+
+function memoryDir() {
+  return path.join(ensureDir(dataDir()), 'memory');
+}
+
 function logFile() {
   return path.join(ensureDir(path.join(dataDir(), 'logs')), 'agent.log');
 }
@@ -58,4 +75,8 @@ function uiDir() {
   return path.join(__dirname, '..', 'ui');
 }
 
-module.exports = { dataDir, ensureDir, configFile, logFile, uiDir, APP_DIR_NAME };
+module.exports = {
+  workspaceDir,
+  knowledgeDir,
+  backupsDir,
+  memoryDir, dataDir, ensureDir, configFile, logFile, uiDir, APP_DIR_NAME };

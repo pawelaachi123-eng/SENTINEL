@@ -1,6 +1,7 @@
 'use strict';
 
 const http = require('node:http');
+const os = require('node:os');
 const fs = require('node:fs');
 const path = require('node:path');
 const { timingSafeEqualHex } = require('./util');
@@ -29,7 +30,7 @@ const MAX_BODY = 256 * 1024;
  * SSE (not WebSocket) keeps the agent dependency-free while still being live.
  */
 class HttpApi {
-  constructor({ config, log, commander, link, stats, state, tunnel, brain, think }) {
+  constructor({ config, log, commander, link, stats, state, tunnel, brain, think, ai = null }) {
     this.config = config;
     this.log = log;
     this.commander = commander;
@@ -39,6 +40,8 @@ class HttpApi {
     this.tunnel = tunnel || null;
     this.brain = brain || null;
     this.think = think || (async () => (this.brain ? this.brain.list() : []));
+    this.ai = ai || null;
+    this.chatRuns = new Map(); // runId → AbortController
     this.server = null;
     this.clients = new Set();
     this.failures = new Map();
@@ -52,6 +55,12 @@ class HttpApi {
     const port = this.config.get('ports.ui');
     const bind = this.config.get('bind') || '0.0.0.0';
     this.server = http.createServer((req, res) => this.handle(req, res));
+    this.server.on('error', (err) => {
+      // Port already taken is the most common startup failure. It must show up
+      // as a diagnosis, not as an unhandled exception that kills the agent.
+      this.lastError = err.code === 'EADDRINUSE' ? `port ${port} is already in use` : err.message;
+      this.log.error('http', `could not start the control UI on port ${port}: ${this.lastError}`);
+    });
     this.server.on('clientError', (err, socket) => {
       if (socket.writable) socket.end('HTTP/1.1 400 Bad Request\r\n\r\n');
     });
@@ -309,6 +318,275 @@ class HttpApi {
       return this.json(res, 200, { ok: dismissed, data: this.brain ? this.brain.list() : [] });
     }
 
+
+    /* ── assistant ─────────────────────────────────────────────────────── */
+
+    if (route === '/api/chat' && req.method === 'POST') {
+      if (!this.ai) return this.json(res, 503, { ok: false, code: 'AI_NOT_READY', message: 'the AI stack is not running; see Diagnostics' });
+      const body = await this.body(req);
+      const text = String(body.text || '').trim();
+      if (!text) return this.json(res, 200, { ok: false, code: 'EMPTY', message: 'ask me something' });
+      if (text.length > 12000) return this.json(res, 200, { ok: false, code: 'TOO_LONG', message: 'that message is too long (12k characters max)' });
+      const runId = String(body.runId || `ui_${Date.now().toString(36)}`);
+      const controller = new AbortController();
+      this.chatRuns.set(runId, controller);
+      const sessionId = String(body.sessionId || 'default').slice(0, 60);
+      const images = Array.isArray(body.images)
+        ? body.images.slice(0, 3).map((image) => ({ mime: String(image.mime || 'image/png'), name: String(image.name || 'image'), data: String(image.data || '') })).filter((image) => image.data)
+        : [];
+      return this.streamChat(req, res, { runId, text, mode: body.mode || null, sessionId, images, controller });
+    }
+
+    if (route === '/api/chat/stop' && req.method === 'POST') {
+      const body = await this.body(req).catch(() => ({}));
+      const wanted = body.runId ? String(body.runId) : null;
+      let stopped = 0;
+      for (const [runId, controller] of this.chatRuns) {
+        if (wanted && runId !== wanted) continue;
+        controller.abort(Object.assign(new Error('stopped by the user'), { code: 'CANCELLED' }));
+        this.chatRuns.delete(runId);
+        stopped += 1;
+      }
+      if (this.ai && this.ai.llm) this.ai.llm.cancelAll('stopped by the user');
+      if (this.ai && this.ai.brain) this.ai.brain.cancelAll('stopped by the user');
+      this.log.warn('ai', `STOP pressed (${stopped} run(s))`);
+      return this.json(res, 200, { ok: true, stopped });
+    }
+
+    if (route === '/api/chat/history' && req.method === 'GET') {
+      if (!this.ai || !this.ai.memory) return this.json(res, 503, { ok: false, error: 'AI not ready' });
+      const sessionId = String(url.searchParams.get('session') || 'default');
+      const limit = Math.min(200, Number(url.searchParams.get('limit')) || 60);
+      return this.json(res, 200, { ok: true, data: this.ai.memory.turns(sessionId, limit) });
+    }
+
+
+    /* ── voice ─────────────────────────────────────────────────────────── */
+
+    if (route === '/api/voice/transcribe' && req.method === 'POST') {
+      if (!this.ai || !this.ai.voice) return this.json(res, 503, { ok: false, code: 'AI_NOT_READY', message: 'voice engine is not running' });
+      const body = await this.body(req);
+      const audio = String(body.audio || '');
+      if (!audio) return this.json(res, 200, { ok: false, code: 'EMPTY', message: 'no audio was sent' });
+      if (audio.length > 24 * 1024 * 1024) return this.json(res, 200, { ok: false, code: 'TOO_LONG', message: 'audio is too large (18 MB max)' });
+      const ext = String(body.format || 'webm').replace(/[^a-z0-9]/gi, '').slice(0, 5) || 'webm';
+      const dir = path.join(os.tmpdir(), 'sentinel');
+      fs.mkdirSync(dir, { recursive: true });
+      const file = path.join(dir, `stt-${Date.now().toString(36)}.${ext}`);
+      fs.writeFileSync(file, Buffer.from(audio, 'base64'));
+      try {
+        const result = await this.ai.voice.transcribe(file, { language: String(body.language || 'auto') });
+        return this.json(res, 200, { ok: true, text: result.text, ms: result.ms });
+      } catch (err) {
+        return this.json(res, 200, { ok: false, code: err.code || 'STT_FAILED', message: err.message });
+      } finally {
+        try {
+          fs.unlinkSync(file);
+        } catch {
+          /* ignore */
+        }
+      }
+    }
+
+    if (route === '/api/voice/speak' && req.method === 'POST') {
+      if (!this.ai || !this.ai.voice) return this.json(res, 503, { ok: false, code: 'AI_NOT_READY', message: 'voice engine is not running' });
+      const body = await this.body(req);
+      const text = String(body.text || '').slice(0, 3000);
+      if (!text.trim()) return this.json(res, 200, { ok: false, code: 'EMPTY', message: 'nothing to say' });
+      try {
+        const result = await this.ai.voice.speak(text, { voice: body.voice || null, rate: Number(body.rate) || 0 });
+        const data = result.file ? fs.readFileSync(result.file).toString('base64') : null;
+        return this.json(res, 200, { ok: true, mime: result.mime || 'audio/wav', audio: data, engine: result.engine });
+      } catch (err) {
+        return this.json(res, 200, { ok: false, code: err.code || 'TTS_FAILED', message: err.message });
+      }
+    }
+
+    if (route === '/api/voice/status' && req.method === 'GET') {
+      if (!this.ai || !this.ai.voice) return this.json(res, 200, { ok: false, data: { ready: false } });
+      return this.json(res, 200, { ok: true, data: await this.ai.voice.status() });
+    }
+
+    if (route === '/api/ai/status' && req.method === 'GET') {
+      return this.json(res, 200, { ok: Boolean(this.ai), data: this.ai ? this.ai.status() : { ready: false } });
+    }
+
+    if (route === '/api/ai/mode' && req.method === 'POST') {
+      const body = await this.body(req);
+      const mode = String(body.mode || '');
+      if (!['fast', 'balanced', 'deep'].includes(mode)) {
+        return this.json(res, 200, { ok: false, code: 'BAD_ARGS', message: 'mode must be fast, balanced or deep' });
+      }
+      this.config.set('ai.mode', mode);
+      this.log.info('ai', `Reasoning mode → ${mode}`);
+      return this.json(res, 200, { ok: true, data: { mode } });
+    }
+
+    if (route === '/api/agents' && req.method === 'GET') {
+      if (!this.ai) return this.json(res, 503, { ok: false, error: 'AI not ready' });
+      return this.json(res, 200, { ok: true, data: this.ai.agents.list(), stats: this.ai.agents.stats() });
+    }
+
+    if (route === '/api/tools' && req.method === 'GET') {
+      if (!this.ai) return this.json(res, 503, { ok: false, error: 'AI not ready' });
+      const category = url.searchParams.get('category');
+      const search = url.searchParams.get('q');
+      let tools = this.ai.tools.list({ category: category || null });
+      if (search) tools = tools.filter((tool) => `${tool.name} ${tool.description}`.toLowerCase().includes(String(search).toLowerCase()));
+      return this.json(res, 200, { ok: true, data: tools, categories: this.ai.tools.categories(), counters: this.ai.tools.stats().counters });
+    }
+
+    if (route === '/api/models' && req.method === 'GET') {
+      if (!this.ai) return this.json(res, 503, { ok: false, error: 'AI not ready' });
+      const status = await this.ai.llm.status();
+      return this.json(res, 200, { ok: true, data: status });
+    }
+
+    if (route === '/api/models/benchmark' && req.method === 'POST') {
+      if (!this.ai) return this.json(res, 503, { ok: false, error: 'AI not ready' });
+      const body = await this.body(req).catch(() => ({}));
+      try {
+        const result = await this.ai.llm.benchmark({ modelClass: ['fast', 'balanced', 'deep', 'code'].includes(body.modelClass) ? body.modelClass : 'balanced' });
+        return this.json(res, 200, { ok: true, data: result });
+      } catch (err) {
+        return this.json(res, 200, { ok: false, code: err.code || 'FAILED', message: err.message });
+      }
+    }
+
+    /* ── approvals ─────────────────────────────────────────────────────── */
+
+    if (route === '/api/approvals' && req.method === 'GET') {
+      if (!this.ai) return this.json(res, 503, { ok: false, error: 'AI not ready' });
+      return this.json(res, 200, { ok: true, data: this.ai.approvals.list({ includeSettled: url.searchParams.get('settled') === '1' }) });
+    }
+
+    if (route === '/api/approvals/decide' && req.method === 'POST') {
+      if (!this.ai) return this.json(res, 503, { ok: false, error: 'AI not ready' });
+      const body = await this.body(req);
+      const id = String(body.id || '');
+      const entry = this.ai.approvals.get(id);
+      if (!entry) return this.json(res, 200, { ok: false, code: 'NOT_FOUND', message: 'that approval expired or was already used' });
+      if (body.approve !== true) {
+        this.ai.approvals.deny(id, { reason: String(body.reason || 'denied in the UI') });
+        this.broadcast('approvals', this.ai.approvals.list());
+        return this.json(res, 200, { ok: true, approved: false, id });
+      }
+      const result = await this.ai.tools.execute(entry.tool, entry.args, { approvalId: id, source: 'ui', sessionId: 'ui' });
+      this.broadcast('approvals', this.ai.approvals.list());
+      return this.json(res, 200, { ok: result.ok, approved: true, id, result: { code: result.code || null, message: result.message || null, data: result.data || null, text: result.text ? String(result.text).slice(0, 4000) : null } });
+    }
+
+    /* ── memory & knowledge ────────────────────────────────────────────── */
+
+    if (route === '/api/memory' && req.method === 'GET') {
+      if (!this.ai) return this.json(res, 503, { ok: false, error: 'AI not ready' });
+      const q = url.searchParams.get('q');
+      const kind = url.searchParams.get('kind');
+      if (q) {
+        const hits = await this.ai.memory.recall(q, { limit: 20, kinds: kind ? [kind] : null });
+        return this.json(res, 200, { ok: true, data: hits.map((hit) => ({ ...hit.record, score: hit.score, vector: undefined })) });
+      }
+      return this.json(res, 200, { ok: true, data: this.ai.memory.list({ kind: kind || null, limit: 100 }).map((record) => ({ ...record, vector: undefined })), stats: this.ai.memory.stats() });
+    }
+
+    if (route === '/api/memory' && req.method === 'POST') {
+      if (!this.ai) return this.json(res, 503, { ok: false, error: 'AI not ready' });
+      const body = await this.body(req);
+      if (body.action === 'forget') {
+        const forgotten = this.ai.memory.forget(String(body.id || ''));
+        return this.json(res, 200, { ok: forgotten });
+      }
+      const result = await this.ai.memory.remember({
+        kind: body.kind || 'long_term',
+        text: String(body.text || ''),
+        tags: Array.isArray(body.tags) ? body.tags : [],
+        importance: Number(body.importance) || 0.6,
+        source: 'ui',
+      });
+      return this.json(res, 200, { ok: Boolean(result.record), rejected: result.rejected || null, id: result.record ? result.record.id : null });
+    }
+
+    if (route === '/api/knowledge' && req.method === 'GET') {
+      if (!this.ai) return this.json(res, 503, { ok: false, error: 'AI not ready' });
+      const q = url.searchParams.get('q');
+      if (q) return this.json(res, 200, { ok: true, data: await this.ai.knowledge.search(q, { limit: 10 }) });
+      return this.json(res, 200, { ok: true, data: this.ai.knowledge.list({ limit: 100 }), stats: this.ai.knowledge.stats() });
+    }
+
+    if (route === '/api/knowledge' && req.method === 'POST') {
+      if (!this.ai) return this.json(res, 503, { ok: false, error: 'AI not ready' });
+      const body = await this.body(req);
+      if (body.action === 'remove') {
+        return this.json(res, 200, { ok: this.ai.knowledge.remove(String(body.id || '')) });
+      }
+      if (body.text) {
+        const result = await this.ai.knowledge.indexText({ title: body.title || 'notatka z UI', text: String(body.text), tags: body.tags || [] });
+        return this.json(res, 200, { ok: true, data: { docId: result.doc.id, chunks: result.chunks } });
+      }
+      if (!body.path) return this.json(res, 200, { ok: false, code: 'BAD_ARGS', message: 'give a path or text to index' });
+      try {
+        const resolved = this.ai.sandbox.resolve(String(body.path), { write: false });
+        const result = await this.ai.knowledge.indexPath(resolved, { recursive: body.recursive !== false, maxFiles: Math.min(2000, Number(body.maxFiles) || 300), tags: body.tags || [] });
+        return this.json(res, 200, { ok: true, data: { scanned: result.scanned, indexed: result.indexed, skipped: result.skipped, documents: result.documents.map((doc) => ({ id: doc.id, title: doc.title, chunks: doc.chunks })) } });
+      } catch (err) {
+        return this.json(res, 200, { ok: false, code: err.code || 'FAILED', message: err.message });
+      }
+    }
+
+    /* ── tasks & automations ───────────────────────────────────────────── */
+
+    if (route === '/api/tasks' && req.method === 'GET') {
+      if (!this.ai) return this.json(res, 503, { ok: false, error: 'AI not ready' });
+      const status = url.searchParams.get('status');
+      return this.json(res, 200, { ok: true, data: this.ai.tasks.list({ status: status || null, limit: 100 }), stats: this.ai.tasks.stats() });
+    }
+
+    if (route === '/api/tasks/cancel' && req.method === 'POST') {
+      if (!this.ai) return this.json(res, 503, { ok: false, error: 'AI not ready' });
+      const body = await this.body(req);
+      return this.json(res, 200, { ok: this.ai.tasks.cancel(String(body.id || ''), 'cancelled in the UI') });
+    }
+
+    if (route === '/api/automations' && req.method === 'GET') {
+      if (!this.ai) return this.json(res, 503, { ok: false, error: 'AI not ready' });
+      return this.json(res, 200, { ok: true, data: this.ai.automation.list(), stats: this.ai.automation.stats() });
+    }
+
+    if (route === '/api/automations' && req.method === 'POST') {
+      if (!this.ai) return this.json(res, 503, { ok: false, error: 'AI not ready' });
+      const body = await this.body(req);
+      try {
+        if (body.action === 'toggle') return this.json(res, 200, { ok: true, data: this.ai.automation.toggle(String(body.id || ''), Boolean(body.enabled)) });
+        if (body.action === 'delete') return this.json(res, 200, { ok: this.ai.automation.remove(String(body.id || '')) });
+        if (body.action === 'run') return this.json(res, 200, { ok: true, data: await this.ai.automation.run(String(body.id || ''), { trigger: 'manual' }) });
+        const item = this.ai.automation.create({
+          name: body.name,
+          trigger: { type: body.type === 'daily' ? 'daily' : 'interval', everyMinutes: Number(body.everyMinutes) || 60, at: body.at },
+          action: { type: body.actionType === 'command' ? 'command' : 'prompt', prompt: body.prompt, command: body.command },
+        });
+        return this.json(res, 200, { ok: true, data: item });
+      } catch (err) {
+        return this.json(res, 200, { ok: false, code: err.code || 'FAILED', message: err.message });
+      }
+    }
+
+    /* ── diagnostics ───────────────────────────────────────────────────── */
+
+    if (route === '/api/diagnostics' && req.method === 'GET') {
+      const snapshot = await this.snapshot();
+      return this.json(res, 200, { ok: true, data: { snapshot, ai: this.ai ? this.ai.status() : null } });
+    }
+
+    if (route === '/api/doctor' && req.method === 'POST') {
+      if (!this.ai) return this.json(res, 503, { ok: false, error: 'AI not ready' });
+      return this.json(res, 200, { ok: true, data: await this.ai.healing.diagnose() });
+    }
+
+    if (route === '/api/backups' && req.method === 'GET') {
+      if (!this.ai) return this.json(res, 503, { ok: false, error: 'AI not ready' });
+      return this.json(res, 200, { ok: true, data: this.ai.healing.listBackups() });
+    }
+
     if (route === '/api/log' && req.method === 'GET') {
       const limit = Math.min(500, Number(url.searchParams.get('limit')) || 200);
       return this.json(res, 200, { ok: true, data: this.log.recent(limit) });
@@ -441,6 +719,66 @@ class HttpApi {
       counters: this.state.counters,
       at: new Date().toISOString(),
     });
+  }
+
+  /**
+   * Streams one assistant turn as newline-delimited JSON: stage events, tokens,
+   * then the final answer. NDJSON over fetch keeps the browser able to abort the
+   * request, which is what makes STOP immediate.
+   */
+  async streamChat(req, res, { runId, text, mode, sessionId, images = [], controller }) {
+    res.writeHead(200, {
+      'content-type': 'application/x-ndjson; charset=utf-8',
+      'cache-control': 'no-cache, no-transform',
+      connection: 'keep-alive',
+      'x-accel-buffering': 'no',
+    });
+    const write = (event) => {
+      if (res.writableEnded) return;
+      try {
+        res.write(`${JSON.stringify(event)}\n`);
+      } catch {
+        /* client went away */
+      }
+    };
+    const cleanup = () => {
+      this.chatRuns.delete(runId);
+      if (!res.writableEnded) res.end();
+    };
+    // A hung client must not keep a model run alive forever.
+    const idle = setTimeout(() => controller.abort(Object.assign(new Error('stream timed out'), { code: 'TIMEOUT' })), 10 * 60 * 1000);
+    if (idle.unref) idle.unref();
+    res.on('close', () => {
+      clearTimeout(idle);
+      if (!controller.signal.aborted) controller.abort(Object.assign(new Error('client disconnected'), { code: 'CANCELLED' }));
+    });
+
+    write({ type: 'start', runId, at: new Date().toISOString() });
+    let answered = false;
+    try {
+      const answer = await this.ai.brain.ask({
+        text,
+        mode,
+        sessionId,
+        runId,
+        images,
+        signal: controller.signal,
+        onToken: (token) => write({ type: 'token', text: token }),
+        onStage: (event) => write({ type: 'stage', ...event }),
+      });
+      write({ type: 'final', ...answer });
+      answered = true;
+      if (answer.text) {
+        this.ai.memory.appendTurn(sessionId, 'user', text.slice(0, 4000), { runId });
+        this.ai.memory.appendTurn(sessionId, 'assistant', answer.text.slice(0, 8000), { runId, agent: answer.agent });
+      }
+    } catch (err) {
+      write({ type: 'error', code: err.code || 'FAILED', message: err.message });
+    } finally {
+      clearTimeout(idle);
+      if (!answered) write({ type: 'final', text: '', cancelled: controller.signal.aborted, error: true });
+      cleanup();
+    }
   }
 
   /* --------------------------------------------------------------- static */
