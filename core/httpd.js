@@ -729,6 +729,23 @@ class HttpApi {
     }
 
 
+
+    /* ── 4.0: MCP (opt-in) ─────────────────────────────────────────────── */
+
+    if (route === '/api/mcp' && req.method === 'GET') {
+      if (!this.ai || !this.ai.mcp) return this.json(res, 200, { ok: true, data: { enabled: false, servers: [] } });
+      return this.json(res, 200, { ok: true, data: this.ai.mcp.status() });
+    }
+
+    if (route === '/api/mcp' && req.method === 'POST') {
+      if (!this.ai || !this.ai.mcp) return this.json(res, 503, { ok: false, error: 'AI not ready' });
+      const body = await this.body(req);
+      const mcp = this.ai.mcp;
+      if (body.action === 'connect') return this.json(res, 200, { ok: true, data: await mcp.connect(String(body.server || '')) });
+      if (body.action === 'disconnect') return this.json(res, 200, { ok: true, data: await mcp.disconnect(String(body.server || '')) });
+      return this.json(res, 200, { ok: false, code: 'BAD_ACTION', message: 'action must be connect or disconnect' });
+    }
+
     /* ── 4.0: knowledge graph ──────────────────────────────────────────── */
 
     if (route === '/api/graph' && req.method === 'GET') {

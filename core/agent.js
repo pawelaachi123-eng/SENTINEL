@@ -34,6 +34,7 @@ const { PatchManager } = require('./patching');
 const { SemanticInterpreter } = require('./semantics');
 const { Executor } = require('./executor');
 const { KnowledgeGraph } = require('./graph');
+const { McpHub } = require('./mcp');
 const { ExperienceStore } = require('./experience');
 const { EventBus } = require('./events');
 const { Metrics } = require('./metrics');
@@ -118,6 +119,8 @@ class Agent extends EventEmitter {
         store: this.store,
       };
       this.tools = buildTools({ config: this.config, log: this.log, sandbox: this.sandbox, approvals: this.approvals, services: this.services });
+      this.mcp = new McpHub({ config: this.config, log: this.log, registry: this.tools, store: this.store });
+      this.services.mcp = this.mcp;
       this.agents = new AgentRegistry();
       this.dispatcher = new Dispatcher({
         agents: this.agents,
@@ -154,6 +157,7 @@ class Agent extends EventEmitter {
         patches: this.patches,
         executor: this.executor,
         graph: this.graph,
+        mcp: this.mcp,
         experience: this.experience,
         events: this.events,
         metrics: this.metrics,
@@ -276,6 +280,7 @@ class Agent extends EventEmitter {
             patches: this.patches || null,
             executor: this.executor || null,
             graph: this.graph || null,
+            mcp: this.mcp || null,
             incidents: this.incidents || null,
             tasks: this.tasks || null,
           }
@@ -354,6 +359,14 @@ class Agent extends EventEmitter {
         this.incidents.report({ subsystem: 'tasks', code: 'INTERRUPTED', message: `${interrupted} task(s) were interrupted by a restart`, severity: 'warn' });
         this.events.publish('task', { action: 'reconciled', interrupted }, { severity: 'warn' });
       }
+      // MCP is opt-in: start() connects nothing unless ai.mcp.enabled is true.
+      if (this.mcp) {
+        this.mcp.start()
+          .then((result) => {
+            if (result && result.enabled) this.events.publish('mcp', { action: 'started', connected: result.connected, servers: result.servers ? result.servers.length : 0 });
+          })
+          .catch((err) => this.log.warn('mcp', `startup failed: ${err.message}`));
+      }
       this.events.publish('system', { action: 'started', version: require('../package.json').version });
     }
     this.log.info('agent', `SENTINEL ${require('../package.json').version} on ${os.hostname()} (${process.platform})`);
@@ -414,6 +427,7 @@ class Agent extends EventEmitter {
       incidents: this.incidents ? this.incidents.stats() : null,
       executor: this.executor ? { ...this.executor.counters } : null,
       graph: this.graph ? this.graph.stats() : null,
+      mcp: this.mcp ? this.mcp.status() : null,
       watchdogs: (this.watchdogs || []).map((watchdog) => watchdog.status()),
       voice: this.voice.counters,
       vision: this.vision.counters,

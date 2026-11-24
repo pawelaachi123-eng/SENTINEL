@@ -1272,7 +1272,231 @@ test('graph tools read and link through the tool permission layer', async () => 
   assert.equal(stats.data.nodes, 2);
 });
 
+/* ── MCP client (4.0) ─────────────────────────────────────────────────── */
+
+const http = require('node:http');
+const { McpHub, McpServer } = require('../core/mcp');
+
+function mcpConfig(overrides = {}) {
+  const settings = { enabled: true, requireApproval: true, servers: [], ...overrides };
+  return { get: (key, fallback) => (key === 'ai.mcp' ? settings : key === 'ai.autonomy' ? { requireApprovalForWrites: true } : key === 'ai.tools.allowNetwork' ? true : key === 'ai.limits.toolTimeoutMs' ? 5000 : fallback) };
+}
+
+async function fakeHttpServer(handler) {
+  const sockets = new Set();
+  const server = http.createServer((req, res) => {
+    let body = '';
+    req.on('data', (chunk) => {
+      body += chunk;
+    });
+    req.on('end', () => {
+      let message = null;
+      try {
+        message = body ? JSON.parse(body) : null;
+      } catch {
+        /* handled by the handler */
+      }
+      handler(message, req, res);
+    });
+  });
+  server.on('connection', (socket) => {
+    sockets.add(socket);
+    socket.on('close', () => sockets.delete(socket));
+  });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const { port } = server.address();
+  return {
+    url: `http://127.0.0.1:${port}/mcp`,
+    close: () => new Promise((resolve) => {
+      for (const socket of sockets) socket.destroy();
+      server.close(resolve);
+    }),
+  };
+}
+
+test('MCP is off unless explicitly enabled', async () => {
+  const hub = new McpHub({ config: mcpConfig({ enabled: false, servers: [{ id: 'x', transport: 'http', url: 'http://127.0.0.1:9/mcp', enabled: true }] }), log: null });
+  const started = await hub.start();
+  assert.equal(started.enabled, false);
+  assert.equal(hub.status().servers.length, 1);
+  assert.equal(hub.status().servers[0].status, 'disconnected');
+  const attempted = await hub.connect('x');
+  assert.equal(attempted.ok, false);
+  assert.equal(attempted.code, 'MCP_DISABLED');
+});
+
+test('MCP refuses plain http to a remote host and unknown protocol versions', async () => {
+  const insecure = new McpServer({ id: 'remote', transport: 'http', url: 'http://example.com/mcp' });
+  await assert.rejects(() => insecure.connect(), (err) => err.code === 'MCP_INSECURE');
+  const fake = await fakeHttpServer((message, req, res) => {
+    const result = message.method === 'initialize' ? { protocolVersion: '1999-01-01', capabilities: {}, serverInfo: { name: 'old' } } : { tools: [] };
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ jsonrpc: '2.0', id: message.id, result }));
+  });
+  try {
+    const server = new McpServer({ id: 'old', transport: 'http', url: fake.url });
+    await assert.rejects(() => server.connect(), (err) => err.code === 'MCP_VERSION');
+    assert.equal(server.status, 'closed');
+  } finally {
+    await fake.close();
+  }
+});
+
+test('MCP over Streamable HTTP negotiates a version and discovers tools', async () => {
+  const calls = [];
+  const fake = await fakeHttpServer((message, req, res) => {
+    if (req.method === 'DELETE') {
+      res.writeHead(200);
+      res.end();
+      return;
+    }
+    if (req.headers.authorization !== 'Bearer secret-token') {
+      res.writeHead(401);
+      res.end('no');
+      return;
+    }
+    if (message.method === 'initialize') {
+      res.writeHead(200, { 'content-type': 'application/json', 'mcp-session-id': 'session-1' });
+      res.end(JSON.stringify({ jsonrpc: '2.0', id: message.id, result: { protocolVersion: '2025-06-18', capabilities: { tools: {} }, serverInfo: { name: 'http-fixture', version: '2' } } }));
+      return;
+    }
+    if (message.method === 'tools/list') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ jsonrpc: '2.0', id: message.id, result: { tools: [{ name: 'lookup', description: 'Look something up', inputSchema: { type: 'object', properties: { q: { type: 'string' } }, required: ['q'] }, annotations: { readOnlyHint: true } }] } }));
+      return;
+    }
+    if (message.method === 'tools/call') {
+      calls.push({ params: message.params, session: req.headers['mcp-session-id'] });
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ jsonrpc: '2.0', id: message.id, result: { content: [{ type: 'text', text: `found:${message.params.arguments.q}` }] } }));
+      return;
+    }
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ jsonrpc: '2.0', id: message.id, result: { resources: [], prompts: [] } }));
+  });
+  try {
+    const hub = new McpHub({ config: mcpConfig({ servers: [{ id: 'docs', transport: 'http', url: fake.url, token: 'secret-token', enabled: true, trusted: true }] }), log: null });
+    const started = await hub.start();
+    assert.equal(started.connected, 1);
+    const status = hub.status();
+    assert.equal(status.servers[0].protocolVersion, '2025-06-18');
+    assert.equal(status.servers[0].tools, 1);
+    assert.equal(status.tools, 1);
+    const result = await hub.servers.get('docs').callTool('lookup', { q: 'atlas' });
+    assert.equal(result.ok, true);
+    assert.equal(result.text, 'found:atlas');
+    assert.equal(result.protocolVersion, '2025-06-18');
+    assert.equal(calls[0].session, 'session-1');
+    assert.equal(hub.servers.get('docs').stats.callsOk, 1);
+    await hub.closeAll();
+  } finally {
+    await fake.close();
+  }
+});
+
+test('MCP surfaces a missing credential as MCP_AUTH and a slow server as MCP_TIMEOUT', async () => {
+  const auth = await fakeHttpServer((message, req, res) => {
+    res.writeHead(401);
+    res.end('unauthorised');
+  });
+  try {
+    const server = new McpServer({ id: 'auth', transport: 'http', url: auth.url, token: 'wrong' });
+    await assert.rejects(() => server.connect(), (err) => err.code === 'MCP_AUTH');
+  } finally {
+    await auth.close();
+  }
+  const slow = await fakeHttpServer(() => {
+    /* never answers */
+  });
+  try {
+    const server = new McpServer({ id: 'slow', transport: 'http', url: slow.url, timeoutMs: 1000 });
+    await assert.rejects(() => server.connect(), (err) => err.code === 'MCP_TIMEOUT');
+  } finally {
+    await slow.close();
+  }
+});
+
+test('MCP registers remote tools with namespacing and approval', async () => {
+  const fake = await fakeHttpServer((message, req, res) => {
+    if (message.method === 'initialize') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ jsonrpc: '2.0', id: message.id, result: { protocolVersion: '2025-06-18', capabilities: {}, serverInfo: { name: 'fixture' } } }));
+      return;
+    }
+    if (message.method === 'tools/list') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({
+        jsonrpc: '2.0',
+        id: message.id,
+        result: {
+          tools: [
+            { name: 'read.doc', description: 'Read', inputSchema: { type: 'object', properties: {} }, annotations: { readOnlyHint: true } },
+            { name: 'write.doc', description: 'Write', inputSchema: { type: 'object', properties: { body: { type: 'string' } } } },
+          ],
+        },
+      }));
+      return;
+    }
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ jsonrpc: '2.0', id: message.id, result: { content: [{ type: 'text', text: 'done' }] } }));
+  });
+  const { ToolRegistry } = require('../core/tools/registry');
+  const approvals = new ApprovalQueue({ log: null });
+  const registry = new ToolRegistry({ config: mcpConfig(), log: null, sandbox: { resolve: (value) => value }, approvals, services: {} });
+  const hub = new McpHub({ config: mcpConfig({ servers: [{ id: 'files', transport: 'http', url: fake.url, enabled: true, trusted: true }] }), log: null, registry });
+  try {
+    await hub.start();
+    const names = [...registry.tools.keys()].filter((name) => name.startsWith('mcp_'));
+    assert.deepEqual(names.sort(), ['mcp_files_read_doc', 'mcp_files_write_doc'].sort());
+    assert.equal(registry.get('mcp_files_read_doc').permission, 'network', 'a trusted read-only tool was over-restricted');
+    assert.equal(registry.get('mcp_files_write_doc').permission, 'write');
+    const read = await registry.execute('mcp_files_read_doc', {}, { source: 'test' });
+    assert.equal(read.ok, true);
+    assert.equal(read.data.text, 'done');
+    const blocked = await registry.execute('mcp_files_write_doc', { body: 'x' }, { source: 'test' });
+    assert.equal(blocked.ok, false);
+    assert.equal(blocked.code, 'APPROVAL_REQUIRED');
+    approvals.approve(blocked.approval.id, { by: 'test' });
+    const allowed = await registry.execute('mcp_files_write_doc', { body: 'x' }, { source: 'test', approvalId: blocked.approval.id });
+    assert.equal(allowed.ok, true);
+    assert.equal(hub.servers.get('files').stats.callsOk, 2);
+  } finally {
+    await hub.closeAll();
+    await fake.close();
+  }
+});
+
+test('MCP over stdio performs a real handshake, call and shutdown', async () => {
+  const { ToolRegistry } = require('../core/tools/registry');
+  const registry = new ToolRegistry({ config: mcpConfig(), log: null, sandbox: { resolve: (value) => value }, approvals: new ApprovalQueue({ log: null }), services: {} });
+  const hub = new McpHub({
+    config: mcpConfig({ servers: [{ id: 'fixture', transport: 'stdio', command: process.execPath, args: [path.join(__dirname, 'fixtures', 'mcp-server.js')], enabled: true, trusted: true }] }),
+    log: null,
+    registry,
+  });
+  await hub.start();
+  const status = hub.status();
+  assert.equal(status.servers[0].protocolVersion, '2025-06-18');
+  assert.equal(status.servers[0].tools, 2);
+  const server = hub.servers.get('fixture');
+  assert.ok(server.child, 'no child process was started');
+  const echo = await server.callTool('echo', { text: 'hello' });
+  assert.equal(echo.ok, true);
+  assert.equal(echo.text, 'echo:hello');
+  const refused = await server.callTool('destroy', {});
+  assert.equal(refused.ok, false, 'isError from the server was not surfaced');
+  const readTool = await registry.execute('mcp_fixture_echo', { text: 'via registry' }, { source: 'test' });
+  assert.equal(readTool.ok, true);
+  assert.equal(readTool.data.text, 'echo:via registry');
+  const child = server.child;
+  await hub.closeAll();
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  assert.equal(child.killed || child.exitCode !== null, true, 'the stdio child was left running');
+  assert.equal(hub.status().servers[0].status, 'closed');
+});
+
 /* ── fault injection and the live agent ───────────────────────────────── */
+
 
 
 

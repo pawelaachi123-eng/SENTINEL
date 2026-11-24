@@ -90,6 +90,9 @@ function defaults() {
         maxToolCalls: 8,
       },
       tools: { enabled: true, workspace: null, allowShell: false, allowNetwork: true },
+      // MCP is opt-in. Servers are declared explicitly; nothing connects unless
+      // enabled is true here and on the server entry.
+      mcp: { enabled: false, requireApproval: true, servers: [] },
       memory: { enabled: true, maxPerKind: 4000, summarizeAfter: 30 },
       knowledge: { roots: [], chunkTokens: 700, overlapTokens: 80, maxFileMb: 25 },
       voice: { enabled: true, sttEngine: 'auto', ttsEngine: 'auto', language: 'auto', pushToTalk: true },
