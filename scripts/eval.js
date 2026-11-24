@@ -37,7 +37,7 @@ function parseArgs(argv) {
 
 function makeAsk(agent, live) {
   return async (entry) => {
-    const input = String(entry.input);
+    const input = String((entry.platformInput && entry.platformInput[process.platform]) || entry.input);
     switch (entry.adapter) {
       case 'arithmetic': {
         if (!live) {

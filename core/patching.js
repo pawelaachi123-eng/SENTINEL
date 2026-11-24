@@ -18,6 +18,7 @@
  * smuggle `&& rm -rf` into it, and the process runs with a timeout and no shell.
  */
 
+const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
@@ -40,9 +41,14 @@ const VERIFIERS = {
 const AUTO_VERIFY_EXTENSIONS = new Set(['.js', '.cjs', '.mjs']);
 const NAMED_VERIFIERS = {
   syntax: null, // chosen from the extension
-  test: { command: 'npm', args: ['test', '--silent'] },
+  // On Windows npm is a .cmd shim; spawnSync without a shell cannot execute it.
+  test: { command: process.platform === 'win32' ? 'npm.cmd' : 'npm', args: ['test', '--silent'] },
   none: null,
 };
+
+function sha256(text) {
+  return crypto.createHash('sha256').update(String(text), 'utf8').digest('hex');
+}
 
 function diffLines(before, after) {
   const a = String(before).split('\n');
@@ -290,6 +296,14 @@ class PatchManager {
       return session.verification;
     }
     const started = this.now();
+    // Bind verification to immutable content: the candidate the tests ran and
+    // the baseline that was on disk. A later edit to either invalidates it.
+    const candidateText = fs.readFileSync(path.join(this.stagedDir(session.id), 'after'), 'utf8');
+    session.hashes = {
+      candidate: sha256(candidateText),
+      baseline: fs.existsSync(session.file) ? sha256(fs.readFileSync(session.file, 'utf8')) : null,
+      at: this.now(),
+    };
     const workspace = path.join(this.stagedDir(session.id), 'workspace');
     fs.rmSync(workspace, { recursive: true, force: true });
     fs.mkdirSync(workspace, { recursive: true });
@@ -364,6 +378,12 @@ class PatchManager {
     if (!approved) throw Object.assign(new Error('a staged patch needs an approval before it is written'), { code: 'APPROVAL_REQUIRED' });
     if (!session.verification || !session.verification.ok) throw Object.assign(new Error('the patch has not passed verification'), { code: 'UNVERIFIED' });
     const target = session.file;
+    const staged = fs.readFileSync(path.join(this.stagedDir(session.id), 'after'), 'utf8');
+    if (session.hashes) {
+      if (sha256(staged) !== session.hashes.candidate) throw Object.assign(new Error('the verified candidate changed on disk; verify it again'), { code: 'STALE_VERIFICATION', hash: 'candidate' });
+      const current = fs.existsSync(target) ? sha256(fs.readFileSync(target, 'utf8')) : null;
+      if (current !== session.hashes.baseline) throw Object.assign(new Error('the target file changed after verification; the patch was not applied'), { code: 'STALE_VERIFICATION', hash: 'baseline' });
+    }
     let backup = null;
     if (fs.existsSync(target)) {
       backup = `${target}.sentinel-backup-${new Date(this.now()).toISOString().replace(/[:.]/g, '-')}`;

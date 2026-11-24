@@ -298,3 +298,16 @@ names the models the user is expected to pull themselves.
 | Local inference (Ollama) | keep-alive controls VRAM; 8 GB is the real constraint | runtime profiles, feasibility refusal, unload through `/api/ps` + `keep_alive: 0` |
 | sqlite-vec | MIT OR Apache-2.0, useful ANN | deferred: hashed+lexical retrieval met the measured corpus; a native Windows dependency needs packaging work first |
 | LM Studio | proprietary | never bundled; the `lms` CLI is MIT but the runtime is not shipped |
+
+---
+
+## 14. 5.0 research notes
+
+| Topic | Finding that mattered | Implementation decision |
+| --- | --- | --- |
+| Ollama metadata | `/api/show` exposes `details.{family,parameter_size,quantization_level}`, `model_info.*` (architecture, parameter count, context/embedding length, block/head counts) and `capabilities` | read exactly these fields; absent values stay `null`; name-based guesses flagged `inferred` |
+| MCP revisions | 2025-11-25 adds experimental tasks, CIMD, URL-mode elicitation, icons and JSON Schema 2020-12; 2026-07-28 drafts move to a stateless core | accept 2025-11-25 during negotiation but keep requesting 2025-06-18; no task/elicitation claims |
+| Token accounting | no provider here exposes a tokenizer endpoint | every token figure labelled `estimated` with its method |
+| Agent benchmarks | τ-bench `pass^k`, τ²-bench and the Agentic Benchmark Checklist warn about overestimation | deterministic/mock gates kept separate from live-model evaluation; no unrun test reported as passed |
+| Windows process spawning | `npm` is a `.cmd` shim; `spawnSync('npm')` fails with ENOENT off a shell | verifier uses `npm.cmd` on `win32` |
+| Read-only reasoning | hypotheses need refutable measurements | each hypothesis names a real tool and expected observation; failures are `untested` |

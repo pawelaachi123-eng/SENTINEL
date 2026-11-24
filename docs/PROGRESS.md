@@ -1,4 +1,34 @@
-# SENTINEL 4.0 — progress and verification log
+# SENTINEL 5.0 — progress and verification log
+
+Branch: `arena/15fbea48-sentinel`. Everything below was executed in this
+repository; anything unexecuted is labelled as such.
+
+## 5.0 status
+
+Implemented and measured (details in `docs/REPORT-5.0.md`): neural runtime
+discovery/routing (`core/neural.js`), evidence-bound reasoning
+(`core/reasoning.js`), gated skill library (`core/skills.js`), repository map
+(`core/repomap.js`), mandatory context sections + output reserve, SHA-256 patch
+verification binding, `sentinel neural` CLI, MCP `2025-11-25` negotiation, and
+the Windows `npm.cmd` verifier fix.
+
+| Gate | 5.0 result |
+| --- | --- |
+| `node test/run.js` | 23 passed |
+| `node test/ai.js` | 25 passed |
+| `node test/ui.js` | 35/35 |
+| `node test/deep.js` | **117/117** (99 in 4.0) |
+| `node scripts/check.js` | all checks passed |
+| `node scripts/eval.js` | 23/23, score 1, **mock mode** |
+| `node scripts/audit-tools.js --no-write` | **219 tools / 22 categories / 0 problems / 14 executed / 205 unexecuted** |
+
+Not implemented yet: learning lab, new memory types/research sessions, expanded
+executive DAG, organisation growth, tool growth to 300+, multi-file coding
+patches, hardware measurements, security/fault-injection suites, multimodal
+fixtures, new UI panels, expanded eval corpus, 5.0 installer changes, and a green
+Windows CI run. **The Windows fix is unverified until CI is green.**
+
+# Historical: SENTINEL 4.0 progress log
 
 Branch: `arena/15fbea48-sentinel`. Everything below was executed in this
 repository. Items that could not be executed here are listed as not verified.

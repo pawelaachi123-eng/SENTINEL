@@ -54,6 +54,7 @@ const HELP = `SENTINEL ${require('../package.json').version} — your own assist
   sentinel voice speak "<text>"
   sentinel status [--json]                this machine and the AI stack
   sentinel runtime [profil]               idle / balanced / deep / gaming
+    neural [status|discover|route <zadanie>]  modele: metadane, możliwości, routing
   sentinel graph [zapytanie]              knowledge graph stats or a multi-hop query
   sentinel org [zdolność]                 organisation chart or a delegation preview
   sentinel mcp [status|connect|disconnect] [serwer]   opt-in MCP servers
@@ -605,6 +606,31 @@ async function main() {
         return done(0);
       }
 
+      case 'neural': {
+        const action = rest[0] || 'status';
+        if (action === 'discover' || action === 'refresh') {
+          const found = await agent.neural.discover({ force: true });
+          if (args.json) console.log(JSON.stringify(found, null, 2));
+          else console.log(green(`✓ ${found.found} modeli${found.errors.length ? `, ${found.errors.length} dostawców nie odpowiada` : ''}`));
+          return done(found.errors.length && !found.found ? 4 : 0);
+        }
+        if (action === 'route') {
+          const route = agent.neural.route({ task: rest[1] || 'reasoning' });
+          if (args.json) console.log(JSON.stringify(route, null, 2));
+          else console.log(route.ok ? green(`✓ ${route.ref} — ${route.reason}`) : red(`✗ ${route.code}: ${route.message}`));
+          return done(route.ok ? 0 : 4);
+        }
+        const status = agent.neural.status();
+        if (args.json) console.log(JSON.stringify(status, null, 2));
+        else {
+          console.log(`${status.models.length} modeli${status.cached ? ' (z cache)' : ''}${status.lastDiscovery ? `, odkryte ${status.lastDiscovery}` : ''}`);
+          for (const model of status.models.slice(0, 30)) {
+            console.log(`  ${model.provider}:${model.id} · ${model.kind} · ${model.parameters || 'rozmiar nieznany'} · ${model.quantization || 'kwantyzacja nieznana'} · kontekst ${model.contextLength || 'nieznany'}`);
+          }
+          console.log(dim('Pola nieznane są puste, nie zgadywane. Odśwież: sentinel neural discover'));
+        }
+        return done(0);
+      }
       case 'mcp': {
         const action = rest[0] || 'status';
         if (action === 'connect' || action === 'disconnect') {

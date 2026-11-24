@@ -36,6 +36,10 @@ const { Executor } = require('./executor');
 const { KnowledgeGraph } = require('./graph');
 const { McpHub } = require('./mcp');
 const { RuntimeManager } = require('./runtime');
+const { NeuralRuntime } = require('./neural');
+const { Reasoner } = require('./reasoning');
+const { SkillLibrary } = require('./skills');
+const { RepoMap } = require('./repomap');
 const { Organisation } = require('./org');
 const { ExperienceStore } = require('./experience');
 const { EventBus } = require('./events');
@@ -97,6 +101,7 @@ class Agent extends EventEmitter {
       this.approvals = new ApprovalQueue({ log: this.log });
       this.llm = new LlmClient({ config: this.config, log: this.log, metrics: this.metrics, events: this.events, experience: this.experience });
       this.runtime = new RuntimeManager({ config: this.config, llm: this.llm, log: this.log });
+      this.neural = new NeuralRuntime({ config: this.config, llm: this.llm, log: this.log, store: this.store, runtime: this.runtime });
       this.semantics = new SemanticInterpreter({ cognitive: this.cognitive, llm: this.llm, log: this.log, config: this.config });
       this.sandbox = new Sandbox({ config: this.config, log: this.log, paths: pathsModule });
       if (this.patches) this.patches.sandbox = this.sandbox;
@@ -125,6 +130,21 @@ class Agent extends EventEmitter {
       this.mcp = new McpHub({ config: this.config, log: this.log, registry: this.tools, store: this.store });
       this.services.mcp = this.mcp;
       this.services.runtime = this.runtime;
+      this.services.neural = this.neural;
+      this.services.tools = this.tools;
+      // The reasoner may measure with read-only tools, never with itself.
+      this.reasoning = new Reasoner({
+        log: this.log,
+        runTool: async (name, args) => {
+          if (String(name).startsWith('reason.')) throw Object.assign(new Error('the reasoner cannot test a hypothesis with itself'), { code: 'RECURSIVE_REASONING' });
+          return this.tools.execute(name, args, { source: 'reasoning' });
+        },
+      });
+      this.services.reasoning = this.reasoning;
+      this.skills = new SkillLibrary({ store: this.store, log: this.log });
+      this.services.skills = this.skills;
+      this.repoMap = new RepoMap({ root: pathsModule.workspaceDir(), log: this.log });
+      this.services.repoMap = this.repoMap;
       this.agents = new AgentRegistry();
       this.org = new Organisation({ agents: this.agents, log: this.log });
       this.services.org = this.org;

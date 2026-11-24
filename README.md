@@ -1,4 +1,4 @@
-# SENTINEL 4.0
+# SENTINEL 5.0
 
 **Your own assistant for your own machine — it runs on the PC, answers with measurements instead of guesses, and can still be driven from your phone over a direct encrypted channel. No account, no cloud.**
 
@@ -24,7 +24,7 @@ Three situations, one app:
 
 ## The assistant
 
-SENTINEL 4.0 is a cognitive assistant that can *operate this computer*, not
+SENTINEL 5.0 is a cognitive assistant that can *operate this computer*, not
 just talk about it — with a real brief, bounded plans, verified answers and a
 memory that admits when two facts contradict each other. Ask in the UI, on the phone, or in a terminal:
 
@@ -35,8 +35,15 @@ sentinel doctor --fix
 ```
 
 * **It measures before it speaks.** Hardware, processes, files, documents, logs
-  and the ESP32 are read through 206 audited tools; every answer carries its
+  and the ESP32 are read through 219 audited tools; every answer carries its
   tool calls, citations and a verification report.
+* **It knows what its models can do.** `sentinel neural` reads architecture,
+  quantisation, context length and capabilities from the provider itself, routes
+  each task to a capable model, and refuses with exit code 4 when none is
+  installed — no invented context windows or neuron counts.
+* **Reasoning is tied to measurements.** Diagnoses build hypotheses only from
+  crossed thresholds and test them with real tools; untested stays untested and
+  contradictory facts are kept side by side.
 * **It runs on your machine.** Ollama / LM Studio / llama.cpp / any
   OpenAI-compatible endpoint you configure. No telemetry, no request leaves the
   box unless you point it somewhere.
@@ -91,22 +98,22 @@ code blocks, and approvals appear at the top of the screen wherever you are.
 
 ---
 
-### What 4.0 verifies, and what it does not
+### What 5.0 verifies, and what it does not
 
 `npm test` runs four suites: **23** protocol/CLI checks, **35** UI checks,
-**25** assistant-stack checks and **99** deep checks (semantics, executor,
+**25** assistant-stack checks and **117** deep checks (semantics, executor,
 isolated verification, graph, MCP, runtime profiles, held-out evaluation,
 organisation, conversation state, plus the 3.0 checks). Two gates run on top:
 `node scripts/eval.js` (**23/23** deterministic cases, every provider disabled)
-and `node scripts/audit-tools.js` (**206** tools, **0** structural problems,
-**14** executed successfully, **192** explicitly unexecuted).
+and `node scripts/audit-tools.js` (**219** tools, **0** structural problems,
+**14** executed successfully, **205** explicitly unexecuted).
 
 Counts, measurements and the full delivery report are in
-[`docs/REPORT-4.0.md`](docs/REPORT-4.0.md) and
+[`docs/REPORT-5.0.md`](docs/REPORT-5.0.md), [`docs/REPORT-4.0.md`](docs/REPORT-4.0.md) and
 [`docs/PROGRESS.md`](docs/PROGRESS.md); research and licences in
 [`docs/research.md`](docs/research.md). Windows CI is configured but was not run
 in the sandbox that produced this report; no GPU was available, no live model
-evaluation was run, and 192 tools remain unexecuted. Those limits are stated
+evaluation was run, and 205 tools remain unexecuted. Those limits are stated
 there rather than glossed over.
 
 ## Download

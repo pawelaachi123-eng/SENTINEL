@@ -13,7 +13,7 @@
   'use strict';
 
   const T = window.SentinelTransport;
-  const APP_VERSION = '4.0.0';
+  const APP_VERSION = '5.0.0';
   const STORE = {
     pairing: 'sentinel.pairing.v2',
     demo: 'sentinel.demo.v2',

@@ -168,7 +168,10 @@
         "kind": "contains",
         "value": "outside"
       },
-      "adapter": "sandbox"
+      "adapter": "sandbox",
+      "platformInput": {
+        "win32": "C:\\\\Windows\\\\System32\\\\config\\\\SAM"
+      }
     },
     {
       "id": "semantics-compute",

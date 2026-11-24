@@ -7,7 +7,8 @@
  * surface of the protocol. The protocol revision negotiated at initialize is
  * recorded per server, because MCP has drifted (2024-11-05 → 2025-03-26 →
  * 2025-06-18 → …) and claiming "MCP support" without the revision is meaningless.
- * We request 2025-06-18 by default and accept the server's counter-proposal only
+ * We request 2025-06-18 by default (widest support) and accept the server's
+ * counter-proposal including 2025-11-25 only
  * from a known list.
  *
  * Security posture:
@@ -26,7 +27,7 @@ const { spawn } = require('node:child_process');
 const { newId } = require('./memory/store');
 const crypto = require('node:crypto');
 
-const SUPPORTED_VERSIONS = ['2025-06-18', '2025-03-26', '2024-11-05'];
+const SUPPORTED_VERSIONS = ['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05'];
 const PREFERRED_VERSION = '2025-06-18';
 const MAX_RESPONSE_BYTES = 512 * 1024;
 const DEFAULT_TIMEOUT_MS = 20000;
@@ -111,7 +112,7 @@ class McpServer {
     const init = await this.request('initialize', {
       protocolVersion: PREFERRED_VERSION,
       capabilities: { roots: { listChanged: false }, sampling: {} },
-      clientInfo: { name: 'sentinel', version: '4.0.0' },
+      clientInfo: { name: 'sentinel', version: '5.0.0' },
     });
     if (!init || !init.protocolVersion) throw new McpError('the server did not negotiate a protocol version', 'MCP_PROTOCOL');
     if (!SUPPORTED_VERSIONS.includes(init.protocolVersion)) {

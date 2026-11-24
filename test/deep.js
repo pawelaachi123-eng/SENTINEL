@@ -802,6 +802,24 @@ test('a staged patch is diffed without touching the file, and syntax is verified
   assert.equal(patches.get(session.id).status, 'verified');
 });
 
+test('a verified patch is bound to the baseline hash and refuses a changed target', () => {
+  const { PatchManager } = require('../core/patching');
+  const patches = new PatchManager({ paths: { patchesDir: () => path.join(home, 'patches-hash'), dataDir: () => home }, sandbox: { resolve: (file) => path.resolve(file) } });
+  const file = path.join(home, 'hashed-target.js');
+  fs.writeFileSync(file, 'const value = 1;\n');
+  const session = patches.create({ file, newText: 'const value = 2;\n', description: 'bump the value' });
+  const verification = patches.verify(session.id);
+  assert.equal(verification.ok, true, verification.output);
+  const stored = patches.get(session.id);
+  assert.match(stored.hashes.baseline, /^[0-9a-f]{64}$/);
+  assert.match(stored.hashes.candidate, /^[0-9a-f]{64}$/);
+  assert.notEqual(stored.hashes.baseline, stored.hashes.candidate);
+  // Somebody edits the file between verification and apply.
+  fs.writeFileSync(file, 'const value = 99;\n');
+  assert.throws(() => patches.apply(session.id, { approved: true, approvedBy: 'test' }), (err) => err.code === 'STALE_VERIFICATION');
+  assert.equal(fs.readFileSync(file, 'utf8'), 'const value = 99;\n', 'a stale patch must not overwrite the file');
+});
+
 test('test verification runs in a full copy and never writes to the workspace', () => {
   const { PatchManager } = require('../core/patching');
   const project = path.join(home, 'iso-project');
@@ -1894,6 +1912,388 @@ test('cognitive benchmark: deterministic answers, correct tool choice, honest la
   } finally {
     process.env.SENTINEL_HOME = original;
   }
+});
+
+
+/* ── neural runtime 5.0 ───────────────────────────────────────────────── */
+
+const { NeuralRuntime, capabilitiesOf, normaliseOllama } = require('../core/neural');
+
+function neuralConfig(overrides = {}) {
+  const values = {
+    'ai.providers': {
+      ollama: { enabled: true, baseUrl: 'http://fake-ollama' },
+      external: { enabled: true, baseUrl: 'http://fake-external' },
+    },
+    'ai.allowExternal': false,
+    'ai.models': { fast: 'qwen3.5:4b', balanced: 'qwen3.5:9b', embed: 'nomic-embed-text:latest' },
+    ...overrides,
+  };
+  return { get: (key) => values[key] };
+}
+
+function fakeOllama(seen) {
+  return async (url, options = {}) => {
+    seen.push(url);
+    if (url.endsWith('/api/tags')) {
+      return { ok: true, json: async () => ({ models: [{ name: 'qwen3.5:9b', size: 6810000000 }, { name: 'nomic-embed-text:latest', size: 274000000 }] }) };
+    }
+    if (url.endsWith('/api/show')) {
+      const body = JSON.parse(options.body);
+      if (body.model === 'qwen3.5:9b') {
+        return { ok: true, json: async () => ({
+          details: { family: 'qwen3', parameter_size: '9.0B', quantization_level: 'Q4_K_M' },
+          capabilities: ['completion', 'tools', 'thinking'],
+          model_info: { 'general.architecture': 'qwen3', 'general.parameter_count': 8900000000, 'qwen3.context_length': 131072, 'qwen3.embedding_length': 4096, 'qwen3.block_count': 36, 'qwen3.attention.head_count': 32, 'qwen3.attention.head_count_kv': 8 },
+        }) };
+      }
+      return { ok: true, json: async () => ({
+        details: { family: 'nomic-bert', parameter_size: '137M', quantization_level: 'F16' },
+        capabilities: ['embedding'],
+        model_info: { 'general.architecture': 'nomic-bert', 'nomic-bert.context_length': 2048, 'nomic-bert.embedding_length': 768 },
+      }) };
+    }
+    if (url.endsWith('/api/generate')) return { ok: true, json: async () => ({ done: true }) };
+    return { ok: false, status: 404, json: async () => ({}) };
+  };
+}
+
+test('neural: provider metadata becomes facts, absent fields stay null', async () => {
+  const seen = [];
+  const runtime = new NeuralRuntime({ config: neuralConfig(), fetchImpl: fakeOllama(seen) });
+  const result = await runtime.discover({ force: true });
+  assert.equal(result.found, 2);
+  const qwen = runtime.list().find((model) => model.id === 'qwen3.5:9b');
+  assert.equal(qwen.architecture, 'qwen3');
+  assert.equal(qwen.parameters, '9.0B');
+  assert.equal(qwen.quantization, 'Q4_K_M');
+  assert.equal(qwen.contextLength, 131072);
+  assert.equal(qwen.layers, 36);
+  assert.equal(qwen.heads, 32);
+  assert.equal(qwen.kvHeads, 8);
+  assert.equal(qwen.parameterCount, 8900000000);
+  assert.equal(qwen.capabilitiesInferred, false);
+  assert.ok(qwen.capabilities.includes('tools'));
+  assert.equal(qwen.sizeGb, 6.34);
+  const embed = runtime.list().find((model) => model.kind === 'embedding');
+  assert.equal(embed.contextLength, 2048);
+  assert.equal(embed.layers, null, 'missing block_count must be null, not invented');
+  // external inference is off: no request may reach it
+  assert.equal(seen.some((url) => url.includes('fake-external')), false);
+  assert.equal(runtime.status().counts.tools, 1);
+});
+
+test('neural: name-based capabilities are labelled as inference', () => {
+  const caps = capabilitiesOf('qwen3.5-vl:7b', {});
+  assert.ok(caps.capabilities.includes('vision'));
+  assert.equal(caps.inferred, true);
+  const parsed = normaliseOllama({ name: 'mystery:1b', details: {}, model_info: {} });
+  assert.equal(parsed.contextLength, null);
+  assert.equal(parsed.quantization, null);
+  assert.equal(parsed.source, 'ollama:/api/show');
+  assert.equal(parsed.capabilitiesInferred, true);
+});
+
+test('neural: discovery is cached, persists and honours a TTL', async () => {
+  const seen = [];
+  const rows = new Map();
+  const store = { list: () => [...rows.values()], put: (table, id, value) => rows.set(id, value) };
+  let clock = 1000;
+  const runtime = new NeuralRuntime({ config: neuralConfig(), fetchImpl: fakeOllama(seen), store, now: () => clock });
+  await runtime.discover({ force: true });
+  const requests = seen.length;
+  const cached = await runtime.discover({});
+  assert.equal(cached.cached, true);
+  assert.equal(seen.length, requests, 'a fresh cache must not hit the network');
+  clock += 11 * 60 * 1000;
+  await runtime.discover({});
+  assert.ok(seen.length > requests, 'an expired cache must rediscover');
+  assert.equal(rows.size, 2);
+  const restored = new NeuralRuntime({ config: neuralConfig(), fetchImpl: async () => { throw new Error('offline'); }, store });
+  assert.equal(restored.list().length, 2, 'roster survives a restart');
+});
+
+test('neural: routing picks by capability and preferred class, and refuses honestly', () => {
+  const rows = new Map();
+  const runtime = new NeuralRuntime({ config: neuralConfig(), fetchImpl: async () => ({ ok: false, status: 500, json: async () => ({}) }), store: { list: () => [], put: () => {} } });
+  runtime.models = new Map([
+    ['ollama:qwen3.5:9b', { id: 'qwen3.5:9b', provider: 'ollama', kind: 'chat-tools', capabilities: ['completion', 'tools', 'thinking'], contextLength: 131072, parameterCount: 8900000000, quantization: 'Q4_K_M' }],
+    ['ollama:nomic-embed-text:latest', { id: 'nomic-embed-text:latest', provider: 'ollama', kind: 'embedding', capabilities: ['embedding'], contextLength: 2048 }],
+  ]);
+  const route = runtime.route({ task: 'reasoning' });
+  assert.equal(route.ok, true);
+  assert.equal(route.model, 'qwen3.5:9b');
+  assert.match(route.reason, /completion/);
+  assert.equal(runtime.route({ task: 'embedding' }).model, 'nomic-embed-text:latest');
+  const none = runtime.route({ task: 'vision' });
+  assert.equal(none.ok, false);
+  assert.equal(none.code, 'NO_CAPABLE_MODEL');
+  assert.match(none.message, /vision/);
+});
+
+test('neural: chat bounds concurrency, propagates cancellation and never invents tokens', async () => {
+  const calls = [];
+  const llm = {
+    chat: async ({ messages, signal }) => {
+      calls.push({ messages, signal });
+      await new Promise((resolve) => setTimeout(resolve, 25));
+      return { text: 'ok', usage: { totalTokens: 3 } };
+    },
+  };
+  const runtime = new NeuralRuntime({ config: neuralConfig(), llm, concurrency: 2 });
+  runtime.models = new Map([['ollama:qwen3.5:9b', { id: 'qwen3.5:9b', provider: 'ollama', kind: 'chat-tools', capabilities: ['completion', 'tools'] }]]);
+  await Promise.all([0, 1, 2, 3].map(() => runtime.chat({ messages: [{ role: 'user', content: 'hi' }], task: 'tools' })));
+  const queue = runtime.status().queue[0];
+  assert.equal(queue.limit, 2);
+  assert.equal(queue.active, 0);
+  assert.equal(queue.peak, 2, `peak concurrency was ${queue.peak}`);
+  assert.equal(queue.waited, 2);
+  const controller = new AbortController();
+  controller.abort();
+  const before = calls.length;
+  await assert.rejects(() => runtime.chat({ messages: [{ role: 'user', content: 'stop' }], signal: controller.signal }), /cancelled/i);
+  assert.equal(calls.length, before, 'an aborted call must not reach the provider');
+  const count = runtime.countTokens('Zażółć gęślą jaźń');
+  assert.equal(count.estimated, true);
+  assert.match(count.method, /no provider tokenizer/);
+});
+
+test('neural: structured output gets exactly one schema repair', async () => {
+  let attempts = 0;
+  const llm = {
+    structured: async ({ messages }) => {
+      attempts += 1;
+      if (attempts === 1) throw Object.assign(new Error('expected object, got string'), { code: 'BAD_JSON' });
+      return { value: { ok: true }, raw: '{"ok":true}', messages };
+    },
+  };
+  const runtime = new NeuralRuntime({ config: neuralConfig(), llm });
+  runtime.models = new Map([['ollama:qwen3.5:9b', { id: 'qwen3.5:9b', provider: 'ollama', capabilities: ['completion'] }]]);
+  const result = await runtime.structured({ messages: [{ role: 'user', content: 'return json' }], schema: { type: 'object' } });
+  assert.equal(attempts, 2);
+  assert.equal(result.repaired, true);
+  assert.match(result.repairError, /expected object/);
+  assert.match(result.messages[0].content, /schema/);
+  assert.equal(runtime.status().counters.repairs, 1);
+});
+
+
+
+/* ── bounded reasoning 5.0 ────────────────────────────────────────────── */
+
+const { Reasoner } = require('../core/reasoning');
+
+test('reasoning: hypotheses come only from measured signals', () => {
+  const reasoner = new Reasoner();
+  const empty = reasoner.hypotheses({ question: 'why is it slow' });
+  assert.equal(empty.hypotheses.length, 0, 'no signal may not produce a story');
+  assert.match(empty.note, /No signal/);
+  const built = reasoner.hypotheses({ signals: [
+    { name: 'cpu.usage', value: 97, source: 'system.status' },
+    { name: 'disk.freeRatio', value: 0.02, source: 'system.status' },
+    { name: 'weather', value: 'rain' },
+  ] });
+  assert.deepEqual(built.hypotheses.map((entry) => entry.id), ['cpu-saturation', 'disk-exhaustion']);
+  assert.equal(built.hypotheses[0].basedOn[0].source, 'system.status');
+  assert.equal(built.hypotheses[0].status, 'untested');
+});
+
+test('reasoning: a failed measurement is untested, not support', async () => {
+  const reasoner = new Reasoner();
+  const run = async (tool) => {
+    if (tool === 'system.snapshot') return { ok: true, cpuPercent: 12 };
+    throw new Error('tool exploded');
+  };
+  const result = await reasoner.evaluate({
+    signals: [{ name: 'cpu.usage', value: 96 }, { name: 'disk.freeRatio', value: 0.01 }],
+    run,
+  });
+  assert.equal(result.supported, undefined);
+  assert.equal(result.conclusion, null);
+  assert.equal(result.verdict, 'insufficient_evidence');
+  assert.ok(result.contradicted.includes('cpu-saturation'));
+  assert.equal(result.confidence, 0);
+  assert.ok(Array.isArray(result.need), 'need must list outstanding measurements');
+  assert.ok(result.contradicted.includes('cpu-saturation'));
+  assert.ok(result.results.find((entry) => entry.id === 'disk-exhaustion').status === 'untested');
+});
+
+test('reasoning: a supported hypothesis is reported with its measured evidence', async () => {
+  const reasoner = new Reasoner();
+  const result = await reasoner.evaluate({
+    question: 'why is the machine slow',
+    signals: [{ name: 'cpu.usage', value: 93, source: 'system.status' }],
+    run: async () => ({ ok: true, cpuPercent: 91 }),
+  });
+  assert.equal(result.verdict, 'supported');
+  assert.match(result.conclusion, /CPU/);
+  assert.equal(result.confidence, 1);
+  assert.equal(result.results[0].status, 'supported');
+});
+
+test('reasoning: contradictions are preserved, and agreement needs independence', () => {
+  const reasoner = new Reasoner();
+  const result = reasoner.contradictions([
+    { key: 'gpu.vram', value: '8 GB', source: 'dxdiag' },
+    { key: 'gpu.vram', value: '8192 MB', source: 'nvidia-smi' },
+    { key: 'cpu.cores', value: 16, source: 'os' },
+  ]);
+  assert.equal(result.conflicted, 1);
+  assert.equal(result.conflicts[0].values.length, 2);
+  assert.equal(result.conflicts[0].resolution, null);
+  const same = reasoner.agreement([{ text: 'yes', model: 'qwen3.5:9b', provider: 'ollama' }, { text: 'yes', model: 'qwen3.5:9b', provider: 'ollama' }]);
+  assert.equal(same.independent, false);
+  assert.match(same.note, /not independent/);
+  const distinct = reasoner.agreement([{ text: 'yes', model: 'a', provider: 'ollama' }, { text: 'yes', model: 'b', provider: 'lmstudio' }]);
+  assert.equal(distinct.independent, true);
+  assert.match(distinct.note, /not proof/);
+});
+
+test('reasoning: the agent exposes diagnosis and refuses to reason with itself', async () => {
+  const agent = new Agent();
+  try {
+    const tool = agent.tools.get('reason.diagnose');
+    assert.ok(tool, 'reason.diagnose must be registered');
+    const result = await agent.tools.execute('reason.diagnose', { signals: [{ name: 'cpu.usage', value: 97, source: 'test' }] });
+    assert.equal(result.ok, true);
+    assert.ok(Array.isArray(result.data.results) && result.data.results.length >= 1);
+    await assert.rejects(() => agent.reasoning.runTool('reason.diagnose', {}), /itself/);
+    const facts = await agent.tools.execute('reason.contradictions', { facts: [{ key: 'a', value: 1, source: 'x' }, { key: 'a', value: 2, source: 'y' }] });
+    assert.equal(facts.data.conflicted, 1);
+    assert.equal(agent.tools.get('models.discover').permission, 'read');
+    assert.equal(agent.tools.get('models.unload').permission, 'write');
+  } finally {
+    agent.stop();
+  }
+});
+
+
+/* ── skills and code intelligence 5.0 ─────────────────────────────────── */
+
+test('skills: candidates need a held-out gate and a named approval to promote', () => {
+  const { SkillLibrary } = require('../core/skills');
+  const rows = new Map();
+  const store = { list: () => [...rows.values()], put: (table, id, value) => rows.set(id, value) };
+  const skills = new SkillLibrary({ store });
+  const first = skills.propose({ name: 'tidy-workspace', description: 'remove temp files in the workspace', steps: [{ tool: 'files.list', args: { path: '.' } }], params: { path: { type: 'string', required: false } } });
+  assert.equal(first.ok, true);
+  assert.equal(first.skill.status, 'candidate');
+  const duplicate = skills.propose({ name: 'tidy-workspace', description: 'remove temp files in the workspace', steps: [{ tool: 'files.list', args: { path: '.' } }], params: { path: { type: 'string', required: false } } });
+  assert.equal(duplicate.duplicate, true);
+  assert.equal(skills.status().total, 1);
+  const unapproved = skills.validate(first.skill.id, { gate: { heldOut: true, ok: true, score: 1, cases: 5, passed: 5 } });
+  assert.equal(unapproved.code, 'APPROVAL_REQUIRED');
+  const notHeldOut = skills.validate(first.skill.id, { gate: { heldOut: false, ok: true, score: 1 }, approvedBy: 'Pawel' });
+  assert.equal(notHeldOut.code, 'NOT_HELD_OUT');
+  const failed = skills.validate(first.skill.id, { gate: { heldOut: true, ok: false, score: 0.4 }, approvedBy: 'Pawel' });
+  assert.equal(failed.code, 'GATE_FAILED');
+  assert.equal(skills.get(first.skill.id).status, 'candidate');
+  const promoted = skills.validate(first.skill.id, { gate: { heldOut: true, ok: true, score: 1, cases: 6, passed: 6, mode: 'deterministic' }, approvedBy: 'Pawel' });
+  assert.equal(promoted.ok, true);
+  assert.equal(promoted.skill.status, 'validated');
+  assert.equal(promoted.skill.tests.cases, 6);
+  assert.equal(skills.match('remove temp workspace').matches[0].name, 'tidy-workspace');
+});
+
+test('skills: a regression is rejected and retirement is final', () => {
+  const { SkillLibrary } = require('../core/skills');
+  const skills = new SkillLibrary({ store: null });
+  const v1 = skills.propose({ name: 'check-disk', description: 'read free disk space', steps: [{ tool: 'disk.volumes' }] });
+  skills.validate(v1.skill.id, { gate: { heldOut: true, ok: true, score: 0.95, cases: 20, passed: 19 }, approvedBy: 'Pawel' });
+  const v2 = skills.propose({ name: 'check-disk', description: 'read free disk space and warn', steps: [{ tool: 'disk.volumes' }, { tool: 'system.snapshot' }] });
+  assert.equal(v2.skill.version, 2);
+  const regression = skills.validate(v2.skill.id, { gate: { heldOut: true, ok: true, score: 0.8, cases: 20, passed: 16 }, approvedBy: 'Pawel' });
+  assert.equal(regression.code, 'REGRESSION');
+  assert.match(regression.message, /belows|below/);
+  assert.equal(skills.get(v1.skill.id).status, 'validated', 'the good version must stay validated');
+  const better = skills.validate(v2.skill.id, { gate: { heldOut: true, ok: true, score: 0.99, cases: 25, passed: 25 }, approvedBy: 'Pawel' });
+  assert.equal(better.ok, true);
+  assert.equal(skills.get(v1.skill.id).status, 'superseded');
+  assert.equal(skills.retire(v2.skill.id, { reason: 'obsolete', approvedBy: 'Pawel' }).skill.status, 'retired');
+  assert.equal(skills.validate(v2.skill.id, { gate: { heldOut: true, ok: true, score: 1 }, approvedBy: 'Pawel' }).code, 'RETIRED');
+  assert.equal(skills.match('disk').matches.length, 0, 'retired skills must not match');
+});
+
+test('code intelligence: symbols, imports, impact and nearest tests from real files', () => {
+  const { RepoMap } = require('../core/repomap');
+  const repo = path.join(home, 'repo-fixture');
+  fs.rmSync(repo, { recursive: true, force: true });
+  fs.mkdirSync(path.join(repo, 'lib'), { recursive: true });
+  fs.mkdirSync(path.join(repo, 'test'), { recursive: true });
+  fs.writeFileSync(path.join(repo, 'lib', 'math.js'), 'function add(a, b) {\n  return a + b;\n}\n\nclass Calculator {\n  add(a, b) { return add(a, b); }\n}\nmodule.exports = { add, Calculator };\n');
+  fs.writeFileSync(path.join(repo, 'lib', 'app.js'), "const { add } = require('./math');\nconst Calculator = require('./math').Calculator;\nfunction run() { return add(1, 2); }\nmodule.exports = { run, Calculator };\n");
+  fs.writeFileSync(path.join(repo, 'test', 'math.test.js'), "const { add } = require('../lib/math');\nif (add(1, 2) !== 3) process.exit(1);\n");
+  fs.writeFileSync(path.join(repo, 'tool.py'), 'def helper(x):\n    return x + 1\n\nclass Thing:\n    pass\n');
+  fs.writeFileSync(path.join(repo, 'notes.md'), '# notes\n');
+  const map = new RepoMap({ root: repo });
+  const summary = map.scan();
+  assert.equal(summary.files, 5);
+  assert.equal(summary.languages.javascript, 3);
+  assert.equal(summary.languages.python, 1);
+  assert.equal(summary.tests, 1);
+  const found = map.search('add');
+  assert.ok(found.matches.some((match) => match.file === 'lib/math.js' && match.symbol === 'add'));
+  assert.ok(map.search('run').matches.some((match) => match.file === 'lib/app.js' && match.symbol === 'run'));
+  const impact = map.impact({ file: 'lib/math.js', symbol: 'add' });
+  assert.equal(impact.ok, true);
+  assert.ok(impact.dependents.some((entry) => entry.file === 'lib/app.js'));
+  assert.ok(impact.references.some((entry) => entry.file === 'lib/app.js' && entry.count >= 1));
+  assert.equal(impact.tests[0].file, 'test/math.test.js');
+  assert.equal(map.impact({ file: 'missing.js' }).code, 'NOT_FOUND');
+  assert.match(summary.honest, /not a type-aware parser/);
+  assert.equal(map.status().cached, true);
+});
+
+test('code intelligence: file and size bounds are reported, not hidden', () => {
+  const { RepoMap } = require('../core/repomap');
+  const repo = path.join(home, 'repo-bounded');
+  fs.rmSync(repo, { recursive: true, force: true });
+  fs.mkdirSync(repo, { recursive: true });
+  for (let index = 0; index < 6; index += 1) fs.writeFileSync(path.join(repo, `file-${index}.js`), `function f${index}() { return ${index}; }\n`);
+  fs.writeFileSync(path.join(repo, 'huge.js'), `function huge() {}\n${'// filler\n'.repeat(200000)}`);
+  const map = new RepoMap({ root: repo, maxFiles: 4 });
+  const summary = map.scan();
+  assert.equal(summary.files, 4);
+  assert.equal(summary.truncated, true);
+  const unbounded = new RepoMap({ root: repo, maxFiles: 50, maxFileBytes: 1000 }).scan();
+  assert.ok(!unbounded.languages.javascript || unbounded.files <= 6, 'a file over maxFileBytes must be skipped');
+});
+
+
+/* ── context attention 5.0 ────────────────────────────────────────────── */
+
+test('context: user constraints are mandatory, and overflow is reported not hidden', () => {
+  const { ContextManager } = require('../core/context');
+  const manager = new ContextManager({ maxTokens: 6000 });
+  manager.budgetFor = () => 300;
+  const longNote = 'nie ruszaj produkcji '.repeat(120);
+  const built = manager.build({
+    question: 'co dalej',
+    brief: { constraints: [{ note: longNote }], budget: null, mode: 'balanced' },
+    memories: Array.from({ length: 20 }, (_, index) => ({ text: `memory ${index} `.repeat(30), score: 0.5 })),
+  });
+  assert.match(built.block, /Ograniczenia od użytkownika/);
+  assert.match(built.block, /nie ruszaj produkcji/);
+  assert.equal(built.overflow, true);
+  assert.equal(built.tokenMethod, 'estimate');
+  assert.equal(built.budget, 300);
+  assert.ok(built.sections.find((section) => section.name === 'constraints').mandatory);
+  assert.ok(built.tokens > built.fitTokens, 'mandatory content may exceed the fit budget, visibly');
+});
+
+test('context: the output reserve is subtracted before optional sections are admitted', () => {
+  const { ContextManager } = require('../core/context');
+  const manager = new ContextManager({ maxTokens: 6000 });
+  manager.budgetFor = () => 1000;
+  const built = manager.build({
+    question: 'short question',
+    reserveTokens: 600,
+    memories: Array.from({ length: 30 }, (_, index) => ({ text: `memory ${index} `.repeat(40) })),
+  });
+  assert.equal(built.fitTokens, 400);
+  assert.equal(built.reserveTokens, 600);
+  assert.ok(built.tokens <= 400, `optional context used ${built.tokens} of 400 fit tokens`);
+  assert.ok(built.dropped.length > 0, 'the budget must actually drop something');
 });
 
 /* ── runner ───────────────────────────────────────────────────────────── */

@@ -83,21 +83,25 @@ class ContextManager {
     systemRules = null,
     mode = null,
     modelContext = null,
+    reserveTokens = 512,
   } = {}) {
     const maxTokens = brief && brief.budget ? Math.min(this.budgetFor({ mode: brief.mode || mode, modelContext }), brief.budget.tokens * 2) : this.budgetFor({ mode, modelContext });
     const sections = [];
 
-    const add = (name, priority, text) => {
+    const add = (name, priority, text, { mandatory = false } = {}) => {
       const body = String(text || '').trim();
       if (!body) return;
-      sections.push({ name, priority, text: body, tokens: estimateTokens(body) });
+      sections.push({ name, priority, text: body, tokens: estimateTokens(body), mandatory });
     };
+    // Room for the answer itself: a context that fills the window cannot be
+    // answered from, and tool schemas also need space.
+    const fitTokens = Math.max(256, maxTokens - Math.max(0, Number(reserveTokens) || 0));
 
-    if (systemRules) add('system', PRIORITY.system, systemRules);
-    add('question', PRIORITY.question, `Pytanie: ${question}`);
+    if (systemRules) add('system', PRIORITY.system, systemRules, { mandatory: true });
+    add('question', PRIORITY.question, `Pytanie: ${question}`, { mandatory: true });
     if (brief) {
       if (brief.constraints && brief.constraints.length) {
-        add('constraints', PRIORITY.constraints, `Ograniczenia od użytkownika:\n${brief.constraints.map((entry) => `- ${entry.note}`).join('\n')}`);
+        add('constraints', PRIORITY.constraints, `Ograniczenia od użytkownika:\n${brief.constraints.map((entry) => `- ${entry.note}`).join('\n')}`, { mandatory: true });
       }
       if (brief.assumptions && brief.assumptions.length) {
         add('assumptions', PRIORITY.assumptions, `Założenia:\n${brief.assumptions.map((entry) => `- ${entry.text}`).join('\n')}`);
@@ -153,19 +157,29 @@ class ContextManager {
     let used = 0;
     const kept = [];
     const dropped = [];
+    let overflow = false;
     for (const section of ordered) {
-      if (used + section.tokens <= maxTokens) {
+      if (section.mandatory) {
+        // Mandatory sections (system rules, the question, explicit user
+        // constraints) are never dropped. If they do not fit, that is reported
+        // instead of silently discarding the user's own constraints.
+        if (used + section.tokens > fitTokens) overflow = true;
+        kept.push(section);
+        used += section.tokens;
+        continue;
+      }
+      if (used + section.tokens <= fitTokens) {
         kept.push(section);
         used += section.tokens;
         continue;
       }
       // A section that almost fits is truncated once; anything else is dropped.
-      const room = maxTokens - used;
+      const room = fitTokens - used;
       if (room > 120 && section.priority >= PRIORITY.memories) {
         const keepChars = Math.max(200, room * 4 - 60);
         const text = `${section.text.slice(0, keepChars)}… [skrócone]`;
         const tokens = estimateTokens(text);
-        if (used + tokens <= maxTokens) {
+        if (used + tokens <= fitTokens) {
           kept.push({ ...section, text, tokens, truncated: true });
           used += tokens;
           this.counters.trimmed += 1;
@@ -185,7 +199,11 @@ class ContextManager {
       block,
       tokens: used,
       budget: maxTokens,
-      sections: finalSections.map((section) => ({ name: section.name, tokens: section.tokens, truncated: Boolean(section.truncated) })),
+      reserveTokens: Math.max(0, Number(reserveTokens) || 0),
+      fitTokens,
+      overflow,
+      tokenMethod: 'estimate',
+      sections: finalSections.map((section) => ({ name: section.name, tokens: section.tokens, truncated: Boolean(section.truncated), mandatory: Boolean(section.mandatory) })),
       dropped,
       history: digest,
       utilisation: Number((used / maxTokens).toFixed(2)),
