@@ -61,14 +61,42 @@ jobs:
       - name: Behaviour tests on Windows
         shell: pwsh
         run: |
-          node test/run.js
-          if ($LASTEXITCODE -ne 0) { exit 1 }
-          node scripts/check.js
-          if ($LASTEXITCODE -ne 0) { exit 1 }
-          node test/ai.js
-          if ($LASTEXITCODE -ne 0) { exit 1 }
-          node test/deep.js
-          if ($LASTEXITCODE -ne 0) { exit 1 }
+          # Each suite is run separately and its failing assertions are emitted
+          # as workflow annotations, so a red Windows build is diagnosable
+          # without downloading logs.
+          $failed = $false
+          $suites = @(
+            @{ name = 'run';  file = 'test/run.js' },
+            @{ name = 'check'; file = 'scripts/check.js' },
+            @{ name = 'ai';   file = 'test/ai.js' },
+            @{ name = 'deep'; file = 'test/deep.js' }
+          )
+          foreach ($suite in $suites) {
+            Write-Host "::group::$($suite.file)"
+            $output = & node $suite.file 2>&1 | Out-String
+            $code = $LASTEXITCODE
+            Write-Host $output
+            Write-Host "::endgroup::"
+            $output | Set-Content "windows-$($suite.name).log"
+            if ($code -ne 0) {
+              $failed = $true
+              $details = ($output -split "`r?`n" | Where-Object { $_ -match '✗|Error|failed|AssertionError' } | Select-Object -First 6) -join ' | '
+              if (-not $details) { $details = ($output -split "`r?`n" | Select-Object -Last 3) -join ' | ' }
+              $details = $details -replace '%', '%25' -replace "`r", '' -replace "`n", '%0A'
+              Write-Host "::error title=Windows $($suite.file) failed::$details"
+            } else {
+              Write-Host "::notice title=Windows $($suite.file) passed::exit 0"
+            }
+          }
+          if ($failed) { exit 1 }
+      - name: Upload Windows test logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-behaviour-logs
+          path: windows-*.log
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Deterministic evaluation on Windows
         shell: pwsh
         run: |
