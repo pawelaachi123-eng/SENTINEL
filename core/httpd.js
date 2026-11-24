@@ -730,6 +730,21 @@ class HttpApi {
 
 
 
+
+    /* ── 4.0: model runtime profiles ───────────────────────────────────── */
+
+    if (route === '/api/runtime' && req.method === 'GET') {
+      if (!this.ai || !this.ai.runtime) return this.json(res, 200, { ok: true, data: null });
+      return this.json(res, 200, { ok: true, data: await this.ai.runtime.status() });
+    }
+
+    if (route === '/api/runtime' && req.method === 'POST') {
+      if (!this.ai || !this.ai.runtime) return this.json(res, 503, { ok: false, error: 'AI not ready' });
+      const body = await this.body(req);
+      if (body.action !== 'set') return this.json(res, 200, { ok: false, code: 'BAD_ACTION', message: 'action must be set' });
+      return this.json(res, 200, { ok: true, data: await this.ai.runtime.apply(String(body.profile || ''), { reason: body.reason || 'set from the UI' }) });
+    }
+
     /* ── 4.0: MCP (opt-in) ─────────────────────────────────────────────── */
 
     if (route === '/api/mcp' && req.method === 'GET') {

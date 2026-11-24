@@ -1272,7 +1272,116 @@ test('graph tools read and link through the tool permission layer', async () => 
   assert.equal(stats.data.nodes, 2);
 });
 
+/* ── model runtime (4.0) ──────────────────────────────────────────────── */
+
+const { RuntimeManager, estimateModelGb, detectHardware } = require('../core/runtime');
+
+function runtimeConfig({ profile = 'balanced', models = {}, ollama = { enabled: true, baseUrl: 'http://127.0.0.1:11434' } } = {}) {
+  const data = {
+    'ai.runtime.profile': profile,
+    'ai.models': { fast: 'qwen3.5:4b', balanced: 'qwen3.5:9b', deep: 'qwen3.5:9b', ...models },
+    'ai.providers.ollama': ollama,
+  };
+  return {
+    data,
+    get(key, fallback) {
+      return data[key] === undefined ? fallback : data[key];
+    },
+    set(key, value) {
+      data[key] = value;
+    },
+  };
+}
+
+const HARDWARE_8GB = { platform: 'win32', arch: 'x64', cpu: 'Intel Core i7-13700F', cores: 24, memoryGb: 32, freeMemoryGb: 18, gpu: { name: 'NVIDIA GeForce RTX 4060 Ti', vramGb: 8, driver: '551.23' }, gpuSource: 'nvidia-smi' };
+
+test('runtime hardware detection is cached and degrades honestly without a GPU', () => {
+  let calls = 0;
+  const fakeSpawn = () => {
+    calls += 1;
+    return { status: 0, stdout: 'NVIDIA GeForce RTX 4060 Ti, 8188, 551.23\n' };
+  };
+  const state = {};
+  const first = detectHardware({ spawn: fakeSpawn, now: () => 1000, state });
+  assert.equal(first.gpu.vramGb, 8);
+  assert.equal(first.gpuSource, 'nvidia-smi');
+  const second = detectHardware({ spawn: fakeSpawn, now: () => 1500, state });
+  assert.equal(calls, 1, 'hardware detection was not cached');
+  assert.equal(second.gpu.name, 'NVIDIA GeForce RTX 4060 Ti');
+  const noGpu = detectHardware({ spawn: () => { throw new Error('ENOENT'); }, now: () => 5000, state: {} });
+  assert.equal(noGpu.gpu, null);
+  assert.equal(noGpu.gpuSource, 'none');
+});
+
+test('model footprint estimates are labelled and grow with parameters', () => {
+  const small = estimateModelGb('qwen3.5:4b');
+  const big = estimateModelGb('qwen3.5:14b');
+  assert.equal(small.estimated, true);
+  assert.ok(big.totalGb > small.totalGb);
+  assert.equal(estimateModelGb('nomic-embed-text'), null, 'an embedding model has no parameter count in its name');
+  const context = estimateModelGb('qwen3.5:9b', { contextTokens: 32768 });
+  assert.ok(context.totalGb > estimateModelGb('qwen3.5:9b').totalGb, 'a larger context did not raise the KV estimate');
+});
+
+test('deep is refused when the model does not fit the detected VRAM', () => {
+  const config = runtimeConfig({ models: { deep: 'qwen3.5:32b' } });
+  const runtime = new RuntimeManager({ config, hardware: HARDWARE_8GB, log: null });
+  const feasibility = runtime.feasibility('deep');
+  assert.equal(feasibility.ok, false);
+  assert.equal(feasibility.code, 'VRAM_INSUFFICIENT');
+  assert.ok(feasibility.message.includes('estimate'));
+  const decision = runtime.effectiveMode('deep');
+  assert.equal(decision.mode, 'balanced');
+  assert.match(decision.reason, /VRAM|GB/);
+  const applied = runtime.apply('deep');
+  return applied.then((result) => {
+    assert.equal(result.ok, false);
+    assert.equal(runtime.profile, 'balanced', 'the refused profile was applied anyway');
+    assert.equal(runtime.counters.refusals, 1);
+  });
+});
+
+test('gaming unloads resident models and refuses heavy work with a reason', async () => {
+  const config = runtimeConfig();
+  const requests = [];
+  const fetchImpl = async (url, options = {}) => {
+    requests.push({ url, options });
+    if (url.endsWith('/api/ps')) {
+      return { ok: true, json: async () => ({ models: [{ name: 'qwen3.5:9b', size: 5 * 1024 * 1024 * 1024, size_vram: 5 * 1024 * 1024 * 1024 }, { name: 'nomic-embed-text', size: 512 * 1024 * 1024 }] }) };
+    }
+    return { ok: true, json: async () => ({}) };
+  };
+  const runtime = new RuntimeManager({ config, hardware: HARDWARE_8GB, fetchImpl, log: null });
+  const result = await runtime.apply('gaming', { reason: 'test session' });
+  assert.equal(result.ok, true);
+  assert.equal(result.unloaded.length, 2);
+  assert.ok(result.unloaded.every((entry) => entry.ok));
+  const generateCalls = requests.filter((request) => request.url.endsWith('/api/generate'));
+  assert.equal(generateCalls.length, 2);
+  assert.ok(generateCalls.every((request) => JSON.parse(request.options.body).keep_alive === 0));
+  assert.equal(config.get('ai.providers.ollama.keepAlive'), '0s');
+  assert.equal(config.get('ai.runtime.profile'), 'gaming');
+  const decision = runtime.effectiveMode('deep');
+  assert.equal(decision.mode, 'fast');
+  assert.match(decision.reason, /gaming/);
+  const status = await runtime.status();
+  assert.equal(status.profile, 'gaming');
+  assert.equal(status.estimates.honest, 'estimates, not measurements');
+  assert.equal(status.resident.models.length, 2);
+});
+
+test('unloading is refused for a provider that has no keep-alive control', async () => {
+  const config = runtimeConfig({ ollama: { enabled: false } });
+  const runtime = new RuntimeManager({ config, hardware: HARDWARE_8GB, fetchImpl: async () => { throw new Error('should not be called'); }, log: null });
+  const result = await runtime.unload('qwen3.5:9b');
+  assert.equal(result.ok, false);
+  assert.equal(result.code, 'PROVIDER_UNSUPPORTED');
+  const resident = await runtime.resident();
+  assert.equal(resident.supported, false);
+});
+
 /* ── MCP client (4.0) ─────────────────────────────────────────────────── */
+
 
 const http = require('node:http');
 const { McpHub, McpServer } = require('../core/mcp');

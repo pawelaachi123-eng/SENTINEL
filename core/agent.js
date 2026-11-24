@@ -35,6 +35,7 @@ const { SemanticInterpreter } = require('./semantics');
 const { Executor } = require('./executor');
 const { KnowledgeGraph } = require('./graph');
 const { McpHub } = require('./mcp');
+const { RuntimeManager } = require('./runtime');
 const { ExperienceStore } = require('./experience');
 const { EventBus } = require('./events');
 const { Metrics } = require('./metrics');
@@ -94,6 +95,7 @@ class Agent extends EventEmitter {
       this.tasks = new TaskManager({ store: this.store, log: this.log });
       this.approvals = new ApprovalQueue({ log: this.log });
       this.llm = new LlmClient({ config: this.config, log: this.log, metrics: this.metrics, events: this.events, experience: this.experience });
+      this.runtime = new RuntimeManager({ config: this.config, llm: this.llm, log: this.log });
       this.semantics = new SemanticInterpreter({ cognitive: this.cognitive, llm: this.llm, log: this.log, config: this.config });
       this.sandbox = new Sandbox({ config: this.config, log: this.log, paths: pathsModule });
       if (this.patches) this.patches.sandbox = this.sandbox;
@@ -121,6 +123,7 @@ class Agent extends EventEmitter {
       this.tools = buildTools({ config: this.config, log: this.log, sandbox: this.sandbox, approvals: this.approvals, services: this.services });
       this.mcp = new McpHub({ config: this.config, log: this.log, registry: this.tools, store: this.store });
       this.services.mcp = this.mcp;
+      this.services.runtime = this.runtime;
       this.agents = new AgentRegistry();
       this.dispatcher = new Dispatcher({
         agents: this.agents,
@@ -158,6 +161,7 @@ class Agent extends EventEmitter {
         executor: this.executor,
         graph: this.graph,
         mcp: this.mcp,
+        runtime: this.runtime,
         experience: this.experience,
         events: this.events,
         metrics: this.metrics,
@@ -281,6 +285,7 @@ class Agent extends EventEmitter {
             executor: this.executor || null,
             graph: this.graph || null,
             mcp: this.mcp || null,
+            runtime: this.runtime || null,
             incidents: this.incidents || null,
             tasks: this.tasks || null,
           }
@@ -428,6 +433,7 @@ class Agent extends EventEmitter {
       executor: this.executor ? { ...this.executor.counters } : null,
       graph: this.graph ? this.graph.stats() : null,
       mcp: this.mcp ? this.mcp.status() : null,
+      runtime: this.runtime ? { profile: this.runtime.profile, hardware: this.runtime.hardware } : null,
       watchdogs: (this.watchdogs || []).map((watchdog) => watchdog.status()),
       voice: this.voice.counters,
       vision: this.vision.counters,

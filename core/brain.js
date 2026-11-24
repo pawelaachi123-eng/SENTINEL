@@ -335,7 +335,14 @@ class Brain {
       throw Object.assign(new Error('the cognitive core is not wired up (no dispatcher)'), { code: 'BRAIN_NOT_READY' });
     }
     const started = this.now();
-    const chosenMode = ['fast', 'balanced', 'deep', 'research'].includes(mode) ? mode : (this.config.get('ai.mode') || 'balanced');
+    let chosenMode = ['fast', 'balanced', 'deep', 'research'].includes(mode) ? mode : (this.config.get('ai.mode') || 'balanced');
+    // The runtime profile can veto heavy modes (gaming keeps VRAM free, or the
+    // model does not fit). The downgrade and its reason travel with the answer.
+    let runtimeDecision = { mode: chosenMode, reason: null, profile: this.runtime ? this.runtime.profile : null };
+    if (this.runtime) {
+      runtimeDecision = this.runtime.effectiveMode(chosenMode);
+      chosenMode = runtimeDecision.mode;
+    }
     const id = runId || `run_${started.toString(36)}${Math.random().toString(36).slice(2, 7)}`;
     // Accepts both stage('name', detail) and stage({stage:'name', ...}), because
     // the dispatcher emits events while agents use the shorter form.
@@ -353,6 +360,7 @@ class Brain {
     this.runs.set(id, run);
     if (!this.runMeta) this.runMeta = new Map();
     this.runMeta.set(id, {});
+    this.runMeta.get(id).runtime = runtimeDecision;
     if (this.runMeta.size > 30) this.runMeta.delete([...this.runMeta.keys()][0]);
     if (this.runs.size > 30) this.runs.delete([...this.runs.keys()][0]);
     this.chatCounters.questions += 1;
@@ -370,6 +378,8 @@ class Brain {
         }
       }
     };
+
+    if (runtimeDecision.reason) emitted('runtime', { downgraded: true, from: mode || chosenMode, reason: runtimeDecision.reason, profile: runtimeDecision.profile });
 
     // 0. understand — before searching, decide what the question is, how risky
     // it is, what would count as done and whether it is answerable at all.
@@ -857,6 +867,7 @@ class Brain {
     // A tool produced this text and no model touched it: measured, not generated.
     const exact = !cancelled && !answer.model && !answer.provider && text.length > 0 && text.length <= 400 && runtime.toolLog.some((entry) => entry.ok);
     const graphContext = (this.runMeta && this.runMeta.get(run.id) && this.runMeta.get(run.id).graph) || null;
+    const runtimeDecision = (this.runMeta && this.runMeta.get(run.id) && this.runMeta.get(run.id).runtime) || null;
     const final = {
       runId: run.id,
       text,
@@ -911,6 +922,7 @@ class Brain {
       uncertainty: brief ? brief.uncertainty : null,
       reflection,
       execution: answer.execution || null,
+      runtime: answer.runtime || runtimeDecision,
       graph: graphContext
         ? {
             seeds: graphContext.seeds,
