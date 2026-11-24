@@ -111,8 +111,8 @@ and `node scripts/audit-tools.js` (**219** tools, **0** structural problems,
 Counts, measurements and the full delivery report are in
 [`docs/REPORT-5.0.md`](docs/REPORT-5.0.md), [`docs/REPORT-4.0.md`](docs/REPORT-4.0.md) and
 [`docs/PROGRESS.md`](docs/PROGRESS.md); research and licences in
-[`docs/research.md`](docs/research.md). Windows CI is configured but was not run
-in the sandbox that produced this report; no GPU was available, no live model
+[`docs/research.md`](docs/research.md). Windows CI is green as of commit `d995bf7` (behaviour tests, deterministic
+evaluation and tool audit); no GPU was available, no live model
 evaluation was run, and 205 tools remain unexecuted. Those limits are stated
 there rather than glossed over.
 

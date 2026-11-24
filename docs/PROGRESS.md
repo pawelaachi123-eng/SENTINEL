@@ -26,7 +26,7 @@ Not implemented yet: learning lab, new memory types/research sessions, expanded
 executive DAG, organisation growth, tool growth to 300+, multi-file coding
 patches, hardware measurements, security/fault-injection suites, multimodal
 fixtures, new UI panels, expanded eval corpus, 5.0 installer changes, and a green
-Windows CI run. **The Windows fix is unverified until CI is green.**
+Windows CI run. **Windows CI is green** as of `d995bf7`: behaviour tests, deterministic evaluation and tool audit all passed on `windows-latest`.
 
 # Historical: SENTINEL 4.0 progress log
 

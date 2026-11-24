@@ -107,8 +107,7 @@ Tool count grew from 206 to **219** across the same 22 categories: 4 neural,
   modes.
 - Multimodal STT/TTS/OCR fixtures, ESP32/Android integration verification.
 - UI panels for the new subsystems, orb state bindings, scheduled workflows.
-- Expanded cognitive evaluation corpus (hundreds of cases) and a Windows CI
-  re-run with a green result.
+- Expanded cognitive evaluation corpus (hundreds of cases).
 - Installer changes for 5.0 (the 4.0 installer and health checks are unchanged).
 
 ## Sources used
@@ -125,5 +124,5 @@ Tool count grew from 206 to **219** across the same 22 categories: 4 neural,
 ## Limitations that must be repeated
 
 The deterministic gate passed against the mock provider. No live model was
-called, no GPU measurement was taken, the Windows job has not been re-run yet,
+called, no GPU measurement was taken, the Windows job is green but no GPU was tested,
 and 205 of 219 tools were not executed by the audit. Those are gaps, not passes.
