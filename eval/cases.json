@@ -1,0 +1,221 @@
+{
+  "version": 1,
+  "note": "Deterministic-core cases: they exercise cognition, semantics, security classification and command gating with no model involved. Model-quality cases belong in a live run (scripts/eval.js --live) and must not be inferred from these results.",
+  "cases": [
+    {
+      "id": "arith-basic-1",
+      "input": "ile to 6*7",
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "42"
+        ]
+      },
+      "adapter": "arithmetic"
+    },
+    {
+      "id": "arith-basic-2",
+      "input": "2+2*2",
+      "expected": {
+        "kind": "contains",
+        "value": "= 6"
+      },
+      "adapter": "arithmetic"
+    },
+    {
+      "id": "arith-percent",
+      "input": "15% ze 200",
+      "expected": {
+        "kind": "contains",
+        "value": "30"
+      },
+      "adapter": "arithmetic"
+    },
+    {
+      "id": "arith-power",
+      "input": "2^10",
+      "expected": {
+        "kind": "contains",
+        "value": "1,024"
+      },
+      "adapter": "arithmetic"
+    },
+    {
+      "id": "arith-sqrt",
+      "input": "pierwiastek z 144",
+      "expected": {
+        "kind": "contains",
+        "value": "12"
+      },
+      "adapter": "arithmetic"
+    },
+    {
+      "id": "arith-division",
+      "input": "100 / 8",
+      "expected": {
+        "kind": "contains",
+        "value": "12.5"
+      },
+      "adapter": "arithmetic"
+    },
+    {
+      "id": "arith-injection",
+      "input": "ile to 2+2; rm -rf /",
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "4"
+        ]
+      },
+      "adapter": "arithmetic"
+    },
+    {
+      "id": "lang-pl",
+      "input": "jaka jest pogoda w Krakowie",
+      "expected": {
+        "kind": "equals",
+        "value": "pl"
+      },
+      "adapter": "language"
+    },
+    {
+      "id": "lang-en",
+      "input": "what is the weather in London",
+      "expected": {
+        "kind": "equals",
+        "value": "en"
+      },
+      "adapter": "language"
+    },
+    {
+      "id": "spelling-pl",
+      "input": "jaki jest stauts systemu",
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "status"
+        ]
+      },
+      "adapter": "spelling"
+    },
+    {
+      "id": "risk-shell-1",
+      "input": "wyłącz komputer",
+      "expected": {
+        "kind": "equals",
+        "value": "medium"
+      },
+      "adapter": "risk"
+    },
+    {
+      "id": "risk-shell-2",
+      "input": "usuń wszystkie pliki z dysku",
+      "expected": {
+        "kind": "equals",
+        "value": "high"
+      },
+      "adapter": "risk"
+    },
+    {
+      "id": "risk-safe",
+      "input": "jaka jest pogoda",
+      "expected": {
+        "kind": "equals",
+        "value": "low"
+      },
+      "adapter": "risk"
+    },
+    {
+      "id": "secret-redaction",
+      "input": "moje hasło to hunter2 a token to abc123",
+      "expected": {
+        "kind": "contains",
+        "value": "password"
+      },
+      "adapter": "secret"
+    },
+    {
+      "id": "secret-not-stored",
+      "input": "zapisz hasło do bazy: tajne123",
+      "expected": {
+        "kind": "contains",
+        "value": "password"
+      },
+      "adapter": "secret"
+    },
+    {
+      "id": "permission-read-tool",
+      "input": "fs.read",
+      "expected": {
+        "kind": "equals",
+        "value": "read"
+      },
+      "adapter": "toolPermission"
+    },
+    {
+      "id": "permission-system-tool",
+      "input": "esp.reset",
+      "expected": {
+        "kind": "equals",
+        "value": "system"
+      },
+      "adapter": "toolPermission"
+    },
+    {
+      "id": "sandbox-escape",
+      "input": "/etc/passwd",
+      "expected": {
+        "kind": "contains",
+        "value": "outside"
+      },
+      "adapter": "sandbox"
+    },
+    {
+      "id": "semantics-compute",
+      "input": "ile to 12*12",
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "compute"
+        ]
+      },
+      "adapter": "semanticsKind"
+    },
+    {
+      "id": "semantics-clarify",
+      "input": "a to?",
+      "expected": {
+        "kind": "contains",
+        "value": "clarify"
+      },
+      "adapter": "semanticsKind"
+    },
+    {
+      "id": "semantics-risk-preserved",
+      "input": "wyłącz komputer",
+      "expected": {
+        "kind": "equals",
+        "value": "medium"
+      },
+      "adapter": "semanticsRisk"
+    },
+    {
+      "id": "memory-no-secret",
+      "input": "token=ghp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "expected": {
+        "kind": "contains",
+        "value": "password"
+      },
+      "adapter": "secret"
+    },
+    {
+      "id": "deny-default",
+      "input": "esp.reset",
+      "expected": {
+        "kind": "equals",
+        "value": "true"
+      },
+      "adapter": "toolApproval"
+    }
+  ]
+}

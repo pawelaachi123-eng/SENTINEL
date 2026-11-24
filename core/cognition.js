@@ -203,11 +203,14 @@ class CognitiveCore {
     const text = String(question || '');
     const flags = [];
     if (SIGNALS.destructive.test(text)) flags.push('destructive-verb');
+    // Mass deletion has no single target to protect: treat it as high risk even
+    // when the verb is otherwise ordinary.
+    if (/(usun|usuń|skasuj|kasuj|delete|remove|wipe|format|formatuj)[^.\n]{0,40}(wszystk\w*|all|dysk|dysku|dyskach|katalog|folder|plików|pliki)/i.test(text) && /(wszystk\w*|all|dysk|dysku|katalog|folder)/i.test(text)) flags.push('mass-deletion');
     if (/\b(system32|rejestr|registry|regedit|bcdedit|diskpart|format\s+[a-z]:)/i.test(text)) flags.push('system-level');
     if (/\b(hasło|haslo|token|api[ _-]?key|klucz prywatny|password|credentials)\b/i.test(text)) flags.push('secret-mention');
     if (/\b(uprawnienia|administrator|sudo|runas|admin)\b/i.test(text)) flags.push('privilege');
     if (/\b(wyłącz|wylacz|disable)\b.*\b(defender|firewall|antivirus|sandbox)\b/i.test(text)) flags.push('security-bypass');
-    const level = flags.includes('security-bypass') || flags.includes('system-level') ? 'high' : flags.length ? 'medium' : 'low';
+    const level = flags.includes('security-bypass') || flags.includes('system-level') || flags.includes('mass-deletion') ? 'high' : flags.length ? 'medium' : 'low';
     return { level, flags, requiresApprovalHint: level !== 'low' };
   }
 

@@ -42,7 +42,7 @@ const VOCAB = [
   'wentylator', 'system', 'windows', 'sterownik', 'sterowniki', 'aktualizacja', 'instalacja', 'folder',
   'plik', 'pliku', 'dokument', 'dokumenty', 'zdjecie', 'zdjęcie', 'ekran', 'klawiatura', 'mysz',
   'siec', 'sieć', 'internet', 'bateria', 'laptop', 'komputer', 'oprogramowanie', 'program', 'proces',
-  'procesy', 'blad', 'błąd', 'log', 'logi', 'wydajnosc', 'wydajność', 'fps', 'grafika', 'monitor',
+  'procesy', 'blad', 'błąd', 'log', 'logi', 'status', 'konfiguracja', 'bezpieczenstwo', 'bezpieczeństwo', 'wydajnosc', 'wydajność', 'fps', 'grafika', 'monitor',
   'rozdzielczosc', 'yet', 'gpu', 'cpu', 'ram', 'vram', 'ssd', 'hdd', 'usb', 'audio', 'dzwiek',
   'dźwięk', 'mikrofon', 'kamera', 'drukarka', 'drukarke', 'drukarkę', 'gwarancja', 'gwarancji',
   'faktura', 'umowa', 'projekt', 'repozytorium', 'kod', 'funkcja', 'test', 'testy', 'bledy', 'błędy',
@@ -120,12 +120,20 @@ function repairSpelling(text, { maxFixes = 6 } = {}) {
     }
     if (PL_STOPWORDS.has(folded) || EN_STOPWORDS.has(folded)) return token;
     let best = null;
+    let ties = 0;
+    const allowance = folded.length >= 6 ? 2 : 1;
     for (const entry of VOCAB_FOLDED) {
       if (Math.abs(entry.folded.length - folded.length) > 2) continue;
       const distance = levenshtein(folded, entry.folded);
-      if (distance <= 1 && (!best || distance < best.distance)) best = { ...entry, distance };
+      if (distance > allowance) continue;
+      if (!best || distance < best.distance) {
+        best = { ...entry, distance };
+        ties = 1;
+      } else if (distance === best.distance) ties += 1;
     }
-    if (!best) return token;
+    // A long word may be two edits away, but only when exactly one candidate is
+    // that close; ambiguity is left to the model instead of being guessed.
+    if (!best || (best.distance > 1 && ties > 1)) return token;
     fixes.push({ from: bare, to: best.word, distance: best.distance });
     return token.replace(bare, best.word);
   });
@@ -234,7 +242,10 @@ class SemanticInterpreter {
     // turn. We keep the original question for the answer text, and build a
     // retrieval query that is explicitly labelled as augmented.
     const delta = references.find((reference) => reference.kind === 'delta' && reference.resolved);
-    const resolvedText = delta ? `${lastUser.text.slice(0, 400)} — ${question}` : question;
+    // A repaired spelling is what retrieval and planning should see; the raw
+    // question is kept unchanged for the answer and for risk classification.
+    const repaired = spelling.text || question;
+    const resolvedText = delta ? `${lastUser.text.slice(0, 400)} — ${repaired}` : repaired;
 
     const verb = ACTION_VERBS.test(question);
     const blocking = unresolved.length > 0 && (verb || question.split(/\s+/).length <= 6);

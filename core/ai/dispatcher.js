@@ -73,6 +73,14 @@ class Dispatcher {
   }
 
   route(text, { limit = 2 } = {}) {
+    // Arithmetic is decided by the parser, not by keyword scoring: a bare
+    // expression ("2+2*2") belongs to the mathematics agent even when the
+    // conversation agent would otherwise win on generic words.
+    const expression = String(text || '').match(/(?:^|\s)((?:\d[\d\s.,]*[-+*/^%×÷]\s*\d)|pierwiastek\s+z\s+\d+|\d+\s*%\s*(?:ze|z|of)\s+\d+)/i);
+    const mathAgent = this.agents.get('mathematics');
+    if (expression && mathAgent) {
+      return { primary: mathAgent, helpers: [], candidates: [{ name: mathAgent.name, score: 1 }], reason: `arithmetic expression: ${expression[1].trim()}` };
+    }
     const candidates = this.agents.candidates(text, limit);
     if (!candidates.length) {
       const conversation = this.agents.get('conversation');

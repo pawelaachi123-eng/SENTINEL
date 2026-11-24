@@ -38,6 +38,8 @@ const SECRET_PATTERNS = [
   { name: 'private key', re: /-----BEGIN [A-Z ]*PRIVATE KEY-----/ },
   // Polish puts a word between the label and the value: "hasło to abc123".
   { name: 'password assignment', re: /\b(password|passwd|hasło|haslo|secret|api[_-]?key|token|klucz)\b\s*(?:[:=]|to|jest|=)\s*\S{6,}/i },
+  // "hasło do bazy: tajne123" — a few words may sit between the label and value.
+  { name: 'password assignment', re: /\b(password|passwd|hasło|haslo|secret|api[_-]?key|token|klucz)\b[^.\n]{0,24}[:=]\s*\S{4,}/i },
   { name: 'aws key', re: /\bAKIA[0-9A-Z]{16}\b/ },
   { name: 'card number', re: /\b(?:\d[ -]*?){13,19}\b/ },
 ];

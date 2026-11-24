@@ -1272,7 +1272,80 @@ test('graph tools read and link through the tool permission layer', async () => 
   assert.equal(stats.data.nodes, 2);
 });
 
+/* ── held-out evaluation and promotion gates (4.0) ────────────────────── */
+
+const { EvaluationRunner, scoreCase, stableSplit, loadCases } = require('../core/evaluation');
+const evalCases = loadCases(require('../eval/cases.json'));
+
+test('evaluation cases are unique and split deterministically', () => {
+  assert.ok(evalCases.length >= 20);
+  const first = evalCases.map((entry) => stableSplit(entry.id));
+  const second = evalCases.map((entry) => stableSplit(entry.id));
+  assert.deepEqual(first, second, 'the split changed between runs');
+  assert.ok(first.includes('train') && first.includes('heldout'), 'one split is empty');
+  assert.throws(() => loadCases({ cases: [{ id: 'x', input: 'a' }, { id: 'x', input: 'b' }] }), (err) => err.code === 'BAD_CASES');
+});
+
+test('scoring reads observable outcomes, not model self-report', () => {
+  assert.equal(scoreCase({ id: 'a', expected: { kind: 'equals', value: '42' } }, { text: '42' }).ok, true);
+  assert.equal(scoreCase({ id: 'a', expected: { kind: 'equals', value: '42' } }, { text: 'I think 42' }).ok, false);
+  assert.equal(scoreCase({ id: 'a', expected: { kind: 'contains', value: ['a', 'b'] } }, { text: 'b and a' }).ok, true);
+  assert.equal(scoreCase({ id: 'a', expected: { kind: 'regex', value: '^\\d+$' } }, { text: '17' }).ok, true);
+  assert.equal(scoreCase({ id: 'a', expected: { kind: 'tool', value: 'math.eval' } }, { text: '', tools: ['math.eval'] }).ok, true);
+  assert.equal(scoreCase({ id: 'a', expected: { kind: 'noTool', value: 'shell' } }, { text: '', tools: ['fs.read'] }).ok, true);
+  assert.equal(scoreCase({ id: 'a', expected: { kind: 'refusal' } }, { ok: false, text: '' }).ok, true);
+  assert.equal(scoreCase({ id: 'a', expected: { kind: 'contains', value: 'ok' }, maxMs: 10 }, { text: 'ok', ms: 50 }).ok, false);
+});
+
+test('the promotion gate refuses mocks, non-held-out runs and regressions', () => {
+  const runner = new EvaluationRunner();
+  const baseline = { mode: 'live', split: 'heldout', results: Array.from({ length: 10 }, (_, index) => ({ id: `c${index}`, ok: true })) };
+  const better = { mode: 'live', split: 'heldout', results: baseline.results.map((entry) => ({ ...entry })) };
+  assert.equal(runner.gate({ baseline, candidate: better, minCases: 8 }).code, 'NO_IMPROVEMENT');
+  const mock = { ...better, mode: 'mock' };
+  assert.equal(runner.gate({ baseline, candidate: mock }).code, 'MOCK_NOT_PROMOTABLE');
+  const train = { ...better, split: 'train' };
+  assert.equal(runner.gate({ baseline, candidate: train }).code, 'NOT_HELDOUT');
+  const small = { mode: 'live', split: 'heldout', results: better.results.slice(0, 5) };
+  assert.equal(runner.gate({ baseline: { ...baseline, results: baseline.results.slice(0, 5) }, candidate: small, minCases: 8 }).code, 'INSUFFICIENT_CASES');
+  const regressed = { mode: 'live', split: 'heldout', results: baseline.results.map((entry, index) => ({ ...entry, ok: index === 0 ? false : entry.ok })) };
+  const regression = runner.gate({ baseline, candidate: regressed });
+  assert.equal(regression.code, 'REGRESSION');
+  assert.equal(regression.regressions.length, 1);
+});
+
+test('a real improvement on held-out cases passes the gate', async () => {
+  const cases = Array.from({ length: 12 }, (_, index) => ({ id: `case-${index}`, input: `question ${index}`, expected: { kind: 'contains', value: 'ok' } }));
+  const holding = new Set(cases.filter((entry) => stableSplit(entry.id) === 'heldout').map((entry) => entry.id));
+  assert.ok(holding.size >= 1);
+  const runner = new EvaluationRunner();
+  const askBaseline = async (entry) => ({ ok: true, text: holding.has(entry.id) ? 'nope' : 'ok' });
+  const askCandidate = async () => ({ ok: true, text: 'ok' });
+  const baseline = await runner.run({ cases, ask: askBaseline, split: 'heldout', mode: 'live' });
+  const candidate = await runner.run({ cases, ask: askCandidate, split: 'heldout', mode: 'live' });
+  assert.ok(baseline.failed > 0);
+  assert.equal(candidate.failed, 0);
+  const gate = runner.gate({ baseline, candidate, minCases: 1 });
+  assert.equal(gate.promoted, true, JSON.stringify(gate));
+  assert.ok(gate.delta > 0);
+});
+
+test('a runner that throws is recorded as a failed case, not a crash', async () => {
+  const runner = new EvaluationRunner();
+  const result = await runner.run({
+    cases: [{ id: 'boom', input: 'x', expected: { kind: 'contains', value: 'ok' } }],
+    ask: async () => {
+      throw new Error('provider exploded');
+    },
+    split: 'all',
+    mode: 'live',
+  });
+  assert.equal(result.failed, 1);
+  assert.match(result.results[0].error, /provider exploded/);
+});
+
 /* ── model runtime (4.0) ──────────────────────────────────────────────── */
+
 
 const { RuntimeManager, estimateModelGb, detectHardware } = require('../core/runtime');
 

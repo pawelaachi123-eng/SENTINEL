@@ -494,6 +494,17 @@ Use what you remember only when it is relevant. If a request needs the machine, 
     categories: ['math'],
     handler: async (runtime) => {
       const text = runtime.request.text;
+      const root = text.match(/pierwiastek\s+(?:z|ze)\s+(\d+(?:[.,]\d+)?)/i);
+      if (root) {
+        const expression = `sqrt(${root[1].replace(',', '.')})`;
+        const result = await runtime.tool('math.eval', { expression });
+        if (result.ok) return { text: `${expression} = ${result.data.formatted}`, data: result.data, toolsUsed: ['math.eval'] };
+      }
+      const percentOf = text.match(/(\d+(?:[.,]\d+)?)\s*%\s*(?:ze|z|of)\s*(\d+(?:[.,]\d+)?)/i);
+      if (percentOf) {
+        const percent = await runtime.tool('math.percent', { mode: /zmian|change/i.test(text) ? 'change' : 'of', a: Number(percentOf[1].replace(',', '.')), b: Number(percentOf[2].replace(',', '.')) });
+        if (percent.ok) return { text: `${percent.data.explanation} = ${percent.data.result}`, data: percent.data, toolsUsed: ['math.percent'] };
+      }
       const expression = findExpression(text);
       if (expression) {
         const result = await runtime.tool('math.eval', { expression });
