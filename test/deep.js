@@ -1272,7 +1272,76 @@ test('graph tools read and link through the tool permission layer', async () => 
   assert.equal(stats.data.nodes, 2);
 });
 
+/* ── structured conversation state (4.0) ──────────────────────────────── */
+
+function summaryMemory() {
+  return new Memory({ store, embedder: new HashingEmbedder(), log: null });
+}
+
+test('the conversation summary extracts decisions, constraints and topics deterministically', () => {
+  const memory = summaryMemory();
+  const session = `summary-${Date.now()}`;
+  memory.appendTurn(session, 'user', 'Ustaw profil balansowany na stałe, używaj modelu 9B');
+  memory.appendTurn(session, 'assistant', 'Gotowe, profil ustawiony.');
+  memory.appendTurn(session, 'user', 'Nie usuwaj plików projektu Atlas, tylko je przeczytaj');
+  memory.appendTurn(session, 'assistant', 'Rozumiem.');
+  memory.appendTurn(session, 'user', 'Czy Atlas używa SQLite?');
+  const summary = memory.summarise(session);
+  assert.equal(summary.turns, 5);
+  assert.equal(summary.source, 'deterministic');
+  assert.ok(summary.decisions.some((entry) => /profil/i.test(entry.text)));
+  assert.ok(summary.constraints.some((entry) => /Nie usuwaj/i.test(entry.text)));
+  assert.ok(summary.topics.some((topic) => topic.word === 'atlas'));
+  assert.equal(summary.openQuestions.length, 1);
+  assert.match(summary.openQuestions[0].text, /SQLite/);
+  assert.match(summary.text, /Tematy:/);
+  assert.ok(summary.decisions.every((entry) => entry.turn), 'a decision has no source turn');
+});
+
+test('a summary never becomes a secret store', () => {
+  const memory = summaryMemory();
+  const session = `summary-secret-${Date.now()}`;
+  memory.appendTurn(session, 'user', 'moje hasło to supertajne123');
+  memory.appendTurn(session, 'user', 'Ustaw motyw ciemny');
+  const summary = memory.summarise(session);
+  assert.equal(summary.skippedSecrets, 1);
+  assert.doesNotMatch(summary.text, /supertajne123/);
+  assert.match(summary.text, /Pomini/);
+});
+
+test('the summary persists, is versioned and only refreshes when new turns arrive', () => {
+  const memory = summaryMemory();
+  const session = `summary-persist-${Date.now()}`;
+  memory.appendTurn(session, 'user', 'Ustaw tryb szybki');
+  const first = memory.maybeSummarise(session, { minTurns: 2 });
+  assert.equal(first.turns, 1);
+  const unchanged = memory.maybeSummarise(session, { minTurns: 2 });
+  assert.equal(unchanged.id, first.id, 'the summary was rebuilt without new turns');
+  memory.appendTurn(session, 'user', 'a teraz ustaw tryb głęboki');
+  memory.appendTurn(session, 'assistant', 'ok');
+  const second = memory.maybeSummarise(session, { minTurns: 2 });
+  assert.notEqual(second.id, first.id);
+  assert.equal(second.turns, 3);
+  const reopened = summaryMemory();
+  const persisted = reopened.summaryFor(session);
+  assert.equal(persisted.id, second.id);
+  assert.equal(reopened.summaries(5)[0].id, second.id);
+});
+
+test('the summary is offered to the context budget as its own section', () => {
+  const memory = summaryMemory();
+  const session = `summary-context-${Date.now()}`;
+  memory.appendTurn(session, 'user', 'Ustaw profil gaming i nie zmieniaj go bez pytania');
+  const summary = memory.summarise(session);
+  const context = new ContextManager({});
+  const built = context.build({ question: 'jaki profil?', summary, history: [] });
+  assert.ok(built.sections.some((section) => section.name === 'conversation'));
+  assert.match(built.block, /Stan rozmowy/);
+  assert.match(built.block, /Ustaw profil gaming/);
+});
+
 /* ── held-out evaluation and promotion gates (4.0) ────────────────────── */
+
 
 const { EvaluationRunner, scoreCase, stableSplit, loadCases } = require('../core/evaluation');
 const evalCases = loadCases(require('../eval/cases.json'));

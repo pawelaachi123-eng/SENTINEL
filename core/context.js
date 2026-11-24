@@ -25,6 +25,7 @@ const PRIORITY = {
   documents: 80,
   graph: 85,
   history: 50,
+  conversation: 52,
   tools: 65,
   project: 55,
 };
@@ -77,6 +78,7 @@ class ContextManager {
     history = [],
     toolResults = [],
     graph = null,
+    summary = null,
     project = null,
     systemRules = null,
     mode = null,
@@ -136,6 +138,10 @@ class ContextManager {
         .map((entry) => `- ${entry.name}: ${entry.ok ? 'ok' : `błąd ${entry.code}`}${entry.summary ? ` — ${String(entry.summary).slice(0, 300)}` : ''}`)
         .join('\n');
       add('tools', PRIORITY.tools, `Wyniki narzędzi:\n${body}`);
+    }
+
+    if (summary && summary.text) {
+      add('conversation', PRIORITY.conversation, `Stan rozmowy (skrót deterministyczny, ${summary.turns} tur):\n${summary.text}${summary.skippedSecrets ? '\n(sekrety pominięte)' : ''}`);
     }
 
     const digest = this.historyDigest(history);

@@ -490,11 +490,25 @@ class Brain {
     }
 
     const historyForContext = history || (this.memory ? this.memory.turns(sessionId, 20) : []);
+    // Long conversations get a structured state beside the raw tail: decisions,
+    // constraints, topics and the open question, extracted deterministically.
+    let conversationSummary = null;
+    if (this.memory && historyForContext.length >= 6) {
+      try {
+        conversationSummary = this.memory.summaryFor(sessionId);
+        if (!conversationSummary || historyForContext.length >= 12) conversationSummary = this.memory.maybeSummarise(sessionId, { minTurns: 6 }) || conversationSummary;
+      } catch (err) {
+        this.log && this.log.debug('brain', `conversation summary failed: ${err.message}`);
+        conversationSummary = null;
+      }
+    }
+    if (this.runMeta && this.runMeta.has(id)) this.runMeta.get(id).conversation = conversationSummary;
     const contextReport = this.context
       ? this.context.build({
           question,
           brief,
           graph: graphContext,
+          summary: conversationSummary,
           memories,
           documents,
           history: historyForContext,
@@ -868,6 +882,7 @@ class Brain {
     const exact = !cancelled && !answer.model && !answer.provider && text.length > 0 && text.length <= 400 && runtime.toolLog.some((entry) => entry.ok);
     const graphContext = (this.runMeta && this.runMeta.get(run.id) && this.runMeta.get(run.id).graph) || null;
     const runtimeDecision = (this.runMeta && this.runMeta.get(run.id) && this.runMeta.get(run.id).runtime) || null;
+    const conversationSummary = (this.runMeta && this.runMeta.get(run.id) && this.runMeta.get(run.id).conversation) || null;
     const final = {
       runId: run.id,
       text,
@@ -923,6 +938,9 @@ class Brain {
       reflection,
       execution: answer.execution || null,
       runtime: answer.runtime || runtimeDecision,
+      conversation: conversationSummary
+        ? { id: conversationSummary.id, turns: conversationSummary.turns, topics: conversationSummary.topics, decisions: conversationSummary.decisions, constraints: conversationSummary.constraints, openQuestions: conversationSummary.openQuestions, skippedSecrets: conversationSummary.skippedSecrets }
+        : null,
       graph: graphContext
         ? {
             seeds: graphContext.seeds,

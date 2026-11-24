@@ -63,6 +63,7 @@ class Memory {
     this.now = now;
     this.collection = 'memory';
     this.turnCollection = 'turns';
+    this.summaryCollection = 'conversation_summaries';
     this.index = new Bm25Index();
     this.cache = new Map(); // id → record
     this.loaded = false;
@@ -525,16 +526,110 @@ class Memory {
 
   /* ── conversation ───────────────────────────────────────────────────── */
 
+  /**
+   * Structured conversation state.
+   *
+   * Deterministic on purpose: decisions, constraints, open questions and topics
+   * are extracted from what was actually said, with the source turn ids kept for
+   * audit. A model may later rephrase the text, but it is never allowed to invent
+   * a decision or drop a constraint. Turns that look like they contain a secret
+   * are skipped entirely, so a summary cannot become a secret store.
+   */
+  summarise(sessionId = 'default', { limit = 60 } = {}) {
+    const turns = this.turns(sessionId, limit);
+    if (!turns.length) return null;
+    const stop = new Set('i w na z do to jest sie nie tak jak co czy a the and of to in for is are it that this with без dla oraz ale lub ze za po pod nad przez'.split(' '));
+    const topics = new Map();
+    const decisions = [];
+    const constraints = [];
+    const skipped = [];
+    const sentences = [];
+    for (const turn of turns) {
+      if (looksSecret(turn.text)) {
+        skipped.push(turn.id);
+        continue;
+      }
+      const text = String(turn.text).replace(/\s+/g, ' ').trim();
+      if (!text) continue;
+      if (turn.role === 'user') {
+        for (const word of text.toLowerCase().split(/[^a-ząćęłńóśźż0-9.-]+/)) {
+          if (word.length < 4 || stop.has(word) || /^\d+$/.test(word)) continue;
+          topics.set(word, (topics.get(word) || 0) + 1);
+        }
+        if (/(ustaw|wybra|postanow|zdecydow|od teraz|na stałe|preferuj|używaj|use |set |choose)/i.test(text)) decisions.push({ text: text.slice(0, 200), turn: turn.id, at: turn.at });
+        if (/(nie usuwaj|bez usuwania|tylko (przeczytaj|odczytaj|sprawdź)|nie zmieniaj|do not|don't|read-only|bez zmian)/i.test(text)) constraints.push({ text: text.slice(0, 200), turn: turn.id, at: turn.at });
+        sentences.push(text);
+      }
+    }
+    // The last user question is only "open" if nothing followed it.
+    const lastTurn = turns[turns.length - 1];
+    const lastUserQuestion = [...turns].reverse().find((turn) => turn.role === 'user' && String(turn.text).trim().endsWith('?'));
+    const open = [];
+    if (lastUserQuestion && lastTurn.role === 'user' && lastUserQuestion.id === lastTurn.id) open.push({ text: String(lastUserQuestion.text).slice(0, 200), turn: lastUserQuestion.id, at: lastUserQuestion.at });
+    const topTopics = [...topics.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, 8).map(([word, count]) => ({ word, count }));
+    const summary = {
+      id: newId('summary'),
+      sessionId,
+      turns: turns.length,
+      coveredUpTo: lastTurn.id,
+      firstAt: turns[0].at,
+      lastAt: lastTurn.at,
+      topics: topTopics,
+      decisions: decisions.slice(-6),
+      constraints: constraints.slice(-6),
+      openQuestions: open.slice(-3),
+      skippedSecrets: skipped.length,
+      source: 'deterministic',
+      text: [
+        topTopics.length ? `Tematy: ${topTopics.map((topic) => topic.word).join(', ')}.` : null,
+        decisions.length ? `Decyzje: ${decisions.slice(-3).map((entry) => entry.text).join(' | ')}.` : null,
+        constraints.length ? `Ograniczenia: ${constraints.slice(-3).map((entry) => entry.text).join(' | ')}.` : null,
+        open.length ? `Otwarte pytanie: ${open[0].text}` : null,
+        skipped.length ? `Pominięto ${skipped.length} wypowiedź(-ci) wyglądającą na sekret.` : null,
+      ].filter(Boolean).join(' ').slice(0, 1200),
+      at: this.now(),
+    };
+    this.store.put(this.summaryCollection, summary.id, summary);
+    return summary;
+  }
+
+  summaryFor(sessionId = 'default') {
+    const rows = this.store.list(this.summaryCollection).filter((row) => row.sessionId === sessionId);
+    return rows.sort((a, b) => b.at - a.at)[0] || null;
+  }
+
+  summaries(limit = 20) {
+    return this.store.list(this.summaryCollection).sort((a, b) => b.at - a.at).slice(0, limit);
+  }
+
+  /** Refreshes the summary only when enough new turns accumulated. */
+  maybeSummarise(sessionId = 'default', { minTurns = 6 } = {}) {
+    const turns = this.turns(sessionId, 200);
+    const previous = this.summaryFor(sessionId);
+    if (!turns.length) return null;
+    if (previous) {
+      const recent = turns.filter((turn) => turn.at > previous.lastAt);
+      if (recent.length < minTurns) return previous;
+    }
+    return this.summarise(sessionId);
+  }
+
   appendTurn(sessionId, role, text, meta = {}) {
     const clean = String(text || '').slice(0, 8000);
     if (!clean) return null;
+    const id = sessionId || 'default';
+    // Two turns appended in the same millisecond used to sort unpredictably,
+    // which scrambled the conversation state. Keep the per-session clock
+    // strictly increasing instead of trusting the wall clock alone.
+    const previous = this.turns(id, 1)[0];
+    const at = previous ? Math.max(this.now(), (previous.at || 0) + 1) : this.now();
     const turn = {
       id: newId('turn'),
-      sessionId: sessionId || 'default',
+      sessionId: id,
       role,
       text: clean,
       meta,
-      at: this.now(),
+      at,
     };
     this.store.put(this.turnCollection, turn.id, turn);
     return turn;

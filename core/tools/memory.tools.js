@@ -465,5 +465,43 @@ module.exports = [
     },
     format: (data) => (data.count ? data.hits.map((hit) => `${hit.kind} ${hit.name} — ${hit.file}:${hit.line}`).join('\n') : 'no symbol matched'),
   },
+
+  {
+    name: 'memory.summary',
+    title: 'Structured conversation state',
+    description: 'Deterministic summary of a session: topics, decisions, constraints and the open question, with the source turn ids. Secrets are skipped.',
+    category: 'memory',
+    permission: 'read',
+    tags: ['memory', 'conversation', 'summary'],
+    parameters: {
+      type: 'object',
+      properties: { sessionId: { type: 'string', maxLength: 80 } },
+      additionalProperties: false,
+    },
+    async run(args, ctx) {
+      if (!ctx.memory) throw Object.assign(new Error('memory is not available'), { code: 'NO_MEMORY' });
+      const sessionId = args.sessionId || 'default';
+      return ctx.memory.summaryFor(sessionId) || ctx.memory.summarise(sessionId);
+    },
+    format: (data) => (data ? data.text || 'brak treści' : 'brak rozmowy'),
+  },
+  {
+    name: 'memory.summarise',
+    title: 'Rebuild the conversation state',
+    description: 'Recompute the structured summary from the current turns. Idempotent: it replaces nothing, it adds a newer snapshot.',
+    category: 'memory',
+    permission: 'write',
+    tags: ['memory', 'conversation', 'summary'],
+    parameters: {
+      type: 'object',
+      properties: { sessionId: { type: 'string', maxLength: 80 } },
+      additionalProperties: false,
+    },
+    async run(args, ctx) {
+      if (!ctx.memory) throw Object.assign(new Error('memory is not available'), { code: 'NO_MEMORY' });
+      return ctx.memory.summarise(args.sessionId || 'default');
+    },
+    format: (data) => (data ? `${data.turns} tur, ${data.decisions.length} decyzji, ${data.constraints.length} ograniczeń` : 'brak rozmowy'),
+  },
 ];
 
