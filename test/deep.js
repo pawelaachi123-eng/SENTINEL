@@ -802,6 +802,58 @@ test('a staged patch is diffed without touching the file, and syntax is verified
   assert.equal(patches.get(session.id).status, 'verified');
 });
 
+test('test verification runs in a full copy and never writes to the workspace', () => {
+  const { PatchManager } = require('../core/patching');
+  const project = path.join(home, 'iso-project');
+  fs.rmSync(project, { recursive: true, force: true });
+  fs.mkdirSync(path.join(project, 'lib'), { recursive: true });
+  const target = path.join(project, 'lib', 'target.js');
+  fs.writeFileSync(target, 'module.exports = 1;\n');
+  fs.writeFileSync(path.join(project, 'package.json'), JSON.stringify({ name: 'iso-fixture', version: '1.0.0', scripts: { test: 'node check.js' } }));
+  fs.writeFileSync(
+    path.join(project, 'check.js'),
+    [
+      "const fs = require('fs');",
+      "const text = fs.readFileSync('lib/target.js', 'utf8');",
+      "fs.writeFileSync('marker.txt', 'the verifier ran here');",
+      "if (!text.includes('42')) { console.error('candidate not present in the copy'); process.exit(1); }",
+      "if (process.cwd() === process.env.ORIGINAL_PROJECT) { console.error('verification ran in place'); process.exit(2); }",
+      "console.log('isolated ok');",
+    ].join('\n'),
+  );
+  const originalBefore = fs.readFileSync(target, 'utf8');
+  const patches = new PatchManager({ paths: { patchesDir: () => path.join(home, 'patches-iso'), dataDir: () => home }, sandbox: { resolve: (file) => path.resolve(file) } });
+  const session = patches.create({ file: target, newText: 'module.exports = 42;\n', verify: 'test', description: 'change the exports' });
+  const verification = patches.verify(session.id);
+  assert.equal(verification.ok, true, verification.output || verification.message);
+  assert.equal(verification.isolated, true);
+  assert.equal(verification.isolation.mode, 'copy');
+  assert.ok(verification.isolation.files >= 2);
+  assert.equal(fs.readFileSync(target, 'utf8'), originalBefore, 'verification modified the user file');
+  assert.equal(fs.existsSync(path.join(project, 'marker.txt')), false, 'the test wrote into the original workspace');
+  assert.equal(fs.existsSync(path.join(patches.stagedDir(session.id), 'workspace')), false, 'the isolated copy was left behind');
+  assert.equal(patches.get(session.id).status, 'verified');
+});
+
+test('a failing isolated test leaves the workspace byte-identical', () => {
+  const { PatchManager } = require('../core/patching');
+  const project = path.join(home, 'iso-failing');
+  fs.rmSync(project, { recursive: true, force: true });
+  fs.mkdirSync(project, { recursive: true });
+  const target = path.join(project, 'value.js');
+  fs.writeFileSync(target, 'module.exports = "original";\n');
+  fs.writeFileSync(path.join(project, 'package.json'), JSON.stringify({ name: 'iso-failing', scripts: { test: 'node fail.js' } }));
+  fs.writeFileSync(path.join(project, 'fail.js'), "require('fs').writeFileSync('touched.txt', 'x'); console.error('deliberate failure'); process.exit(1);\n");
+  const patches = new PatchManager({ paths: { patchesDir: () => path.join(home, 'patches-iso2'), dataDir: () => home }, sandbox: { resolve: (file) => path.resolve(file) } });
+  const session = patches.create({ file: target, newText: 'module.exports = "candidate";\n', verify: 'test' });
+  const verification = patches.verify(session.id);
+  assert.equal(verification.ok, false);
+  assert.match(String(verification.output || ''), /deliberate failure/);
+  assert.equal(fs.readFileSync(target, 'utf8'), 'module.exports = "original";\n');
+  assert.equal(fs.existsSync(path.join(project, 'touched.txt')), false);
+  assert.equal(patches.get(session.id).status, 'failed');
+});
+
 test('a patch with a syntax error fails verification and cannot be applied', () => {
   const { PatchManager } = require('../core/patching');
   const patches = new PatchManager({ paths: { patchesDir: () => path.join(home, 'patches'), dataDir: () => home }, sandbox: { resolve: (file) => path.resolve(file) } });

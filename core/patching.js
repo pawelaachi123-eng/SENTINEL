@@ -205,6 +205,79 @@ class PatchManager {
       .map((session) => ({ ...session }));
   }
 
+  /**
+   * Copies the project into `destination` and places the staged candidate at
+   * the same relative path. Excludes VCS data, build output and dependency
+   * trees (node_modules is symlinked so the copy reuses installed packages
+   * without duplicating or writing to them). Bounded: a project that does not
+   * fit is refused, never verified in place.
+   */
+  isolateProject(session, destination, { maxFiles = 6000, maxBytes = 96 * 1024 * 1024 } = {}) {
+    const EXCLUDE = new Set(['.git', 'node_modules', 'dist', 'build', 'out', 'coverage', '.next', '.venv', '__pycache__', '.cache', '.arena', '.DS_Store']);
+    let root = path.dirname(session.file);
+    for (let up = 0; up < 8; up += 1) {
+      if (fs.existsSync(path.join(root, 'package.json')) || fs.existsSync(path.join(root, '.git'))) break;
+      const parent = path.dirname(root);
+      if (parent === root) break;
+      root = parent;
+    }
+    const relative = path.relative(root, session.file);
+    if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) {
+      return { ok: false, code: 'ISOLATION_UNAVAILABLE', message: 'the patch target is outside any project root' };
+    }
+    const stats = { files: 0, bytes: 0 };
+    const copyDir = (from, to, depth) => {
+      if (depth > 12) return;
+      fs.mkdirSync(to, { recursive: true });
+      for (const entry of fs.readdirSync(from, { withFileTypes: true })) {
+        if (EXCLUDE.has(entry.name)) continue;
+        if (entry.name.endsWith('.sentinel-backup') || entry.name.includes('.sentinel-backup-')) continue;
+        const source = path.join(from, entry.name);
+        const target = path.join(to, entry.name);
+        if (entry.isSymbolicLink()) {
+          try {
+            const link = fs.readlinkSync(source);
+            fs.symlinkSync(link, target);
+          } catch {
+            /* an unreadable link is skipped, not fatal */
+          }
+          continue;
+        }
+        if (entry.isDirectory()) {
+          if (entry.name === 'node_modules') continue;
+          copyDir(source, target, depth + 1);
+          continue;
+        }
+        if (!entry.isFile()) continue;
+        const size = fs.statSync(source).size;
+        stats.files += 1;
+        stats.bytes += size;
+        if (stats.files > maxFiles || stats.bytes > maxBytes) throw Object.assign(new Error(`project is larger than the isolation limit (${stats.files} files, ${stats.bytes} bytes)`), { code: 'ISOLATION_TOO_LARGE' });
+        fs.copyFileSync(source, target);
+      }
+    };
+    try {
+      copyDir(root, destination, 0);
+    } catch (err) {
+      fs.rmSync(destination, { recursive: true, force: true });
+      return { ok: false, code: err.code || 'ISOLATION_FAILED', message: err.message };
+    }
+    const modules = path.join(root, 'node_modules');
+    if (fs.existsSync(modules)) {
+      try {
+        fs.symlinkSync(modules, path.join(destination, 'node_modules'), 'dir');
+      } catch {
+        /* package resolution will explain itself if this fails */
+      }
+    }
+    // The candidate goes in after the copy so it always wins.
+    const targetFile = path.join(destination, relative);
+    fs.mkdirSync(path.dirname(targetFile), { recursive: true });
+    fs.copyFileSync(path.join(this.stagedDir(session.id), 'after'), targetFile);
+    for (const dir of ['home', 'tmp', 'sentinel-home']) fs.mkdirSync(path.join(destination, dir), { recursive: true });
+    return { ok: true, root: destination, mode: 'copy', files: stats.files, bytes: stats.bytes, projectRoot: root, relative, excluded: [...EXCLUDE] };
+  }
+
   /** Runs the whitelisted verifier in an isolated copy of the candidate file. */
   verify(id) {
     const session = this.get(id);
@@ -216,38 +289,50 @@ class PatchManager {
       this.persist(session);
       return session.verification;
     }
+    const started = this.now();
     const workspace = path.join(this.stagedDir(session.id), 'workspace');
     fs.rmSync(workspace, { recursive: true, force: true });
     fs.mkdirSync(workspace, { recursive: true });
-    const candidate = path.join(workspace, path.basename(session.file));
-    fs.copyFileSync(path.join(this.stagedDir(session.id), 'after'), candidate);
-    // For npm test the candidate must live in the project, so the workspace is
-    // the project root and only the staged file is swapped in — with the
-    // original restored immediately afterwards, even on failure.
-    const cwd = session.verify === 'test' ? path.dirname(session.file) : workspace;
-    let restored = null;
+    const candidateName = path.basename(session.file);
+    let isolation = { mode: 'file', root: workspace, files: 1, bytes: 0 };
+    let cwd = workspace;
+    let args;
     if (session.verify === 'test') {
-      const original = path.join(this.stagedDir(session.id), 'before');
-      restored = path.join(workspace, path.basename(session.file));
-      fs.copyFileSync(session.file, restored);
-      fs.copyFileSync(candidate, session.file);
+      // 4.0: tests run against a full copy of the project. The user's workspace
+      // is opened read-only: not even a temporary swap of the candidate file.
+      // If the copy cannot be made inside the limits, verification fails
+      // honestly instead of silently falling back to the live tree.
+      const isolated = this.isolateProject(session, workspace);
+      if (!isolated.ok) {
+        session.verification = { ok: false, code: isolated.code, message: isolated.message, ms: this.now() - started, at: this.now(), isolated: true };
+        session.status = 'failed';
+        this.persist(session);
+        return session.verification;
+      }
+      isolation = isolated;
+      cwd = isolated.root;
+      args = verifier.args;
+    } else {
+      const candidate = path.join(workspace, candidateName);
+      fs.copyFileSync(path.join(this.stagedDir(session.id), 'after'), candidate);
+      isolation.bytes = fs.statSync(candidate).size;
+      args = [...verifier.args, candidateName];
     }
-    const started = this.now();
     let result;
     try {
-      result = this.runner(verifier.command, [...verifier.args, session.verify === 'test' ? [] : path.basename(candidate)].flat(), {
+      result = this.runner(verifier.command, args, {
         cwd,
         timeoutMs: Number((this.config && this.config.get && this.config.get('ai.limits.toolTimeoutMs')) || 120000),
-        env: { PATH: process.env.PATH, NO_COLOR: '1', SENTINEL_TEST_SANDBOX: '1' },
+        env: {
+          PATH: process.env.PATH,
+          NO_COLOR: '1',
+          CI: '1',
+          SENTINEL_TEST_SANDBOX: '1',
+          ...(session.verify === 'test' ? { HOME: path.join(workspace, 'home'), TMPDIR: path.join(workspace, 'tmp'), SENTINEL_HOME: path.join(workspace, 'sentinel-home') } : {}),
+        },
       });
     } finally {
-      if (restored) {
-        try {
-          fs.copyFileSync(path.join(this.stagedDir(session.id), 'before'), session.file);
-        } catch (err) {
-          if (this.log) this.log.error('patch', `could not restore ${session.file} after test verification: ${err.message}`);
-        }
-      }
+      if (session.verify === 'test') fs.rmSync(workspace, { recursive: true, force: true });
     }
     const ms = this.now() - started;
     if (result.error) {
@@ -264,7 +349,8 @@ class PatchManager {
       ms,
       at: this.now(),
       command: `${verifier.command} ${verifier.args.join(' ')}`,
-      isolated: session.verify !== 'test',
+      isolated: true,
+      isolation: { mode: isolation.mode, files: isolation.files, bytes: isolation.bytes, excluded: isolation.excluded || [] },
     };
     session.status = ok ? 'verified' : 'failed';
     this.persist(session);
