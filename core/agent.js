@@ -36,6 +36,7 @@ const { Executor } = require('./executor');
 const { KnowledgeGraph } = require('./graph');
 const { McpHub } = require('./mcp');
 const { RuntimeManager } = require('./runtime');
+const { Organisation } = require('./org');
 const { ExperienceStore } = require('./experience');
 const { EventBus } = require('./events');
 const { Metrics } = require('./metrics');
@@ -125,6 +126,8 @@ class Agent extends EventEmitter {
       this.services.mcp = this.mcp;
       this.services.runtime = this.runtime;
       this.agents = new AgentRegistry();
+      this.org = new Organisation({ agents: this.agents, log: this.log });
+      this.services.org = this.org;
       this.dispatcher = new Dispatcher({
         agents: this.agents,
         tools: this.tools,
@@ -286,6 +289,7 @@ class Agent extends EventEmitter {
             graph: this.graph || null,
             mcp: this.mcp || null,
             runtime: this.runtime || null,
+            org: this.org || null,
             incidents: this.incidents || null,
             tasks: this.tasks || null,
           }
@@ -434,6 +438,7 @@ class Agent extends EventEmitter {
       graph: this.graph ? this.graph.stats() : null,
       mcp: this.mcp ? this.mcp.status() : null,
       runtime: this.runtime ? { profile: this.runtime.profile, hardware: this.runtime.hardware } : null,
+      org: this.org ? this.org.chart().counts : null,
       watchdogs: (this.watchdogs || []).map((watchdog) => watchdog.status()),
       voice: this.voice.counters,
       vision: this.vision.counters,

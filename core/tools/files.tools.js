@@ -329,7 +329,7 @@ module.exports = [
   {
     name: 'fs.mkdir',
     title: 'Create a folder',
-    description: 'Create a directory (recursively).',
+    description: 'Create a directory inside the workspace, including parents; refuses paths outside the allowed roots.',
     category: 'files',
     permission: 'write',
     tags: ['directory', 'mkdir'],
@@ -348,7 +348,7 @@ module.exports = [
   {
     name: 'fs.copy',
     title: 'Copy a file or folder',
-    description: 'Copy inside the workspace only.',
+    description: 'Copy a file or directory inside the workspace; both source and destination are checked against the sandbox.',
     category: 'files',
     permission: 'write',
     tags: ['copy'],

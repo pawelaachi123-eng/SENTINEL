@@ -273,7 +273,7 @@ module.exports = [
   {
     name: 'service.status',
     title: 'Service status',
-    description: 'State and start type of one service.',
+    description: 'State and start type of one Windows service, read through the platform layer; never changes it.',
     category: 'system',
     permission: 'read',
     tags: ['service'],
@@ -470,7 +470,7 @@ Write-Output ("{""found"":true,""process"":""" + $target.ProcessName + """,""tit
   {
     name: 'cpu.info',
     title: 'CPU information',
-    description: 'Model, cores, clock and current load.',
+    description: 'CPU model, physical and logical cores, clock speed and current load, for sizing local model profiles.',
     category: 'system',
     permission: 'read',
     tags: ['cpu', 'processor'],
@@ -752,7 +752,7 @@ Write-Output ("{""found"":true,""process"":""" + $target.ProcessName + """,""tit
   {
     name: 'screen.info',
     title: 'Screen resolution',
-    description: 'Display size and scale factor.',
+    description: 'Display resolution and Windows scale factor, used when the assistant reasons about screenshots and coordinates.',
     category: 'system',
     permission: 'read',
     tags: ['screen', 'display'],

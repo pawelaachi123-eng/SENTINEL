@@ -133,6 +133,11 @@ function repairSpelling(text, { maxFixes = 6 } = {}) {
     }
     // A long word may be two edits away, but only when exactly one candidate is
     // that close; ambiguity is left to the model instead of being guessed.
+    // Do not strip a real inflection: "procesorem" is a form of "procesor", not
+    // a typo of it. A shorter candidate that is a prefix of the word is left
+    // alone unless the suffix is not a Polish ending.
+    const INFLECTION = /(em|ie|ów|ach|ami|owi|ego|emu|owa|owe|owy|ym|im|om|u|y|i|a|e)$/i;
+    if (best && best.word.length < bare.length && bare.toLowerCase().startsWith(best.word.toLowerCase()) && INFLECTION.test(bare)) return token;
     if (!best || (best.distance > 1 && ties > 1)) return token;
     fixes.push({ from: bare, to: best.word, distance: best.distance });
     return token.replace(bare, best.word);
@@ -199,7 +204,19 @@ class SemanticInterpreter {
       let match;
       while ((match = pattern.re.exec(question)) && references.length < 6) {
         const phrase = match[0];
+        if (phrase === '') {
+          if (!pattern.re.global) break;
+          pattern.re.lastIndex += 1;
+          continue;
+        }
         const key = `${pattern.kind}:${phrase.toLowerCase()}`;
+        if (!pattern.re.global) {
+          if (!seen.has(key)) {
+            seen.add(key);
+            references.push({ kind: pattern.kind, phrase, resolved: null });
+          }
+          break;
+        }
         if (seen.has(key)) continue;
         seen.add(key);
         references.push({ kind: pattern.kind, phrase, resolved: null });
@@ -306,6 +323,9 @@ class SemanticInterpreter {
   shouldAskModel({ brief, resolution, mode }) {
     if (!this.enabled()) return false;
     if (mode === 'fast') return false;
+    // No configured provider means no interpretation pass. Waiting on a model
+    // that cannot answer would turn a deterministic fallback into a stall.
+    if (this.llm && typeof this.llm.providerList === 'function' && this.llm.providerList().length === 0) return false;
     // A deterministic computation or a truly empty request does not benefit
     // from an interpretation pass, and paying for one teaches nothing.
     if (brief.strategy === STRATEGIES.COMPUTE) return false;

@@ -646,7 +646,7 @@ module.exports = [
   {
     name: 'git.show',
     title: 'Show a commit',
-    description: 'Metadata and patch of one commit.',
+    description: 'Metadata and unified patch for one git commit, for reviewing what changed without checking out the tree.',
     category: 'git',
     permission: 'read',
     tags: ['git', 'commit'],

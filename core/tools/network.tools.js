@@ -310,7 +310,7 @@ module.exports = [
   {
     name: 'net.route',
     title: 'Routing table',
-    description: 'Default gateway and routes.',
+    description: 'Default gateway and the IPv4 routing table, so a connectivity problem can be attributed to a real interface.',
     category: 'network',
     permission: 'read',
     tags: ['route', 'gateway'],

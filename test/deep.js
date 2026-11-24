@@ -1272,7 +1272,74 @@ test('graph tools read and link through the tool permission layer', async () => 
   assert.equal(stats.data.nodes, 2);
 });
 
+/* ── organisation and tool inventory (4.0) ────────────────────────────── */
+
+const { Organisation, TIERS } = require('../core/org');
+const { AgentRegistry } = require('../core/ai/agents');
+
+test('the organisation chart covers every real agent exactly once', () => {
+  const agents = new AgentRegistry();
+  const org = new Organisation({ agents });
+  const chart = org.chart();
+  const names = TIERS.flatMap((tier) => chart.tiers[tier].map((entry) => entry.name));
+  assert.equal(names.length, agents.agents.size);
+  assert.equal(new Set(names).size, names.length, 'an agent appeared in two tiers');
+  assert.equal(chart.total, 31);
+  assert.ok(chart.counts.executive >= 1);
+  assert.ok(chart.counts.worker >= 1);
+  const titles = [...agents.agents.values()].map((agent) => agent.title);
+  assert.equal(new Set(titles).size, titles.length, 'two agents share a title (duplicate persona)');
+});
+
+test('delegation is capability-based, one-way and bounded', () => {
+  const agents = new AgentRegistry();
+  const org = new Organisation({ agents, maxDepth: 2 });
+  const plan = org.planDelegation({ capability: 'windows', workers: 2 });
+  assert.equal(plan.ok, true);
+  assert.ok(plan.lead);
+  assert.ok(!plan.workers.some((worker) => worker.name === plan.lead), 'an agent delegated to itself');
+  assert.notEqual(plan.leadTier, 'executive', 'an executive took a specialist task');
+  assert.ok(plan.workers.every((worker) => TIERS.indexOf(worker.tier) >= TIERS.indexOf(plan.leadTier)));
+  assert.ok(plan.depth <= plan.maxDepth);
+  assert.match(plan.note, /nothing was executed/);
+  const unknown = org.planDelegation({ capability: 'orbital-mechanics' });
+  assert.equal(unknown.ok, false);
+  assert.equal(unknown.code, 'NO_LEAD');
+  assert.equal(org.leadFor('').ok, false);
+});
+
+test('every registered tool passes the structural inventory rules', () => {
+  const { buildTools } = require('../core/tools');
+  const registry = buildTools({ config: { get: (key, fallback) => fallback }, log: null, sandbox: { resolve: (value) => value }, approvals: new ApprovalQueue({ log: null }), services: {} });
+  const list = registry.list();
+  assert.ok(list.length >= 200);
+  const names = new Set();
+  const categories = new Set();
+  for (const entry of list) {
+    assert.match(entry.name, /^[a-z0-9][a-z0-9_.-]{2,63}$/);
+    assert.ok(!names.has(entry.name), `duplicate tool ${entry.name}`);
+    names.add(entry.name);
+    assert.ok(['read', 'write', 'system', 'network', 'privileged'].includes(entry.permission), `${entry.name} has permission ${entry.permission}`);
+    assert.ok(entry.description.length >= 40, `${entry.name} has a too-short description`);
+    assert.doesNotMatch(entry.description, /lorem ipsum|placeholder text|not implemented yet/i);
+    assert.ok(entry.category && entry.category !== 'general', `${entry.name} is uncategorised`);
+    categories.add(entry.category);
+  }
+  assert.ok(categories.size >= 20);
+});
+
+test('reference extraction terminates on a non-global pattern', () => {
+  const semantics = new SemanticInterpreter({ cognitive: new CognitiveCore({}), llm: null, log: null, config: { get: () => null } });
+  const resolved = semantics.resolve({ text: 'a co z procesorem?', history: [] });
+  assert.ok(resolved.references.some((reference) => reference.kind === 'delta'));
+  // Inflection is not a typo: the word must survive spelling repair.
+  const repair = repairSpelling('a co z procesorem?');
+  assert.equal(repair.fixes.length, 0);
+  assert.match(repair.text, /procesorem/);
+});
+
 /* ── structured conversation state (4.0) ──────────────────────────────── */
+
 
 function summaryMemory() {
   return new Memory({ store, embedder: new HashingEmbedder(), log: null });

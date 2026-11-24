@@ -731,6 +731,15 @@ class HttpApi {
 
 
 
+
+    /* ── 4.0: organisation chart ───────────────────────────────────────── */
+
+    if (route === '/api/org' && req.method === 'GET') {
+      if (!this.ai || !this.ai.org) return this.json(res, 200, { ok: true, data: null });
+      const capability = url.searchParams.get('capability');
+      return this.json(res, 200, { ok: true, data: capability ? this.ai.org.planDelegation({ capability }) : this.ai.org.chart() });
+    }
+
     /* ── 4.0: model runtime profiles ───────────────────────────────────── */
 
     if (route === '/api/runtime' && req.method === 'GET') {

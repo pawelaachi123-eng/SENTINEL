@@ -111,7 +111,7 @@ module.exports = [
   {
     name: 'app.kill',
     title: 'Close an app',
-    description: 'Close an allow-listed application.',
+    description: 'Close an application from the allow-list, never an arbitrary process; approval is required and the result is verified.',
     category: 'desktop',
     permission: 'system',
     tags: ['app', 'close'],
@@ -160,7 +160,7 @@ module.exports = [
   {
     name: 'macro.list',
     title: 'List macros',
-    description: 'Saved macros with their step counts.',
+    description: 'List saved macros with their step counts, so a macro is chosen by its real contents rather than its name.',
     category: 'desktop',
     permission: 'read',
     tags: ['macro'],
@@ -227,7 +227,7 @@ module.exports = [
   {
     name: 'esp.reset',
     title: 'ESP32 reset button',
-    description: 'Press the reset relay. Needs approval.',
+    description: 'Pulse the ESP32 reset relay for the configured hold time. Requires approval and reports the device acknowledgement.',
     category: 'esp32',
     permission: 'system',
     tags: ['esp32', 'reset'],

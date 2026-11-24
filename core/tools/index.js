@@ -10,7 +10,7 @@
 
 const { ToolRegistry } = require('./registry');
 
-const MODULES = ['system', 'network', 'files', 'code', 'docs', 'math', 'dev', 'device', 'memory', 'ai', 'tasks', 'security', 'voice', 'patch', 'graph', 'mcp', 'runtime'];
+const MODULES = ['system', 'network', 'files', 'code', 'docs', 'math', 'dev', 'device', 'memory', 'ai', 'tasks', 'security', 'voice', 'patch', 'graph', 'mcp', 'runtime', 'org'];
 
 /**
  * @param {{config, log, sandbox, approvals, services}} deps
