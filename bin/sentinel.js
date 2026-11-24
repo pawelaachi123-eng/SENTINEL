@@ -53,6 +53,12 @@ const HELP = `SENTINEL ${require('../package.json').version} — your own assist
   sentinel voice transcribe <file> [--lang pl]
   sentinel voice speak "<text>"
   sentinel status [--json]                this machine and the AI stack
+  sentinel benchmark [--json]             measured latency and memory of this install
+  sentinel test [--all] [--json]          run the deterministic test suites
+  sentinel backup [list|<label>]          back up config, memory and database
+  sentinel rollback [--config]            restore the newest backup (kept, not deleted)
+  sentinel update [--check]               compare with the latest release
+  sentinel migrate                        migrate the store and report integrity
   sentinel serve [--open]                 start the agent (same as sentinel-agent)
 
   Global: --home <dir> to use a different data directory, --help, --version
@@ -417,6 +423,120 @@ async function main() {
         if (args.json) console.log(JSON.stringify(status, null, 2));
         else console.log(JSON.stringify(status, null, 2));
         return done(status.stt && status.stt.available ? 0 : 6);
+      }
+
+      case 'benchmark': {
+        const questions = ['ile to 17*23+4', 'oblicz 2^10', 'ile to 6*7'];
+        const samples = [];
+        for (const question of questions) {
+          // eslint-disable-next-line no-await-in-loop
+          const started = process.hrtime.bigint();
+          // eslint-disable-next-line no-await-in-loop
+          const answer = await agent.ask({ text: question, mode: 'fast' });
+          const ms = Number(process.hrtime.bigint() - started) / 1e6;
+          samples.push({ question, ms: Number(ms.toFixed(1)), correct: /\d/.test(answer.text) });
+        }
+        const sorted = samples.map((sample) => sample.ms).sort((a, b) => a - b);
+        const percentile = (p) => sorted[Math.min(sorted.length - 1, Math.floor((p / 100) * sorted.length))];
+        const report = {
+          version: require('../package.json').version,
+          deterministic: true,
+          note: 'no model provider is measured here; these are the deterministic paths',
+          samples,
+          p50Ms: percentile(50),
+          p95Ms: percentile(95),
+          rssMb: Math.round(process.memoryUsage().rss / 1048576),
+          agents: agent.agents.list().length,
+          tools: agent.tools.stats().implemented,
+          toolsAvailable: agent.tools.stats().available,
+          memoryRecords: agent.memory.stats().total,
+          store: agent.store.stats(),
+        };
+        if (args.json) console.log(JSON.stringify(report, null, 2));
+        else {
+          console.log(bold(`SENTINEL ${report.version} — benchmark`));
+          for (const sample of samples) console.log(`  ${sample.question.padEnd(18)} ${String(sample.ms).padStart(8)} ms ${sample.correct ? green('✓') : red('✗')}`);
+          console.log(`  p50 ${report.p50Ms} ms · p95 ${report.p95Ms} ms · RSS ${report.rssMb} MB`);
+          console.log(dim(`  ${report.agents} agentów, ${report.toolsAvailable}/${report.tools} narzędzi dostępnych, ${report.memoryRecords} wspomnień, ${report.store.driver}${report.store.fts ? ' + FTS5' : ''}`));
+          console.log(dim('  Model latency and tokens/s: sentinel models --benchmark (needs a running provider).'));
+        }
+        return done(samples.every((sample) => sample.correct) ? 0 : 4);
+      }
+
+      case 'test': {
+        const { spawnSync } = require('node:child_process');
+        const suites = args.all ? ['run.js', 'ui.js', 'ai.js', 'deep.js'] : ['run.js', 'deep.js'];
+        let failedSuites = 0;
+        for (const suite of suites) {
+          const result = spawnSync(process.execPath, [path.join(__dirname, '..', 'test', suite)], { stdio: args.json ? 'pipe' : 'inherit', encoding: 'utf8' });
+          const ok = result.status === 0;
+          if (!ok) failedSuites += 1;
+          if (args.json) console.log(JSON.stringify({ suite, ok, status: result.status }));
+          else console.log(ok ? green(`  ✓ ${suite}`) : red(`  ✗ ${suite}`));
+        }
+        return done(failedSuites ? 1 : 0);
+      }
+
+      case 'backup': {
+        const action = rest[0] || null;
+        if (action === 'list') {
+          const backups = agent.healing.listBackups();
+          if (args.json) console.log(JSON.stringify(backups, null, 2));
+          else if (!backups.length) console.log(dim('brak kopii zapasowych'));
+          else for (const entry of backups) console.log(`  ${blue(entry.name)} ${dim(entry.createdAt)} ${entry.files === null ? '' : `${entry.files} plików`}`);
+          return done(0);
+        }
+        const { backupsDir } = require('../core/paths');
+        const created = await agent.healing.backup(action ? path.join(backupsDir(), action) : null);
+        console.log(green(`kopia zapasowa: ${created.path}`));
+        console.log(dim(`  ${created.files.length} plik(ów), ${created.files.reduce((sum, entry) => sum + entry.bytes, 0)} B`));
+        return done(0);
+      }
+
+      case 'rollback': {
+        const only = args.config ? 'config' : 'any';
+        const restored = await agent.healing.restoreLatest({ only });
+        if (!restored) {
+          console.error(red('brak kopii zapasowej do przywrócenia'));
+          return done(3);
+        }
+        console.log(green(`przywrócono z ${restored.dir || restored.path || 'najnowszej kopii'}; poprzednie pliki zachowano z sufiksem .before-restore`));
+        return done(0);
+      }
+
+      case 'update': {
+        const current = require('../package.json').version;
+        let latest = null;
+        try {
+          const response = await fetch('https://api.github.com/repos/pawelaachi123-eng/SENTINEL/releases/latest', { headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'sentinel-cli' }, signal: AbortSignal.timeout(8000) });
+          if (response.ok) latest = (await response.json()).tag_name || null;
+        } catch {
+          latest = null;
+        }
+        if (args.json) console.log(JSON.stringify({ current, latest, updateAvailable: Boolean(latest && latest.replace(/^v/, '') !== current) }));
+        else if (!latest) console.log(amber(`nie mogę sprawdzić wydań (brak sieci). Zainstalowana wersja: ${current}`));
+        else if (latest.replace(/^v/, '') === current) console.log(green(`najnowsza wersja: ${current}`));
+        else {
+          console.log(amber(`dostępna nowsza wersja: ${latest} (masz ${current})`));
+          console.log('  aktualizacja jest świadoma i nigdy nie dzieje się po cichu:');
+          console.log(`  1. pobierz ${latest} z https://github.com/pawelaachi123-eng/SENTINEL/releases`);
+          console.log('  2. uruchom INSTALL_SENTINEL_FULL.ps1 -Source <folder> — skrypt robi kopię, wdraża etapowo i sprawdza zdrowie');
+          console.log('  3. przy problemie: sentinel rollback');
+        }
+        return done(0);
+      }
+
+      case 'migrate': {
+        const { migrate } = require('../core/memory/store');
+        const report = migrate(agent.store, { log: { info: (topic, message) => console.log(dim(`${topic}: ${message}`)) } });
+        const integrity = agent.memory.integrity();
+        const knowledge = agent.knowledge.coverage();
+        console.log(bold('migracja'));
+        console.log(`  schemat: ${report.from} → ${report.to}${report.applied ? ' (zastosowano)' : ' (bez zmian)'}`);
+        console.log(`  FTS5: ${agent.store.fts ? 'włączony' : 'niedostępny — używany indeks w pamięci'}`);
+        console.log(`  pamięć: ${agent.memory.stats().total} rekordów, integralność ${integrity.ok ? green('OK') : red(`${integrity.problems.length} problemów`)}`);
+        console.log(`  wiedza: ${knowledge.documents} dokumentów, ${knowledge.chunks} fragmentów, ${knowledge.stale} nieaktualnych`);
+        return done(integrity.ok ? 0 : 4);
       }
 
       case 'status': {

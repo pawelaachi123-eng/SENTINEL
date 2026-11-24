@@ -13,7 +13,7 @@
   'use strict';
 
   const T = window.SentinelTransport;
-  const APP_VERSION = '2.2.0';
+  const APP_VERSION = '3.0.0';
   const STORE = {
     pairing: 'sentinel.pairing.v2',
     demo: 'sentinel.demo.v2',
@@ -1547,7 +1547,7 @@
       esp: {
         connected: true,
         device: 'esp32-bridge',
-        fw: '2.2.0',
+        fw: '2.1.0',
         ip: '192.168.1.1',
         pc: S.demoRelay ? 'off' : 'on',
         chipTemp: 47,

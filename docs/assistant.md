@@ -25,6 +25,25 @@ Everything runs on the machine. There is no account, no telemetry, and no
 request leaves the box unless you configure an external OpenAI-compatible
 endpoint yourself.
 
+## 3.0 at a glance
+
+Every question now goes through a brief before anything else happens:
+`understand → constraints → recall → routing → planning → working → verify →
+answer → retain`. The brief (intent, strategy and why, risk, constraints,
+assumptions, completion criteria, uncertainty with reasons, budget) is attached
+to the answer and shown in the **Poznanie** screen. A vague follow-up is answered
+with a clarifying question instead of a guess.
+
+| Piece | Where | Guarantee |
+| --- | --- | --- |
+| Cognitive brief | `core/cognition.js` | deterministic, no model call, bounded budgets per mode |
+| Context budget | `core/context.js` | never exceeds the window; reports what was dropped/truncated |
+| Task DAG | `core/tasks.js` | invalid plans rejected before running; retries, checkpoints, pause/resume; interrupted ≠ retried |
+| Experience | `core/experience.js` | per-strategy scoring with sample counts; changes only through a regression gate |
+| Events / metrics | `core/events.js`, `core/metrics.js` | typed bus and real p50/p95; no synthetic numbers |
+| Reliability | `core/reliability.js` | breakers, bounded retry, incident log, watchdogs with confirmation |
+| FTS5 | `core/memory/store.js` | persistent lexical index beside the records; `fts:false` when unavailable |
+
 ## Modes
 
 | Mode | What it does | When to use |
@@ -156,6 +175,12 @@ All routes require the UI token (`?t=` or `x-sentinel-token`).
 | `GET|POST /api/automations` | schedules |
 | `POST /api/diagnostics`, `POST /api/doctor`, `GET /api/backups` | health |
 | `POST /api/voice/transcribe`, `POST /api/voice/speak` | speech |
+| `GET /api/eventlog` | typed event bus (`/api/events` is the SSE log stream) |
+| `GET /api/metrics`, `GET /api/reliability` | measured series, breakers, incidents, watchdogs |
+| `GET /api/experience`, `POST /api/feedback` | strategy leaderboard, user rating |
+| `GET|POST /api/cognition` | last run report, ad-hoc brief |
+| `GET /api/memory/conflicts`, `GET /api/memory/integrity`, `POST /api/memory/consolidate` | memory quality |
+| `POST /api/tasks/pause`, `POST /api/tasks/resume` | task lifecycle |
 
 The chat stream ends with exactly one `final` frame — including when the client
 disconnects, the user presses STOP, or no model is installed.
@@ -173,6 +198,12 @@ sentinel models --benchmark
 sentinel agents | tools <query> | tasks | automations | approvals
 sentinel voice transcribe nagranie.wav --lang pl
 sentinel status --json
+sentinel benchmark                    # measured latency, RSS, tool/agent counts
+sentinel test [--all]                 # deterministic suites (run + deep; --all adds UI/API)
+sentinel backup [list|<label>]        # config, memory, database
+sentinel rollback [--config]          # newest backup, previous files kept
+sentinel update [--check]             # compare with the latest release (never auto-applies)
+sentinel migrate                      # store migration + integrity + knowledge coverage
 ```
 
 Exit codes: `0` ok, `1` error, `2` unusable command, `3` unhealthy, `4` repair

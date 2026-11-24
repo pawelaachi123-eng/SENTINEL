@@ -5,6 +5,11 @@
   assistant: the agent, the desktop console, a local model runtime, speech, OCR,
   optional autostart, and a health check that tells you the truth afterwards.
 
+  Default install folder: %USERPROFILE%\Desktop\SENTINEL (override with -InstallDir).
+  The deploy is staged and atomic: files are copied to SENTINEL.staging-<stamp>,
+  verified, the existing folder is moved to SENTINEL.backup-<stamp>, and the new
+  folder is renamed into place. Any failure moves the previous install back.
+
   Usage (PowerShell, run as your normal user; it elevates per-install only):
 
     powershell -ExecutionPolicy Bypass -File .\INSTALL_SENTINEL_FULL.ps1
@@ -23,7 +28,8 @@
 
 [CmdletBinding()]
 param(
-  [string]$InstallDir = "$env:LOCALAPPDATA\SENTINEL",
+  [string]$InstallDir = (Join-Path ([Environment]::GetFolderPath("Desktop")) "SENTINEL"),
+  [int]$VerifyPort = 7888,
   [string]$Source,
   [string]$Model = "qwen3.5:9b",
   [string]$FastModel = "qwen3.5:4b",
@@ -101,6 +107,40 @@ function Wait-Http([string]$url, [int]$seconds = 60) {
   return $false
 }
 
+function New-Stamp { return (Get-Date -Format "yyyyMMdd-HHmmss") }
+
+function Split-DefaultHome {
+  if ($env:SENTINEL_HOME) { return $env:SENTINEL_HOME }
+  return (Join-Path $env:APPDATA "sentinel-data")
+}
+
+function Copy-AppTree([string]$from, [string]$to) {
+  New-Item -ItemType Directory -Force -Path $to | Out-Null
+  robocopy $from $to /E /XD node_modules .git dist build .pio .arena /XF sentinel-install.log /NFL /NDL /NJH /NJS /NP | Out-Null
+  return ($LASTEXITCODE -lt 8)
+}
+
+function Backup-Existing([string]$path, [string]$reason) {
+  if (-not (Test-Path $path)) { return $null }
+  $stamp = New-Stamp
+  $backup = "$path.backup-$stamp"
+  try {
+    Move-Item -LiteralPath $path -Destination $backup -ErrorAction Stop
+    Say "existing install moved to $backup ($reason)" "ok"
+    return $backup
+  } catch {
+    Add-Failure "could not move the existing install aside: $($_.Exception.Message)"
+    return $null
+  }
+}
+
+function Restore-Backup([string]$backup, [string]$path) {
+  if (-not $backup -or -not (Test-Path $backup)) { return }
+  if (Test-Path $path) { Remove-Item -LiteralPath $path -Recurse -Force -ErrorAction SilentlyContinue }
+  Move-Item -LiteralPath $backup -Destination $path -ErrorAction SilentlyContinue
+  Say "previous install restored from $backup" "warn"
+}
+
 Say "SENTINEL full install log: $script:LogFile"
 Say ("Windows {0} · PowerShell {1} · user {2}" -f $env:OS, $PSVersionTable.PSVersion, $env:USERNAME)
 
@@ -159,11 +199,31 @@ Say "Installing the agent" "step"
 if ($Source) {
   if (-not (Test-Path $Source)) { Add-Failure "source folder $Source does not exist"; }
   else {
-    Say "copying from $Source"
-    New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
-    robocopy $Source $InstallDir /E /XD node_modules .git dist build .pio /NFL /NDL /NJH /NJS /NP | Out-Null
-    if ($LASTEXITCODE -ge 8) { Add-Failure "robocopy failed with $LASTEXITCODE" }
-    else { Say "application files copied" "ok" }
+    $staging = "$InstallDir.staging-$(New-Stamp)"
+    Say "staging files from $Source into $staging"
+    if (-not (Copy-AppTree $Source $staging)) {
+      Add-Failure "copying files failed ($LASTEXITCODE); nothing was changed in $InstallDir"
+      Remove-Item -LiteralPath $staging -Recurse -Force -ErrorAction SilentlyContinue
+    } else {
+      # The staged tree must look like SENTINEL before the old install is touched.
+      $stagedAgent = Join-Path $staging "bin\sentinel-agent.js"
+      $stagedPkg = Join-Path $staging "package.json"
+      if (-not (Test-Path $stagedAgent) -or -not (Test-Path $stagedPkg)) {
+        Add-Failure "the staged copy is incomplete (missing bin\sentinel-agent.js or package.json); the previous install was left untouched"
+        Remove-Item -LiteralPath $staging -Recurse -Force -ErrorAction SilentlyContinue
+      } else {
+        $previous = Backup-Existing $InstallDir "before deploying $(New-Stamp)"
+        try {
+          Move-Item -LiteralPath $staging -Destination $InstallDir -ErrorAction Stop
+          Say "application deployed from the staged copy" "ok"
+        } catch {
+          Add-Failure "could not activate the staged copy: $($_.Exception.Message)"
+          Restore-Backup $previous $InstallDir
+          if (Test-Path $staging) { Remove-Item -LiteralPath $staging -Recurse -Force -ErrorAction SilentlyContinue }
+        }
+        if ($previous) { Say "rollback available: move $previous back over $InstallDir" }
+      }
+    }
   }
 } else {
   $release = Get-Json "https://api.github.com/repos/pawelaachi123-eng/SENTINEL/releases/latest"
@@ -210,6 +270,15 @@ if (Test-Path (Join-Path $InstallDir "package.json")) {
       if ($LASTEXITCODE -eq 0) { Say "dependencies ready" "ok" } else { Add-Warning "npm could not install dependencies; the agent will start with the built-in modules only" }
     } finally { Pop-Location }
   } else { Add-Warning "npm is not on PATH; skipping dependency install" }
+}
+
+if ((Test-Path $cli) -and (Test-Path $agent)) {
+  Say "Migrating the store and checking integrity" "step"
+  Push-Location $InstallDir
+  try {
+    & node $cli migrate 2>&1 | Tee-Object -FilePath $script:LogFile -Append | ForEach-Object { if (-not $Quiet) { Write-Host "  $_" } }
+    if ($LASTEXITCODE -ne 0) { Add-Warning "migrate reported a problem — the agent still starts, run sentinel doctor" }
+  } catch { Add-Warning "migrate could not run: $($_.Exception.Message)" } finally { Pop-Location }
 }
 
 # ---------------------------------------------------------------------------
@@ -342,16 +411,34 @@ if (-not $NoDesktop) {
 
 Say "Starting the agent to verify the install" "step"
 $port = 7878
-try {
-  $existing = Get-Json "http://127.0.0.1:$port/api/health"
-  if ($existing) { Say "an agent is already running on $port" "ok" }
-} catch { }
+$existing = Get-Json "http://127.0.0.1:$port/api/health"
+if ($existing) { Say "an agent is already running on $port" "ok" }
+$verifyProcess = $null
 
 if (-not $existing -and (Test-Path $agent)) {
-  $log = Join-Path $env:TEMP "sentinel-start.log"
-  Start-Process -FilePath (Get-Command node).Source -ArgumentList "`"$agent`"" -WindowStyle Hidden -RedirectStandardOutput $log -RedirectStandardError "$log.err"
-  $up = Wait-Http "http://127.0.0.1:$port/api/health" 45
-  if ($up) { Say "agent answers on http://127.0.0.1:$port" "ok" } else { Add-Failure "the agent did not answer on $port — see $log" }
+  # Verify on a private port so a second install cannot collide with a running
+  # agent, and stop it afterwards instead of leaving a stray process behind.
+  $log = Join-Path $env:TEMP "sentinel-verify.log"
+  $env:SENTINEL_HOME = Split-DefaultHome
+  $verifyProcess = Start-Process -FilePath (Get-Command node).Source -ArgumentList "`"$agent`" --port $VerifyPort" -WindowStyle Hidden -PassThru -RedirectStandardOutput $log -RedirectStandardError "$log.err"
+  $up = Wait-Http "http://127.0.0.1:$VerifyPort/api/health" 60
+  if ($up) {
+    Say "agent answers on http://127.0.0.1:$VerifyPort" "ok"
+    $health = Get-Json "http://127.0.0.1:$VerifyPort/api/health"
+    $ai = $null
+    try { $ai = (Get-Json "http://127.0.0.1:$VerifyPort/api/diagnostics") } catch { }
+    Say "health: $($health.status) — data in $env:SENTINEL_HOME" "ok"
+    if ($ai -and $ai.data -and $ai.data.ai) {
+      $stack = $ai.data.ai
+      Say ("cognitive stack: {0} agentów, {1} narzędzi, pamięć {2}" -f $stack.agents, $stack.tools, $stack.memory) "ok"
+    }
+  } else {
+    Add-Failure "the agent did not answer on $VerifyPort — see $log"
+    if (Test-Path $log) { Get-Content $log -Tail 20 | ForEach-Object { Write-Log "verify: $_" } }
+  }
+  if ($verifyProcess -and -not $verifyProcess.HasExited) {
+    try { $verifyProcess.Kill(); $verifyProcess.WaitForExit(5000) | Out-Null; Say "verification agent stopped" "ok" } catch { Add-Warning "could not stop the verification agent: $($_.Exception.Message)" }
+  }
 }
 
 if (Test-Path $cli) {
@@ -369,11 +456,36 @@ if (Test-Path $configFile) {
 }
 $url = if ($token) { "http://127.0.0.1:$port/?t=$token" } else { "http://127.0.0.1:$port/" }
 
+# A real `sentinel` command, not just a node invocation. The wrapper is a .cmd
+# file so it works from cmd.exe, PowerShell and Explorer's address bar.
+$wrapper = Join-Path $InstallDir "sentinel.cmd"
+if (Test-Path $cli) {
+  $lines = @(
+    "@echo off",
+    "rem SENTINEL command wrapper — generated by INSTALL_SENTINEL_FULL.ps1",
+    "setlocal",
+    "`"$(if (Test-Command node) { (Get-Command node).Source } else { 'node' })`" `"$cli`" %*",
+    "exit /b %ERRORLEVEL%"
+  )
+  Set-Content -Path $wrapper -Value $lines -Encoding ASCII
+  Say "created $wrapper" "ok"
+  $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+  if ($userPath -notlike "*$InstallDir*") {
+    try {
+      [Environment]::SetEnvironmentVariable("Path", "$userPath;$InstallDir", "User")
+      Say "added $InstallDir to your user PATH (new terminals only)" "ok"
+    } catch { Add-Warning "could not add $InstallDir to PATH; run $wrapper directly" }
+  }
+}
+
 Say "Done" "step"
 if ($script:Failures.Count -eq 0) {
   Say "SENTINEL is installed and running." "ok"
   Say "Open $url" "ok"
-  Say "Terminal: sentinel ask `"jaki mam GPU?`"   (add $InstallDir\bin to PATH, or use node $cli)" 
+  Say "Terminal: sentinel ask `"jaki mam GPU?`""
+  Say "  sentinel status · doctor · models --benchmark · agents · tools · tasks · memory"
+  Say "  sentinel benchmark · test · backup · rollback · update · migrate · chat"
+  Say "  backups live in $dataDir\backups; rollback keeps the previous files"
   if ($script:Warnings.Count) {
     Say "$($script:Warnings.Count) optional piece(s) were skipped:" "warn"
     $script:Warnings | ForEach-Object { Say "  - $_" "warn" }

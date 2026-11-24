@@ -1,4 +1,4 @@
-# SENTINEL 2.2
+# SENTINEL 3.0
 
 **Your own assistant for your own machine — it runs on the PC, answers with measurements instead of guesses, and can still be driven from your phone over a direct encrypted channel. No account, no cloud.**
 
@@ -24,8 +24,9 @@ Three situations, one app:
 
 ## The assistant
 
-SENTINEL 2.2 adds a local assistant that can *operate this computer*, not just
-talk about it. Ask in the UI, on the phone, or in a terminal:
+SENTINEL 3.0 is a cognitive assistant that can *operate this computer*, not
+just talk about it — with a real brief, bounded plans, verified answers and a
+memory that admits when two facts contradict each other. Ask in the UI, on the phone, or in a terminal:
 
 ```bash
 sentinel ask "jaki mam GPU i ile VRAM jest zajęte?"
@@ -34,7 +35,7 @@ sentinel doctor --fix
 ```
 
 * **It measures before it speaks.** Hardware, processes, files, documents, logs
-  and the ESP32 are read through 176 audited tools; every answer carries its
+  and the ESP32 are read through 182 audited tools; every answer carries its
   tool calls, citations and a verification report.
 * **It runs on your machine.** Ollama / LM Studio / llama.cpp / any
   OpenAI-compatible endpoint you configure. No telemetry, no request leaves the
@@ -48,6 +49,16 @@ sentinel doctor --fix
   looks like instructions to the assistant.
 * **31 specialists, one dispatcher** — routing, planning, verification and an
   optional model audit, not a single prompt doing everything.
+* **It decides before it searches.** Every question gets a brief: intent,
+  strategy, risk, constraints, assumptions, completion criteria and a
+  calibrated uncertainty with reasons. Vague follow-ups get a question back
+  instead of a guess ([`docs/research.md`](docs/research.md)).
+* **Durable plans** — tasks are a validated DAG with retries, checkpoints,
+  idempotency keys, pause/resume and restart reconciliation; a task interrupted
+  by a crash is never silently repeated.
+* **It learns, cautiously** — per-strategy success is recorded and used to route
+  future work, but a change is only promoted after a regression gate with enough
+  samples. Candidates are never applied automatically.
 * **Self-healing** — `sentinel doctor` diagnoses config, storage, ports, models
   and the ESP32 link; repairs are proposed, backed up and approval-gated.
 
@@ -56,12 +67,23 @@ Full detail: [`docs/assistant.md`](docs/assistant.md).
 ### The new interface
 
 Home, Chat, Agents, Tools, Tasks, Memory, Knowledge, Automations, Computer,
-Devices, Models, Activity, Diagnostics, Settings — plus a blue orb that reflects
+Devices, Models, Cognition (Poznanie), Activity, Diagnostics, Settings — plus a blue orb that reflects
 the real state of the run (thinking, planning, working, verifying, error) instead
 of looping an animation. Answers stream token by token, code blocks are real
 code blocks, and approvals appear at the top of the screen wherever you are.
 
 ---
+
+### What 3.0 verifies, and what it does not
+
+`npm test` runs four suites: **23** protocol/CLI checks, **27** UI checks,
+**25** assistant-stack checks and **45** deep checks (cognition, context budget,
+events, metrics, breakers, retry, experience gates, DAG engine, memory 3.0,
+knowledge, structured output, provider failover, corrupt config, benchmark).
+Counts and measured numbers are in [`docs/PROGRESS.md`](docs/PROGRESS.md);
+research and licences in [`docs/research.md`](docs/research.md). Untested
+hardware, unfinished MCP support and the absence of a GPU in CI are stated
+there rather than glossed over.
 
 ## Download
 
@@ -170,7 +192,7 @@ and tested against itself:
 
 ## Install (Windows)
 
-1. **PC** — either run `SENTINEL-Setup-2.2.0-x64.exe` (agent + tray + console),
+1. **PC** — either run `SENTINEL-Setup-3.0.0-x64.exe` (agent + tray + console),
    or take the whole thing in one go:
 
    ```powershell
@@ -246,7 +268,7 @@ CI (`.github/workflows/build.yml`) produces all deliverables:
 
 | Job | Runner | Artifact |
 | --- | --- | --- |
-| `check` | ubuntu | syntax, assets, boot, crypto unit tests, 17-step UI test |
+| `check` | ubuntu | syntax, assets, boot, crypto unit tests, UI test |
 | `windows` | windows-latest | agent `.exe`, NSIS installer, portable `.exe` |
 | `android` | ubuntu-latest | signed release `.apk` |
 | `firmware` | ubuntu-latest | `firmware.bin` for ESP32 |
