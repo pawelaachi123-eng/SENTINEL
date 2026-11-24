@@ -351,6 +351,10 @@ class ToolRegistry {
       sessionId,
       now: this.now,
       registry: this,
+      // Only set when a real, single-use approval was consumed for this exact
+      // tool call. A tool may check it; a model-supplied flag is never enough.
+      approvalId: approval ? approval.id : null,
+      approval: approval || null,
     };
 
     this.counters.calls += 1;

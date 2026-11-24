@@ -950,3 +950,9 @@ input.field::placeholder { color: var(--text-faint); }
 @media (prefers-reduced-motion: reduce) {
   .eventlog-row, .data-table tr { transition: none; }
 }
+
+/* ── staged patches ────────────────────────────────────────────────────── */
+.patches-panel { display: grid; gap: 12px; }
+.patch-form { display: grid; gap: 8px; }
+.patch-row { display: grid; gap: 8px; }
+.patch-diff { max-height: 320px; overflow: auto; font-size: 0.78rem; line-height: 1.45; padding: 10px; border-radius: 10px; background: color-mix(in srgb, currentColor 7%, transparent); white-space: pre; }

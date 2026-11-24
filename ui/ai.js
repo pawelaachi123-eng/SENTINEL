@@ -735,8 +735,128 @@
       host.textContent = `Nie mogę wczytać przebiegu: ${err.message}`;
     }
     loadEventLog();
+    loadPatches();
     loadExperience();
     loadReliability();
+  }
+
+  function notify(message, options) {
+    if (window.SentinelUI && window.SentinelUI.toast) window.SentinelUI.toast(message, options);
+  }
+
+  async function loadPatches() {
+    const host = panel('patches');
+    if (!host) return;
+    try {
+      const data = await api('/api/patches');
+      const sessions = data.data || [];
+      host.textContent = '';
+      const form = el('div', { class: 'patch-form' }, [
+        el('input', { class: 'field', type: 'text', placeholder: 'ścieżka pliku (np. C:/projekt/src/app.js)', id: 'patch-path' }),
+        el('textarea', { class: 'field', id: 'patch-text', rows: 5, placeholder: 'pełna nowa treść pliku — nic nie zostanie zapisane bez weryfikacji i zatwierdzenia' }),
+        el('input', { class: 'field', type: 'text', placeholder: 'powód zmiany (opcjonalnie)', id: 'patch-reason' }),
+        el('div', { class: 'row-actions' }, [
+          el('button', {
+            class: 'btn btn-primary',
+            type: 'button',
+            text: 'Etapuj zmianę',
+            onclick: async (event) => {
+              const path = $('#patch-path').value.trim();
+              const text = $('#patch-text').value;
+              if (!path || !text) return notify('Podaj ścieżkę i nową treść pliku.');
+              event.currentTarget.disabled = true;
+              const result = await api('/api/patches', { method: 'POST', body: { action: 'propose', path, text, reason: $('#patch-reason').value.trim() || null } });
+              event.currentTarget.disabled = false;
+              notify(result.ok ? `Zetapowano ${result.data.id} (+${result.data.added} −${result.data.removed})` : `Nie udało się: ${result.message || result.code}`);
+              loadPatches();
+            },
+          }),
+          el('span', { class: 'muted', text: 'zapis wymaga przejścia weryfikacji i Twojego zatwierdzenia' }),
+        ]),
+      ]);
+      host.append(form);
+      if (!sessions.length) {
+        host.append(el('p', { class: 'empty-note', text: 'Brak zmian. Asystent w trybie kodowania proponuje zmiany tutaj, zamiast pisać do plików.' }));
+        return;
+      }
+      for (const session of sessions) {
+        const row = el('article', { class: 'card patch-row' }, [
+          el('div', { class: 'task-head' }, [
+            el('h3', { text: session.relative || session.file }),
+            el('span', { class: `badge badge-${session.status}`, text: session.status }),
+          ]),
+          el('p', { class: 'muted', text: `+${session.added} −${session.removed} · ${session.verifier}${session.verification ? ` · ${session.verification.ok ? 'weryfikacja OK' : 'weryfikacja nieudana'}` : ''}${session.description ? ` · ${session.description}` : ''}` }),
+          el('div', { class: 'row-actions' }, [
+            el('button', {
+              class: 'btn btn-ghost',
+              type: 'button',
+              text: 'Pokaż diff',
+              onclick: async () => {
+                const detail = await api(`/api/patches?id=${encodeURIComponent(session.id)}`);
+                if (session.diffNode) session.diffNode.remove();
+                const diffNode = el('pre', { class: 'patch-diff', text: detail.diff || 'brak diffu' });
+                session.diffNode = diffNode;
+                row.append(diffNode);
+              },
+            }),
+            ['staged', 'failed'].includes(session.status)
+              ? el('button', {
+                  class: 'btn btn-ghost',
+                  type: 'button',
+                  text: 'Weryfikuj',
+                  onclick: async (event) => {
+                    event.currentTarget.disabled = true;
+                    const result = await api('/api/patches', { method: 'POST', body: { action: 'verify', id: session.id } });
+                    notify(result.ok && result.data && result.data.ok ? `Weryfikacja OK (${result.data.ms} ms)` : `Weryfikacja nieudana: ${(result.data && (result.data.output || result.data.message)) || result.message || ''}`.slice(0, 240));
+                    loadPatches();
+                  },
+                })
+              : null,
+            session.status === 'verified'
+              ? el('button', {
+                  class: 'btn btn-primary',
+                  type: 'button',
+                  text: 'Zastosuj…',
+                  onclick: () => {
+                    (window.SentinelUI ? window.SentinelUI.confirmSheet : (options) => options.onConfirm())({
+                      title: 'Zapisać zmianę?',
+                      body: `${session.file} zostanie nadpisany. Kopia poprzedniej treści jest zachowywana automatycznie.`,
+                      confirmLabel: 'Zapisz plik',
+                      onConfirm: async () => {
+                        const pending = await api('/api/patches', { method: 'POST', body: { action: 'apply', id: session.id } });
+                        if (pending.ok) {
+                          notify('Zapisano plik.');
+                          return loadPatches();
+                        }
+                        if (pending.code === 'APPROVAL_REQUIRED' && pending.approval) {
+                          const decided = await api('/api/approvals/decide', { method: 'POST', body: { id: pending.approval.id, approve: true } });
+                          notify(decided.ok ? `Zapisano: ${decided.result && decided.result.data ? decided.result.data.file : session.file}` : `Nie zapisano: ${decided.result ? decided.result.message : decided.message}`);
+                          return loadPatches();
+                        }
+                        notify(`Nie zapisano: ${pending.message || pending.code}`);
+                      },
+                    });
+                  },
+                })
+              : null,
+            ['staged', 'verified', 'failed'].includes(session.status)
+              ? el('button', {
+                  class: 'btn btn-ghost',
+                  type: 'button',
+                  text: 'Odrzuć',
+                  onclick: async () => {
+                    await api('/api/patches', { method: 'POST', body: { action: 'discard', id: session.id } });
+                    loadPatches();
+                  },
+                })
+              : null,
+          ]),
+        ]);
+        host.append(row);
+      }
+    } catch (err) {
+      host.textContent = `Nie mogę wczytać zmian: ${err.message}`;
+    }
   }
 
   async function loadEventLog() {
@@ -1363,7 +1483,7 @@
         stopRun();
       }
       if (!typing && event.key === '?' && !event.ctrlKey && !event.metaKey) {
-        toast('Skróty: Ctrl+K — czat, Escape — stop, Enter — wyślij, Shift+Enter — nowa linia');
+        notify('Skróty: Ctrl+K — czat, Escape — stop, Enter — wyślij, Shift+Enter — nowa linia');
       }
     });
 

@@ -930,6 +930,13 @@
     return payload;
   }
 
+  // The assistant bundle (ai.js) is a separate IIFE; expose the two shared
+  // primitives instead of duplicating DOM code in two files.
+  window.SentinelUI = {
+    toast: (message, options) => toast(message, options),
+    confirmSheet: (options) => confirmSheet(options),
+  };
+
   function commandArgs(cmd) {
     const catalogue = (S.snap && S.snap.catalogue) || [];
     const entry = catalogue.find((item) => item.cmd === cmd);

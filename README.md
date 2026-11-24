@@ -35,7 +35,7 @@ sentinel doctor --fix
 ```
 
 * **It measures before it speaks.** Hardware, processes, files, documents, logs
-  and the ESP32 are read through 182 audited tools; every answer carries its
+  and the ESP32 are read through 188 audited tools; every answer carries its
   tool calls, citations and a verification report.
 * **It runs on your machine.** Ollama / LM Studio / llama.cpp / any
   OpenAI-compatible endpoint you configure. No telemetry, no request leaves the
@@ -56,6 +56,9 @@ sentinel doctor --fix
 * **Durable plans** — tasks are a validated DAG with retries, checkpoints,
   idempotency keys, pause/resume and restart reconciliation; a task interrupted
   by a crash is never silently repeated.
+* **Code changes are staged, not sprayed** — a proposal is diffed, verified in an
+  isolated workspace, then needs your approval before it is written, with the old
+  file kept as a backup. `patch.propose` / `verify` / `apply` / `discard`.
 * **It learns, cautiously** — per-strategy success is recorded and used to route
   future work, but a change is only promoted after a regression gate with enough
   samples. Candidates are never applied automatically.
@@ -76,8 +79,8 @@ code blocks, and approvals appear at the top of the screen wherever you are.
 
 ### What 3.0 verifies, and what it does not
 
-`npm test` runs four suites: **23** protocol/CLI checks, **27** UI checks,
-**25** assistant-stack checks and **45** deep checks (cognition, context budget,
+`npm test` runs four suites: **23** protocol/CLI checks, **30** UI checks,
+**25** assistant-stack checks and **49** deep checks (cognition, context budget,
 events, metrics, breakers, retry, experience gates, DAG engine, memory 3.0,
 knowledge, structured output, provider failover, corrupt config, benchmark).
 Counts and measured numbers are in [`docs/PROGRESS.md`](docs/PROGRESS.md);

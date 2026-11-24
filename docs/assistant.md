@@ -43,6 +43,7 @@ with a clarifying question instead of a guess.
 | Events / metrics | `core/events.js`, `core/metrics.js` | typed bus and real p50/p95; no synthetic numbers |
 | Reliability | `core/reliability.js` | breakers, bounded retry, incident log, watchdogs with confirmation |
 | FTS5 | `core/memory/store.js` | persistent lexical index beside the records; `fts:false` when unavailable |
+| Staged patches | `core/patching.js` | propose → verify in isolation → diff → approval → write → confirm, with a backup |
 
 ## Modes
 

@@ -675,6 +675,59 @@ class HttpApi {
       return this.json(res, 200, { ok: true, data: this.ai.cognitive.analyse({ text, mode: body.mode || 'balanced', sessionId: body.sessionId || 'default' }) });
     }
 
+
+    /* ── 3.0: staged patches (coding workflow) ─────────────────────────── */
+
+    if (route === '/api/patches' && req.method === 'GET') {
+      if (!this.ai || !this.ai.patches) return this.json(res, 200, { ok: true, data: [] });
+      const status = url.searchParams.get('status');
+      const id = url.searchParams.get('id');
+      if (id) {
+        try {
+          return this.json(res, 200, { ok: true, data: this.ai.patches.get(String(id)), diff: this.ai.patches.diff(String(id)) });
+        } catch (err) {
+          return this.json(res, 200, { ok: false, code: err.code || 'NOT_FOUND', message: err.message });
+        }
+      }
+      return this.json(res, 200, { ok: true, data: this.ai.patches.list({ status: status || null }), stats: this.ai.patches.stats() });
+    }
+
+    if (route === '/api/patches' && req.method === 'POST') {
+      if (!this.ai || !this.ai.patches) return this.json(res, 503, { ok: false, error: 'AI not ready' });
+      const body = await this.body(req);
+      try {
+        if (body.action === 'propose') {
+          const session = this.ai.patches.create({
+            file: String(body.path || ''),
+            newText: String(body.text || ''),
+            description: body.reason ? String(body.reason) : null,
+            verify: ['syntax', 'test', 'none'].includes(body.verify) ? body.verify : 'syntax',
+            requestedBy: 'ui',
+          });
+          return this.json(res, 200, { ok: true, data: session, diff: this.ai.patches.diff(session.id) });
+        }
+        if (body.action === 'verify') {
+          return this.json(res, 200, { ok: true, data: this.ai.patches.verify(String(body.id || '')) });
+        }
+        if (body.action === 'apply') {
+          // The tool registry owns the approval gate: without a consumed
+          // approval this returns APPROVAL_REQUIRED and nothing is written.
+          const result = await this.ai.tools.execute('patch.apply', { id: String(body.id || '') }, {
+            source: 'ui',
+            approvalId: body.approvalId || null,
+            sessionId: body.sessionId || null,
+          });
+          return this.json(res, 200, result);
+        }
+        if (body.action === 'discard') {
+          return this.json(res, 200, { ok: true, data: this.ai.patches.discard(String(body.id || '')) });
+        }
+        return this.json(res, 200, { ok: false, code: 'BAD_ACTION', message: 'action must be propose, verify, apply or discard' });
+      } catch (err) {
+        return this.json(res, 200, { ok: false, code: err.code || 'PATCH_FAILED', message: err.message });
+      }
+    }
+
     if (route === '/api/diagnostics' && req.method === 'GET') {
       const snapshot = await this.snapshot();
       return this.json(res, 200, { ok: true, data: { snapshot, ai: this.ai ? this.ai.status() : null } });

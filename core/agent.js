@@ -30,6 +30,7 @@ const { VisionEngine } = require('./vision');
 const { SelfHeal } = require('./selfheal');
 const { CognitiveCore } = require('./cognition');
 const { ContextManager } = require('./context');
+const { PatchManager } = require('./patching');
 const { ExperienceStore } = require('./experience');
 const { EventBus } = require('./events');
 const { Metrics } = require('./metrics');
@@ -80,6 +81,7 @@ class Agent extends EventEmitter {
       this.cognitive = new CognitiveCore({ config: this.config, log: this.log });
       this.context = new ContextManager({ config: this.config, log: this.log });
       this.experience = new ExperienceStore({ store: this.store, log: this.log });
+      this.patches = new PatchManager({ paths: pathsModule, sandbox: null, log: this.log, store: this.store, config: this.config });
       this.embedder = this.config.get('ai.useModelEmbeddings')
         ? new ModelEmbedder({ llm: null, model: this.config.get('ai.models.embed'), log: this.log })
         : new HashingEmbedder();
@@ -89,6 +91,7 @@ class Agent extends EventEmitter {
       this.approvals = new ApprovalQueue({ log: this.log });
       this.llm = new LlmClient({ config: this.config, log: this.log, metrics: this.metrics, events: this.events, experience: this.experience });
       this.sandbox = new Sandbox({ config: this.config, log: this.log, paths: pathsModule });
+      if (this.patches) this.patches.sandbox = this.sandbox;
       this.voice = new VoiceEngine({ config: this.config, log: this.log, paths: pathsModule });
       this.vision = new VisionEngine({ config: this.config, log: this.log, llm: this.llm, paths: pathsModule });
       this.services = {
@@ -138,6 +141,7 @@ class Agent extends EventEmitter {
         paths: pathsModule,
         cognitive: this.cognitive,
         context: this.context,
+        patches: this.patches,
         experience: this.experience,
         events: this.events,
         metrics: this.metrics,
@@ -240,6 +244,7 @@ class Agent extends EventEmitter {
             experience: this.experience || null,
             cognitive: this.cognitive || null,
             context: this.context || null,
+            patches: this.patches || null,
             incidents: this.incidents || null,
             tasks: this.tasks || null,
           }

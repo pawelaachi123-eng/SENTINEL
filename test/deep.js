@@ -647,6 +647,104 @@ test('a dead provider trips its breaker and the next candidate answers', async (
   assert.ok(breakers.some((breaker) => breaker.name === 'ollama' && breaker.state === 'open'));
 });
 
+/* ── staged patches ───────────────────────────────────────────────────── */
+
+test('a staged patch is diffed without touching the file, and syntax is verified in isolation', () => {
+  const { PatchManager } = require('../core/patching');
+  const sandbox = { resolve: (file) => path.resolve(file) };
+  const patches = new PatchManager({ paths: { patchesDir: () => path.join(home, 'patches'), dataDir: () => home }, sandbox });
+  const file = path.join(home, 'target.js');
+  fs.writeFileSync(file, 'function alpha() {\n  return 1;\n}\n', 'utf8');
+  const session = patches.create({ file, newText: 'function alpha() {\n  return 2;\n}\n', description: 'change the value' });
+  assert.equal(session.status, 'staged');
+  assert.match(fs.readFileSync(file, 'utf8'), /return 1/, 'proposing must not write the file');
+  assert.equal(session.added, 1);
+  assert.equal(session.removed, 1);
+  assert.match(patches.diff(session.id), /^-  return 1;/m);
+  assert.match(patches.diff(session.id), /^\+  return 2;/m);
+  const verification = patches.verify(session.id);
+  assert.equal(verification.ok, true, verification.output);
+  assert.match(verification.command, /node/);
+  assert.equal(patches.get(session.id).status, 'verified');
+});
+
+test('a patch with a syntax error fails verification and cannot be applied', () => {
+  const { PatchManager } = require('../core/patching');
+  const patches = new PatchManager({ paths: { patchesDir: () => path.join(home, 'patches'), dataDir: () => home }, sandbox: { resolve: (file) => path.resolve(file) } });
+  const file = path.join(home, 'broken.js');
+  fs.writeFileSync(file, 'function ok() { return 1; }\n', 'utf8');
+  const session = patches.create({ file, newText: 'function ok( { return 2; }\n' });
+  const verification = patches.verify(session.id);
+  assert.equal(verification.ok, false);
+  assert.equal(patches.get(session.id).status, 'failed');
+  assert.throws(() => patches.apply(session.id, { approved: true }), (err) => err.code === 'UNVERIFIED');
+  assert.match(fs.readFileSync(file, 'utf8'), /return 1/, 'the broken content must not reach the file');
+});
+
+test('applying needs an approval, writes the file, keeps a backup and confirms the result', () => {
+  const { PatchManager } = require('../core/patching');
+  const patches = new PatchManager({ paths: { patchesDir: () => path.join(home, 'patches'), dataDir: () => home }, sandbox: { resolve: (file) => path.resolve(file) } });
+  const file = path.join(home, 'apply.js');
+  fs.writeFileSync(file, 'module.exports = 1;\n', 'utf8');
+  const session = patches.create({ file, newText: 'module.exports = 42;\n' });
+  patches.verify(session.id);
+  assert.throws(() => patches.apply(session.id), (err) => err.code === 'APPROVAL_REQUIRED');
+  const result = patches.apply(session.id, { approved: true, approvedBy: 'test' });
+  assert.equal(result.ok, true);
+  assert.ok(fs.existsSync(result.backup));
+  assert.equal(fs.readFileSync(result.backup, 'utf8'), 'module.exports = 1;\n');
+  assert.equal(fs.readFileSync(file, 'utf8'), 'module.exports = 42;\n');
+  assert.equal(patches.confirm(session.id).ok, true);
+  assert.throws(() => patches.apply(session.id, { approved: true }), (err) => err.code === 'ALREADY_APPLIED');
+});
+
+test('the tool layer blocks patch.apply without a consumed approval and allows it with one', async () => {
+  const { ApprovalQueue } = require('../core/security/approvals');
+  const { Sandbox } = require('../core/security/sandbox');
+  const { buildTools } = require('../core/tools');
+  const config = {
+    get: (key) => ({
+      'ai.autonomy': { requireApprovalForWrites: true },
+      'ai.limits.toolTimeoutMs': 60000,
+      'ai.tools.allowNetwork': false,
+      'sandbox.roots': [home],
+    }[key]),
+  };
+  const sandbox = new Sandbox({
+    config,
+    log: null,
+    paths: {
+      dataDir: () => home,
+      workspaceDir: () => path.join(home, 'workspace'),
+      knowledgeDir: () => path.join(home, 'knowledge'),
+      patchesDir: () => path.join(home, 'patches'),
+    },
+  });
+  const approvals = new ApprovalQueue({ log: null });
+  const { PatchManager } = require('../core/patching');
+  const patches = new PatchManager({ paths: { patchesDir: () => path.join(home, 'patches'), dataDir: () => home }, sandbox });
+  const tools = buildTools({ config, log: null, sandbox, approvals, services: { patches } });
+  const file = path.join(home, 'tool-apply.js');
+  fs.writeFileSync(file, 'module.exports = "before";\n', 'utf8');
+  const session = patches.create({ file, newText: 'module.exports = "after";\n' });
+  patches.verify(session.id);
+
+  const blocked = await tools.execute('patch.apply', { id: session.id }, { source: 'test' });
+  assert.equal(blocked.ok, false);
+  assert.equal(blocked.code, 'APPROVAL_REQUIRED');
+  assert.equal(fs.readFileSync(file, 'utf8'), 'module.exports = "before";\n', 'no approval means no write');
+
+  // The approval is bound to this tool and these exact arguments.
+  const request = approvals.request({ tool: 'patch.apply', args: { id: session.id }, permission: 'write', requestedBy: 'test' });
+  const applied = await tools.execute('patch.apply', { id: session.id }, { source: 'test', approvalId: request.id });
+  assert.equal(applied.ok, true, applied.message);
+  assert.equal(fs.readFileSync(file, 'utf8'), 'module.exports = "after";\n');
+  assert.equal(applied.data.confirmed, true);
+
+  const replay = await tools.execute('patch.apply', { id: session.id }, { source: 'test', approvalId: request.id });
+  assert.equal(replay.ok, false, 'the same approval must not work twice');
+});
+
 /* ── fault injection and the live agent ───────────────────────────────── */
 
 test('a corrupt config is reported by the doctor instead of crashing the agent', async () => {

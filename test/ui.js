@@ -196,10 +196,26 @@ function makePage(url) {
       /math\.eval|Mathematics/.test(aiDoc.getElementById('chat-messages').textContent),
     );
 
+    // A staged patch must render with its diff and never be written by proposing.
+    const crypto = require('node:crypto');
+    const workspace = require('../core/paths').workspaceDir();
+    fs.mkdirSync(workspace, { recursive: true });
+    const patchFile = path.join(workspace, `sentinel-ui-patch-${crypto.randomBytes(4).toString('hex')}.js`);
+    fs.writeFileSync(patchFile, 'module.exports = 1;\n', 'utf8');
+    const session = agent.patches.create({ file: patchFile, newText: 'module.exports = 7;\n', description: 'ui test' });
+    agent.patches.verify(session.id);
+
     aiDoc.querySelector('.tab[data-tab="cognition"]').click();
     await sleep(700);
     const cognitionText = aiDoc.querySelector('[data-panel="cognition"]').textContent;
     check('the cognition panel shows the real brief of the last run', /Zamiar/.test(cognitionText) && /math/.test(cognitionText), cognitionText.slice(0, 90));
+    const patchRow = aiDoc.querySelector('[data-panel="patches"] .patch-row');
+    check('a staged patch shows its file, size and verification state', Boolean(patchRow) && /\+1 −1/.test(patchRow.textContent) && /weryfikacja OK/.test(patchRow.textContent), patchRow ? patchRow.textContent.slice(0, 100) : 'no patch row');
+    const diffButton = Array.from(aiDoc.querySelectorAll('[data-panel="patches"] button')).find((button) => /diff/i.test(button.textContent));
+    if (diffButton) diffButton.click();
+    await sleep(400);
+    check('the diff is readable and shows the real change', /-module\.exports = 1;/.test(aiDoc.querySelector('[data-panel="patches"] .patch-diff') ? aiDoc.querySelector('[data-panel="patches"] .patch-diff').textContent : ''), 'diff missing');
+    check('proposing a patch did not write the target file', fs.readFileSync(patchFile, 'utf8') === 'module.exports = 1;\n');
     check('the event log shows typed events from the bus', aiDoc.querySelectorAll('[data-panel="eventlog"] .eventlog-row').length >= 3, `${aiDoc.querySelectorAll('[data-panel="eventlog"] .eventlog-row').length} events`);
     check('the reliability panel reports breaker state without inventing metrics', /bezpieczniki|Bezpieczniki|online|closed/i.test(aiDoc.querySelector('[data-panel="reliability"]').textContent), aiDoc.querySelector('[data-panel="reliability"]').textContent.slice(0, 90));
 

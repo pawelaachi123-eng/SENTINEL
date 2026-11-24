@@ -10,17 +10,17 @@ Run with `npm test` (Node 22+, no network, no desktop PC required):
 | Suite | Checks | What it covers |
 | --- | --- | --- |
 | `node test/run.js` | **23 passed** | ESP32/Android/tunnel protocol, approvals, CLI, installer helpers |
-| `node test/ui.js` | **27/27** | jsdom UI: pairing, chat over HTTP, cognition panel, event log, memory, diagnostics, demo mode |
+| `node test/ui.js` | **30/30** | jsdom UI: pairing, chat over HTTP, cognition panel, event log, memory, diagnostics, demo mode |
 | `node test/ai.js` | **25 passed** | assistant stack over the real HTTP API with mocks |
-| `node test/deep.js` | **45 passed** | cognition, context budget, events, metrics, breakers, retry, experience gates, DAG tasks, memory 3.0, knowledge, structured output, provider failover, corrupt config, cognitive benchmark |
+| `node test/deep.js` | **49 passed** | cognition, context budget, events, metrics, breakers, retry, experience gates, DAG tasks, memory 3.0, knowledge, structured output, provider failover, corrupt config, cognitive benchmark |
 
 Source size (first-party, excluding `node_modules`, generated mobile assets,
-models and caches): **38,338 lines** across JS/HTML/CSS/INO/PS1;
-`core/`, `bin/`, `ui/`, `desktop/`, firmware: **27,936 lines**.
+models and generated mobile assets): **31,631 lines** across JS/HTML/CSS/INO/
+CPP/PS1; `core/`, `bin/`, `ui/`, `desktop/` and firmware alone: **29,098**.
 
-Registered: **31 agents**, **182 tools** in **21 categories** (implemented =
-available in this environment; `verified` counts tools that have actually
-succeeded at least once on this install and starts at 0, by design).
+Registered: **31 agents**, **188 tools** in **21 categories**. `implemented`
+and `available` are equal in this environment; `verified` counts tools that have
+actually succeeded at least once on this install and starts at 0, by design.
 
 ## Measured on this machine (Linux sandbox, no GPU)
 
@@ -73,8 +73,21 @@ filled in with guesses.
   counts, provider-outage and corrupt-config fault-injection tests.
 - Task reconciliation on start, `cancelAll` on stop, approval-scoped tool gate.
 
+### Coding workflow
+- `core/patching.js`: staged patches — `create` (diff + before/after kept under
+  `SENTINEL_HOME/patches/<id>`), `verify` (whitelisted verifier in an isolated
+  workspace; `node --check` by default, `npm test` optional with the original
+  restored afterwards), `apply` (needs a consumed approval and a passed
+  verification, writes a timestamped backup, then `confirm()` compares the file
+  on disk with the verified candidate), `discard`.
+- Tools `patch.propose`, `patch.verify`, `patch.diff`, `patch.apply`,
+  `patch.discard`, `patch.list`; API `/api/patches`; UI panel in **Poznanie**
+  with the full propose → verify → diff → approve → write → confirm path.
+- Regression tests cover: proposing never writes, syntax failure cannot be
+  applied, approval is required and single-use, backup content is the old file.
+
 ### Tools
-- 182 tools, 21 categories, per-tool risk/platform/availability/dry-run
+- 188 tools, 21 categories, per-tool risk/platform/availability/dry-run
   metadata, execution evidence, `implemented`/`available`/`verified` counts.
 - New: `memory.conflicts`, `memory.integrity`, `memory.consolidate`,
   `kb.coverage`, `kb.stale`, `kb.symbols`.
@@ -101,9 +114,10 @@ other (this collision was found by an HTTP smoke test).
 2. **Multimodal pipeline** — STT/TTS/vision/OCR exist behind optional local
    binaries from 2.x, but Polish OCR/TTS quality was not re-verified in this
    session and there is no Polish speech regression test.
-3. **Installer** — `INSTALL_SENTINEL_FULL.ps1` CLI/reporting update and an
-   end-to-end run on real Windows are pending; all installer code paths here are
-   exercised only by unit tests, not by an actual Windows machine.
+3. **Installer** — `INSTALL_SENTINEL_FULL.ps1` now stages atomically, backs up,
+   migrates, health-checks on a private port and installs a `sentinel.cmd`
+   wrapper, but none of it has been executed on a real Windows machine; the
+   syntax and structure were reviewed, not run (no PowerShell in this sandbox).
 4. **Windows troubleshooting evidence** — tools exist, but none of the hardware
    specific behaviour (RTX 4060 Ti limits, WDDM, Gaming Mode) could be executed
    in this Linux sandbox; it is untested hardware, not verified.

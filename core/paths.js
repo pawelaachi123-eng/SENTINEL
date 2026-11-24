@@ -45,6 +45,10 @@ function backupsDir() {
   return path.join(ensureDir(dataDir()), 'backups');
 }
 
+function patchesDir() {
+  return path.join(ensureDir(dataDir()), 'patches');
+}
+
 function memoryDir() {
   return path.join(ensureDir(dataDir()), 'memory');
 }
@@ -79,4 +83,5 @@ module.exports = {
   workspaceDir,
   knowledgeDir,
   backupsDir,
+  patchesDir,
   memoryDir, dataDir, ensureDir, configFile, logFile, uiDir, APP_DIR_NAME };
