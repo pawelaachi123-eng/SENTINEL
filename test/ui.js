@@ -219,6 +219,17 @@ function makePage(url) {
     check('the event log shows typed events from the bus', aiDoc.querySelectorAll('[data-panel="eventlog"] .eventlog-row').length >= 3, `${aiDoc.querySelectorAll('[data-panel="eventlog"] .eventlog-row').length} events`);
     check('the reliability panel reports breaker state without inventing metrics', /bezpieczniki|Bezpieczniki|online|closed/i.test(aiDoc.querySelector('[data-panel="reliability"]').textContent), aiDoc.querySelector('[data-panel="reliability"]').textContent.slice(0, 90));
 
+    await sleep(500);
+    const runtimeText = aiDoc.querySelector('[data-panel="runtime"]').textContent;
+    check('the runtime panel shows the active profile and real hardware', /Profil/.test(runtimeText) && /(RTX|nie wykryto|GPU)/.test(runtimeText), runtimeText.slice(0, 100));
+    check('all four runtime profiles are offered', aiDoc.querySelectorAll('#runtime-profiles button').length === 4, `${aiDoc.querySelectorAll('#runtime-profiles button').length} profiles`);
+    const graphText = aiDoc.querySelector('[data-panel="graph"]').textContent;
+    check('the graph panel is fed by /api/graph', /Węzły|Węzły|Graf jest pusty/.test(graphText), graphText.slice(0, 100));
+    const orgText = aiDoc.querySelector('[data-panel="org"]').textContent;
+    check('the organisation panel reports the real roster', /31 agentów/.test(orgText), orgText.slice(0, 100));
+    const mcpText = aiDoc.querySelector('[data-panel="mcp"]').textContent;
+    check('the MCP panel reports that it is opt-in', /Wyłączone w ustawieniach/.test(mcpText), mcpText.slice(0, 100));
+
     aiDoc.querySelector('.tab[data-tab="memory"]').click();
     await sleep(500);
     check(

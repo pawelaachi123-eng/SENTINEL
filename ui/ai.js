@@ -703,6 +703,10 @@
           ['Ryzyko', brief.risk ? `${brief.risk.level}${brief.risk.flags && brief.risk.flags.length ? ` (${brief.risk.flags.join(', ')})` : ''}` : '—'],
           ['Pewność', typeof run.verification.confidence === 'number' ? `${Math.round(run.verification.confidence * 100)}%` : '—'],
           ['Kontekst', run.context ? `${run.context.tokens}/${run.context.budget} tokenów (${Math.round((run.context.utilisation || 0) * 100)}%), pominięto ${run.context.dropped ? run.context.dropped.length : 0}` : '—'],
+          ['Rozumienie', brief.semantic ? `${brief.semantic.source}${brief.semantic.degraded ? ' (degraded)' : ''}${brief.language ? ` · ${brief.language}` : ''}` : '—'],
+          ['Wykonanie', run.execution ? `${run.execution.status}, ${run.execution.counters.steps} kroków, ${run.execution.counters.failures} błędów, ${run.execution.counters.replans} przestawień` : '—'],
+          ['Graf', run.graph ? `${run.graph.seeds.length} zalążków, ${run.graph.nodes.length} węzłów` : 'brak trafień'],
+          ['Rozmowa', run.conversation ? `${run.conversation.turns} tur, ${run.conversation.decisions.length} decyzji, ${run.conversation.constraints.length} ograniczeń${run.conversation.skippedSecrets ? `, pominięto ${run.conversation.skippedSecrets} sekretów` : ''}` : '—'],
         ];
         host.append(el('dl', { class: 'kv' }, rows.map(([key, value]) => el('div', {}, [el('dt', { text: key }), el('dd', { text: String(value) })]))));
         host.append(el('p', { class: 'panel-note', text: `Kryteria ukończenia: ${(brief.completionCriteria || []).join(' · ') || '—'}` }));
@@ -738,6 +742,151 @@
     loadPatches();
     loadExperience();
     loadReliability();
+    loadRuntime();
+    loadGraph();
+    loadOrg();
+    loadMcp();
+  }
+
+  function profileButton(entry, active) {
+    return el('button', {
+      class: `chip${active ? ' is-on' : ''}`,
+      type: 'button',
+      text: entry.label,
+      title: entry.description,
+      onclick: async (event) => {
+        event.currentTarget.disabled = true;
+        const result = await api('/api/runtime', { method: 'POST', body: { action: 'set', profile: entry.name, reason: 'wybór w panelu Poznanie' } });
+        if (!result.ok || (result.data && result.data.ok === false)) notify((result.data && result.data.message) || result.message || 'Nie udało się zmienić profilu', { tone: 'warn' });
+        event.currentTarget.disabled = false;
+        loadRuntime();
+      },
+    });
+  }
+
+  async function loadRuntime() {
+    const host = panel('runtime');
+    const buttons = $('#runtime-profiles');
+    if (!host) return;
+    try {
+      const response = await api('/api/runtime');
+      const data = response.data;
+      if (!data) {
+        host.textContent = 'Runtime nie jest dostępny w tej instalacji.';
+        return;
+      }
+      if (buttons && !buttons.childElementCount) {
+        for (const entry of data.profiles) buttons.append(profileButton(entry, entry.name === data.profile));
+      } else if (buttons) {
+        [...buttons.children].forEach((button, index) => button.classList.toggle('is-on', data.profiles[index] && data.profiles[index].name === data.profile));
+      }
+      host.textContent = '';
+      const hw = data.hardware || {};
+      const feasibility = data.feasibility || {};
+      const rows = [
+        ['Profil', `${data.profile}${data.profileDetail ? ` — ${data.profileDetail.description}` : ''}`],
+        ['CPU', `${hw.cpu || '—'} · ${hw.cores || '?'} wątków`],
+        ['RAM', hw.memoryGb ? `${hw.memoryGb} GB (wolne ${hw.freeMemoryGb} GB)` : '—'],
+        ['GPU', hw.gpu ? `${hw.gpu.name} · ${hw.gpu.vramGb} GB VRAM` : 'nie wykryto (nvidia-smi)'],
+        ['Model', feasibility.model ? `${feasibility.model}${feasibility.estimate ? ` — ok. ${feasibility.estimate.totalGb} GB (szacunek)` : ''}` : '—'],
+        ['W pamięci', data.resident && data.resident.supported ? (data.resident.models.length ? data.resident.models.map((model) => `${model.name} ${model.vramGb} GB`).join(', ') : 'brak modeli') : (data.resident && data.resident.reason) || '—'],
+        ['Przełączenia', `${data.counters.switches} · odmowy ${data.counters.refusals} · wyładowania ${data.counters.unloads}`],
+      ];
+      host.append(el('dl', { class: 'kv' }, rows.map(([key, value]) => el('div', {}, [el('dt', { text: key }), el('dd', { text: String(value) })]))));
+      host.append(el('p', { class: 'panel-note', text: `Szacunki: ${data.estimates.basis}. ${data.estimates.honest}.` }));
+      if (feasibility.ok === false) host.append(el('p', { class: 'panel-note warn', text: feasibility.message }));
+    } catch (err) {
+      host.textContent = `Nie mogę wczytać runtime: ${err.message}`;
+    }
+  }
+
+  async function loadGraph(query = '') {
+    const host = panel('graph');
+    if (!host) return;
+    try {
+      const response = await api(`/api/graph${query ? `?q=${encodeURIComponent(query)}` : ''}`);
+      const data = response.data || {};
+      host.textContent = '';
+      if (query && data.lines) {
+        host.append(el('p', { class: 'panel-note', text: data.lines.length ? `Powiązania dla „${query}” (${data.nodes.length} węzłów):` : 'Brak powiązań w grafie.' }));
+        if (data.lines.length) host.append(el('ul', { class: 'eventlog' }, data.lines.map((line) => el('li', { text: line }))));
+        if (data.nodes.length) {
+          host.append(el('div', { class: 'mini-card-tags' }, data.nodes.slice(0, 16).map((node) => el('span', { class: 'tag', text: `${node.type}: ${node.label}`, title: `głębokość ${node.depth}, pewność ${node.confidence}` }))));
+        }
+        return;
+      }
+      const stats = data.stats || { nodes: 0, edges: 0, byType: {}, byEdge: {} };
+      host.append(el('dl', { class: 'kv' }, [
+        el('div', {}, [el('dt', { text: 'Węzły' }), el('dd', { text: String(stats.nodes) })]),
+        el('div', {}, [el('dt', { text: 'Krawędzie' }), el('dd', { text: String(stats.edges) })]),
+        el('div', {}, [el('dt', { text: 'Typy' }), el('dd', { text: Object.entries(stats.byType || {}).map(([type, count]) => `${type} ${count}`).join(' · ') || '—' })]),
+      ]));
+      if (data.nodes && data.nodes.length) {
+        host.append(el('div', { class: 'mini-card-tags' }, data.nodes.slice(0, 20).map((node) => el('span', { class: 'tag', text: `${node.type}: ${node.label}` }))));
+      } else {
+        host.append(el('p', { class: 'empty-note', text: 'Graf jest pusty. Użyj „Uzupełnij z pamięci”, aby dodać zapisane fakty i dokumenty.' }));
+      }
+    } catch (err) {
+      host.textContent = `Nie mogę wczytać grafu: ${err.message}`;
+    }
+  }
+
+  async function loadOrg() {
+    const host = panel('org');
+    if (!host) return;
+    try {
+      const response = await api('/api/org');
+      const data = response.data;
+      if (!data) {
+        host.textContent = 'Organizacja nie jest dostępna.';
+        return;
+      }
+      host.textContent = '';
+      host.append(el('p', { class: 'panel-note', text: `${data.total} agentów · limit głębokości delegacji ${data.maxDepth}` }));
+      for (const [tier, entries] of Object.entries(data.tiers)) {
+        host.append(el('p', { class: 'panel-note', text: `${tier} (${entries.length}): ${entries.map((entry) => entry.name).join(', ') || '—'}` }));
+      }
+      host.append(el('p', { class: 'panel-note', text: `Domeny: ${Object.entries(data.domains).map(([domain, info]) => `${domain} → ${info.lead}`).join(' · ')}` }));
+    } catch (err) {
+      host.textContent = `Nie mogę wczytać organizacji: ${err.message}`;
+    }
+  }
+
+  async function loadMcp() {
+    const host = panel('mcp');
+    if (!host) return;
+    try {
+      const response = await api('/api/mcp');
+      const data = response.data;
+      if (!data) {
+        host.textContent = 'MCP nie jest dostępne.';
+        return;
+      }
+      host.textContent = '';
+      host.append(el('p', { class: 'panel-note', text: `${data.enabled ? 'Włączone' : 'Wyłączone w ustawieniach (ai.mcp.enabled)'} · protokół ${data.preferredVersion} · wymagane zatwierdzenie: ${data.requireApproval ? 'tak' : 'nie'}` }));
+      if (!data.servers.length) {
+        host.append(el('p', { class: 'empty-note', text: 'Brak skonfigurowanych serwerów. Dodaj je w konfiguracji — nic nie łączy się automatycznie.' }));
+        return;
+      }
+      for (const server of data.servers) {
+        host.append(el('div', { class: 'mini-card' }, [
+          el('strong', { text: `${server.id} · ${server.transport}` }),
+          el('p', { class: 'panel-note', text: `${server.status}${server.protocolVersion ? ` · ${server.protocolVersion}` : ''} · ${server.tools} narzędzi${server.lastError ? ` · ${server.lastError}` : ''}` }),
+          el('button', {
+            class: 'btn btn-ghost',
+            type: 'button',
+            text: server.status === 'connected' ? 'Rozłącz' : 'Połącz',
+            onclick: async (event) => {
+              event.currentTarget.disabled = true;
+              await api('/api/mcp', { method: 'POST', body: { action: server.status === 'connected' ? 'disconnect' : 'connect', server: server.id } });
+              loadMcp();
+            },
+          }),
+        ]));
+      }
+    } catch (err) {
+      host.textContent = `Nie mogę wczytać MCP: ${err.message}`;
+    }
   }
 
   function notify(message, options) {
@@ -1469,6 +1618,25 @@
 
     const cognitionRefresh = $('#btn-cognition-refresh');
     if (cognitionRefresh) cognitionRefresh.addEventListener('click', loadCognition);
+
+    const graphForm = $('#graph-form');
+    if (graphForm) {
+      graphForm.addEventListener('submit', (event) => {
+        event.preventDefault();
+        const value = ($('#graph-query') && $('#graph-query').value.trim()) || '';
+        loadGraph(value);
+      });
+    }
+    const graphSync = $('#graph-sync');
+    if (graphSync) {
+      graphSync.addEventListener('click', async () => {
+        graphSync.disabled = true;
+        const result = await api('/api/graph', { method: 'POST', body: { action: 'sync' } });
+        graphSync.disabled = false;
+        if (!result.ok) notify(result.message || 'Synchronizacja grafu nie powiodła się', { tone: 'warn' });
+        loadGraph();
+      });
+    }
 
     document.addEventListener('keydown', (event) => {
       const typing = event.target && (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA' || event.target.isContentEditable);

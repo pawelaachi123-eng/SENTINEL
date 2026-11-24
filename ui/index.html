@@ -359,6 +359,40 @@
         </div>
         <div data-panel="reliability" class="reliability-panel"></div>
       </div>
+      <div class="card">
+        <div class="block-head">
+          <h3>Model i sprzęt</h3>
+          <span class="muted">profil pracy · realne modele w pamięci · VRAM</span>
+        </div>
+        <div class="row-actions" id="runtime-profiles" role="group" aria-label="Profil pracy modeli"></div>
+        <div data-panel="runtime" class="runtime-panel"></div>
+      </div>
+      <div class="card">
+        <div class="block-head">
+          <h3>Graf wiedzy</h3>
+          <span class="muted">relacje z proveniencją, węzły i krawędzie</span>
+        </div>
+        <form class="inline-form" id="graph-form" autocomplete="off">
+          <input id="graph-query" type="search" placeholder="np. Atlas" aria-label="Szukaj w grafie" maxlength="120">
+          <button class="btn" type="submit">Szukaj</button>
+          <button class="btn btn-ghost" type="button" id="graph-sync">Uzupełnij z pamięci</button>
+        </form>
+        <div data-panel="graph" class="graph-panel"></div>
+      </div>
+      <div class="card">
+        <div class="block-head">
+          <h3>Organizacja</h3>
+          <span class="muted">warstwy, domeny i limit delegacji</span>
+        </div>
+        <div data-panel="org" class="org-panel"></div>
+      </div>
+      <div class="card">
+        <div class="block-head">
+          <h3>MCP</h3>
+          <span class="muted">opcjonalne serwery zewnętrzne; domyślnie wyłączone</span>
+        </div>
+        <div data-panel="mcp" class="mcp-panel"></div>
+      </div>
     </section>
 
     <section id="screen-activity" class="screen" data-screen="activity" hidden>
