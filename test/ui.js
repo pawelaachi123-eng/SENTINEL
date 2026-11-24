@@ -41,6 +41,7 @@ const { webcrypto } = require('node:crypto');
 const html = fs.readFileSync(path.join(root, 'ui', 'index.html'), 'utf8').replace(/<script[^>]*><\/script>/g, '');
 const transportSrc = fs.readFileSync(path.join(root, 'ui', 'transport.js'), 'utf8');
 const appSrc = fs.readFileSync(path.join(root, 'ui', 'app.js'), 'utf8');
+const aiSrc = fs.readFileSync(path.join(root, 'ui', 'ai.js'), 'utf8');
 
 const results = [];
 function check(name, ok, extra = '') {
@@ -53,9 +54,19 @@ function makePage(url) {
   const { window } = dom;
   // jsdom has no Web Crypto or fetch of its own; give it the real ones.
   Object.defineProperty(window, 'crypto', { value: webcrypto, configurable: true });
-  window.fetch = (input, init) => globalThis.fetch(input, init);
+  // A browser resolves relative URLs and accepts its own AbortSignal; Node's
+  // fetch does neither, so the shim does exactly that translation.
+  window.fetch = (input, init = {}) => {
+    const target = typeof input === 'string' && input.startsWith('/') ? new URL(input, url).href : input;
+    const options = { ...init };
+    if (options.signal && !(options.signal instanceof globalThis.AbortSignal)) delete options.signal;
+    return globalThis.fetch(target, options);
+  };
+  // jsdom has no canvas backend; the orb must degrade quietly to a static stage.
+  window.HTMLCanvasElement.prototype.getContext = () => null;
   window.eval(transportSrc);
   window.eval(appSrc);
+  window.eval(aiSrc);
   return dom;
 }
 
@@ -145,6 +156,61 @@ function makePage(url) {
     doc.querySelector('.tab[data-tab="settings"]').click();
     await sleep(120);
     check('settings shows how the link is protected', /ST1 tunnel/.test(doc.getElementById('conn-kv').textContent));
+
+    /* ── the assistant surface ─────────────────────────────────────────── */
+
+    const token = agent.config.get('uiToken');
+    const aiPage = makePage(`http://127.0.0.1:${port}/?t=${token}`);
+    const aiDoc = aiPage.window.document;
+    await sleep(700);
+
+    check(
+      'every assistant section has a tab and a screen',
+      aiDoc.querySelectorAll('.tab').length === 14 && aiDoc.querySelectorAll('.screen').length === 14,
+      `${aiDoc.querySelectorAll('.tab').length} tabs / ${aiDoc.querySelectorAll('.screen').length} screens`,
+    );
+
+    aiDoc.querySelector('.tab[data-tab="chat"]').click();
+    await sleep(150);
+    check(
+      'the chat screen shows the orb and an invitation to ask',
+      !aiDoc.getElementById('screen-chat').hidden &&
+        Boolean(aiDoc.getElementById('orb')) &&
+        /Zapytaj o cokolwiek/.test(aiDoc.getElementById('chat-messages').textContent),
+    );
+
+    const input = aiDoc.getElementById('chat-input');
+    input.value = 'ile to 6*7';
+    aiDoc.getElementById('chat-form').dispatchEvent(new aiPage.window.Event('submit', { bubbles: true, cancelable: true }));
+    let answerText = '';
+    for (let attempt = 0; attempt < 60; attempt += 1) {
+      const bubbles = Array.from(aiDoc.querySelectorAll('.msg-assistant .msg-body')).map((node) => node.textContent);
+      answerText = bubbles.join(' | ');
+      if (/42/.test(answerText)) break;
+      // eslint-disable-next-line no-await-in-loop
+      await sleep(100);
+    }
+    check('a question streams a real answer into the chat', /42/.test(answerText), answerText.slice(0, 80));
+    check(
+      'the answer carries its tool footnote',
+      /math\.eval|Mathematics/.test(aiDoc.getElementById('chat-messages').textContent),
+    );
+
+    aiDoc.querySelector('.tab[data-tab="memory"]').click();
+    await sleep(500);
+    check(
+      'the memory panel loads real records over HTTP',
+      /wspomnie/i.test(aiDoc.querySelector('[data-panel="memory"]').textContent),
+      aiDoc.querySelector('[data-panel="memory"]').textContent.slice(0, 60),
+    );
+
+    aiDoc.querySelector('.tab[data-tab="diagnostics"]').click();
+    await sleep(800);
+    check(
+      'diagnostics runs the doctor and shows checks',
+      aiDoc.querySelectorAll('[data-panel="diagnostics"] .check').length >= 4,
+      `${aiDoc.querySelectorAll('[data-panel="diagnostics"] .check').length} checks`,
+    );
 
     const demo = makePage('http://127.0.0.1:1/?demo=1');
     await sleep(400);
