@@ -9,7 +9,7 @@ Measured baseline at the start of 6.0: 31 agents, 219 tools, **14** tools
 executed by the audit, mock-only model evaluation, 117 deep checks. End of this
 slice: 31 agents, **270 tools / 24 categories**, **59 executed** and 211
 unexecuted by the audit, **131 deep checks**, **76 deterministic evaluation
-cases**, **41 UI checks** including new-endpoint refusal cases. No live model or GPU was available. Windows CI is green for `e6edd44`.
+cases**, **41 UI checks** including new-endpoint refusal cases. No live model or GPU was available. Windows CI is green for `1720262`.
 
 | # | Requirement | Status | Evidence | Outstanding |
 | --- | --- | --- | --- | --- |
@@ -45,7 +45,7 @@ cases**, **41 UI checks** including new-endpoint refusal cases. No live model or
 - Verification is bound to immutable candidate/baseline hashes.
 - Contradictory facts are kept, not overwritten.
 - No automatic merge to `main`; PR #1 stays open.
-- Windows CI is green for `e6edd44`; any later source change requires a re-run
+- Windows CI is green for `1720262`; any later source change requires a re-run
   before claiming it green again.
 
 ## Next milestones (ordered)

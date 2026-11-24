@@ -99,7 +99,7 @@ rest is tests, wiring, UI and documentation.
   fixture suite.
 - No new multimodal fixtures, Android/ESP32 integration tests or orb states.
 - No measured VRAM, time-to-first-token or tokens/s on the RTX 4060 Ti.
-- Linux and **Windows CI are green** for commit `e6edd44` (Agent checks,
+- Linux and **Windows CI are green** for commit `1720262` (Agent checks,
   Windows executables, Android APK, ESP32 firmware, publish).
 - The installer was not executed in this sandbox (no PowerShell); its PS1 syntax
   is checked by `scripts/check.js` but the install flow was not run.
