@@ -22,6 +22,7 @@ const loraModule = require('./lora');
 const distillModule = require('./distill');
 const preferenceModule = require('./preference');
 const gpt = require('../ml/gpt');
+const { LearningLab } = require('./classic');
 
 function hash(value) {
   return crypto.createHash('sha256').update(String(value)).digest('hex');
@@ -77,19 +78,39 @@ class TrainingLab {
   splitDataset(name, options) { return this.datasets.split(name, options); }
   loadDataset(name, version) { return this.datasets.load(name, version); }
 
-  /** Builds examples with deterministic hash features from a versioned dataset. */
-  examples(name, { version = null, textKey = 'text', labelKey = 'label', dim = 16, seed = 42 } = {}) {
-    const { manifest, rows } = this.datasets.load(name, version);
-    const labels = [...new Set(rows.map((row) => row[labelKey]))].sort();
-    const data = rows.map((row) => ({
+  /**
+   * Builds examples with deterministic hash features from a versioned dataset.
+   *
+   * The split is group-aware (duplicate texts never straddle two folds) and
+   * always yields three disjoint folds. `test` is untouched by training and by
+   * hyper-parameter selection; callers may look at it once, at the end.
+   */
+  examples(name, { version = null, textKey = 'text', labelKey = 'label', dim = 16, seed = 42, labels = null } = {}) {
+    const split = this.datasets.split(name, { version, seed, ratios: { train: 0.7, validation: 0.15, test: 0.15 }, groupKey: textKey });
+    const { manifest } = this.datasets.load(name, version);
+    const rawLabels = [...new Set([...split.train, ...split.validation, ...split.test].map((row) => row[labelKey]))].sort();
+    if (labels) {
+      const missing = rawLabels.filter((label) => !labels.includes(label));
+      const extra = labels.filter((label) => !rawLabels.includes(label));
+      if (missing.length || extra.length) {
+        throw Object.assign(new Error(`label mapping mismatch: missing [${missing.join(', ')}], unused [${extra.join(', ')}]`), { code: 'LABEL_MISMATCH' });
+      }
+    }
+    const labelOrder = labels ? [...labels] : rawLabels;
+    const convert = (rows) => rows.map((row) => ({
       text: String(row[textKey] || ''),
-      label: labels.indexOf(row[labelKey]),
+      label: labelOrder.indexOf(row[labelKey]),
       rawLabel: row[labelKey],
       vector: loraModule.hashVector(row[textKey], dim),
     }));
-    const mixed = shuffled(data, seed);
-    const cut = Math.max(1, Math.floor(mixed.length * splitFraction(mixed.length)));
-    return { manifest, labels, train: mixed.slice(0, cut), test: mixed.slice(cut), all: mixed };
+    const fold = { train: convert(split.train), validation: convert(split.validation), test: convert(split.test) };
+    return {
+      manifest,
+      labels: labelOrder,
+      ...fold,
+      all: [...fold.train, ...fold.validation, ...fold.test],
+      split: { sizes: split.sizes, groups: split.groups, groupAware: split.groupAware, leakage: split.leakage },
+    };
   }
 
   /* ── LoRA / QLoRA ───────────────────────────────────────────────────── */
@@ -98,41 +119,61 @@ class TrainingLab {
     return loraModule.createBase({ dim, hidden, classes, seed });
   }
 
-  trainLora({ dataset, version = null, sourceDataset = null, sourceVersion = null, dim = 16, hidden = 24, rank = 2, epochs = 140, learningRate = 0.1, seed = 42, target = 'w2', approve = false } = {}) {
+  trainLora({ dataset, version = null, sourceDataset = null, sourceVersion = null, dim = 16, hidden = 24, rank = 2, epochs = 140, learningRate = 0.1, seed = 42, target = 'w2', approve = false, signal = null } = {}) {
     const prepared = this.examples(dataset, { version, dim, seed });
-    const source = sourceDataset ? this.examples(sourceDataset, { version: sourceVersion, dim, seed }) : prepared;
+    const source = sourceDataset ? this.examples(sourceDataset, { version: sourceVersion, dim, seed, labels: prepared.labels }) : prepared;
     const base = this.baseFor({ dim, hidden, classes: prepared.labels.length, seed });
-    loraModule.trainBase(base, source.train, { epochs: Math.max(40, Math.round(epochs * 0.6)) });
-    const outcome = loraModule.trainLora({ base, examples: prepared.train, validation: prepared.test, rank, epochs, learningRate, seed, target });
+    loraModule.trainBase(base, source.train, { epochs: Math.max(40, Math.round(epochs * 0.6)), signal });
+    const outcome = loraModule.trainLora({ base, examples: prepared.train, validation: prepared.validation, test: prepared.test, rank, epochs, learningRate, seed, target, signal });
     const artifact = this.adapters.create({
       name: dataset,
       kind: 'lora',
       payload: { ...outcome.payload, dataset: prepared.manifest, labels: prepared.labels, base: { config: base.config, weights: Object.fromEntries(base.order.map((key) => [key, Array.from(base.parameters[key].data)])) } },
-      metrics: { accuracy: outcome.evaluation.adapted.accuracy, baseline: outcome.evaluation.frozen.accuracy, trainableParameters: outcome.trainableParameters },
+      metrics: { accuracy: outcome.evaluation.test.adapted.accuracy, validationAccuracy: outcome.evaluation.adapted.accuracy, baseline: outcome.evaluation.test.frozen.accuracy, trainableParameters: outcome.trainableParameters },
       dataset: prepared.manifest,
       base: { config: base.config, checksum: loraModule.checksumOfBase(base) },
       notes: `${rank}-rank LoRA, ${epochs} epochs, CPU`,
     });
     this.counters.lora += 1;
-    return { ok: true, adapter: artifact, evaluation: outcome.evaluation, trainableParameters: outcome.trainableParameters, frozenParameters: outcome.frozenParameters, history: outcome.history, dataset: prepared.manifest, approve };
+    return { ok: true, adapter: artifact, evaluation: outcome.evaluation, split: prepared.split, trainableParameters: outcome.trainableParameters, frozenParameters: outcome.frozenParameters, history: outcome.history, dataset: prepared.manifest, approve };
   }
 
-  trainQlora({ dataset, version = null, sourceDataset = null, sourceVersion = null, dim = 16, hidden = 24, rank = 2, epochs = 140, learningRate = 0.1, seed = 42 } = {}) {
+  /** Queue-facing LoRA training that yields so cancellation is observed. */
+  async trainLoraAsync({ dataset, version = null, sourceDataset = null, sourceVersion = null, dim = 16, hidden = 24, rank = 2, epochs = 140, learningRate = 0.1, seed = 42, target = 'w2', signal = null } = {}) {
     const prepared = this.examples(dataset, { version, dim, seed });
-    const source = sourceDataset ? this.examples(sourceDataset, { version: sourceVersion, dim, seed }) : prepared;
+    const source = sourceDataset ? this.examples(sourceDataset, { version: sourceVersion, dim, seed, labels: prepared.labels }) : prepared;
     const base = this.baseFor({ dim, hidden, classes: prepared.labels.length, seed });
-    loraModule.trainBase(base, source.train, { epochs: Math.max(40, Math.round(epochs * 0.6)) });
-    const outcome = loraModule.trainQlora({ base, examples: prepared.train, validation: prepared.test, rank, epochs, learningRate, seed });
+    await loraModule.trainBaseAsync(base, source.train, { epochs: Math.max(40, Math.round(epochs * 0.6)), signal });
+    const outcome = await loraModule.trainLoraAsync({ base, examples: prepared.train, validation: prepared.validation, test: prepared.test, rank, epochs, learningRate, seed, target, signal });
+    const artifact = this.adapters.create({
+      name: dataset,
+      kind: 'lora',
+      payload: { ...outcome.payload, dataset: prepared.manifest, labels: prepared.labels, base: { config: base.config, weights: Object.fromEntries(base.order.map((key) => [key, Array.from(base.parameters[key].data)])) } },
+      metrics: { accuracy: outcome.evaluation.test.adapted.accuracy, validationAccuracy: outcome.evaluation.adapted.accuracy, baseline: outcome.evaluation.test.frozen.accuracy, trainableParameters: outcome.trainableParameters },
+      dataset: prepared.manifest,
+      base: { config: base.config, checksum: loraModule.checksumOfBase(base) },
+      notes: `${rank}-rank LoRA, ${epochs} epochs, CPU, resumable queue runner`,
+    });
+    this.counters.lora += 1;
+    return { ok: true, adapter: artifact, evaluation: outcome.evaluation, split: prepared.split, trainableParameters: outcome.trainableParameters, frozenParameters: outcome.frozenParameters, history: outcome.history, dataset: prepared.manifest };
+  }
+
+  trainQlora({ dataset, version = null, sourceDataset = null, sourceVersion = null, dim = 16, hidden = 24, rank = 2, epochs = 140, learningRate = 0.1, seed = 42, signal = null } = {}) {
+    const prepared = this.examples(dataset, { version, dim, seed });
+    const source = sourceDataset ? this.examples(sourceDataset, { version: sourceVersion, dim, seed, labels: prepared.labels }) : prepared;
+    const base = this.baseFor({ dim, hidden, classes: prepared.labels.length, seed });
+    loraModule.trainBase(base, source.train, { epochs: Math.max(40, Math.round(epochs * 0.6)), signal });
+    const outcome = loraModule.trainQlora({ base, examples: prepared.train, validation: prepared.validation, test: prepared.test, rank, epochs, learningRate, seed, signal });
     const artifact = this.adapters.create({
       name: `${dataset}-qlora`,
       kind: 'qlora',
       payload: { ...outcome.payload, dataset: prepared.manifest, labels: prepared.labels, base: { config: base.config, weights: Object.fromEntries(base.order.map((key) => [key, Array.from(base.parameters[key].data)])) } },
-      metrics: { accuracy: outcome.evaluation.adapted.accuracy, baseline: outcome.evaluation.frozen.accuracy, trainableParameters: outcome.trainableParameters },
+      metrics: { accuracy: outcome.evaluation.test.adapted.accuracy, validationAccuracy: outcome.evaluation.adapted.accuracy, baseline: outcome.evaluation.test.frozen.accuracy, trainableParameters: outcome.trainableParameters },
       dataset: prepared.manifest,
       notes: `4-bit frozen base, ${rank}-rank adapter`,
     });
     this.counters.qlora += 1;
-    return { ok: true, adapter: artifact, evaluation: outcome.evaluation, quantization: outcome.quantization, history: outcome.history, dataset: prepared.manifest };
+    return { ok: true, adapter: artifact, evaluation: outcome.evaluation, split: prepared.split, quantization: outcome.quantization, history: outcome.history, dataset: prepared.manifest };
   }
 
   /* ── distillation / preference ──────────────────────────────────────── */
@@ -176,9 +217,9 @@ class TrainingLab {
 
   /* ── compact autoregressive transformer ─────────────────────────────── */
 
-  trainGpt({ texts, name = 'gpt', epochs = 12, maxLen = 32, dim = 24, hidden = 48, blocks = 2, seed = 42, validation = null, learningRate = 0.01 } = {}) {
+  trainGpt({ texts, name = 'gpt', epochs = 12, maxLen = 32, dim = 24, hidden = 48, blocks = 2, seed = 42, validation = null, learningRate = 0.01, signal = null } = {}) {
     if (!Array.isArray(texts) || !texts.length) throw Object.assign(new Error('trainGpt needs texts'), { code: 'BAD_ARGUMENT' });
-    const { model, report } = gpt.trainText(texts, { epochs, maxLen, dim, hidden, blocks, seed, validation, learningRate });
+    const { model, report } = gpt.trainText(texts, { epochs, maxLen, dim, hidden, blocks, seed, validation, learningRate, signal });
     const directory = path.join(this.dataDir, 'gpt');
     fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
     const file = path.join(directory, `${name}-${this.now()}.json`);
@@ -195,10 +236,23 @@ class TrainingLab {
     return { ok: true, artifact, checkpoint: saved, report, sample: gpt.generate(model, texts[0].slice(0, 8), { maxNewTokens: 24, temperature: 0.9, seed }), modelName: name };
   }
 
-  generateGpt({ name = null, checkpointPath = null, prompt = '', maxNewTokens = 40, temperature = 0.8, topK = 0, seed = 42 } = {}) {
-    const model = name && this.models.has(name) ? this.models.get(name) : gpt.load(checkpointPath);
+  /** Checkpoints live under the lab data directory; arbitrary paths are refused. */
+  checkpointPath(file) {
+    const directory = path.join(this.dataDir, 'gpt');
+    const resolved = path.resolve(String(file || ''));
+    if (!resolved.startsWith(`${path.resolve(directory)}${path.sep}`)) {
+      throw Object.assign(new Error('checkpoints must be read from the lab data directory'), { code: 'OUTSIDE_DATA_DIR' });
+    }
+    return resolved;
+  }
+
+  generateGpt({ name = null, checkpointPath = null, prompt = '', maxNewTokens = 40, temperature = 0.8, topK = 0, topP = 1, repetitionPenalty = 1, seed = 42 } = {}) {
+    let model;
+    if (name && this.models.has(name)) model = this.models.get(name);
+    else if (checkpointPath) model = gpt.load(this.checkpointPath(checkpointPath));
+    else throw Object.assign(new Error('generateGpt needs a loaded model name or a checkpoint path'), { code: 'BAD_ARGUMENT' });
     if (!model.vocab) throw Object.assign(new Error('checkpoint has no vocabulary'), { code: 'BAD_CHECKPOINT' });
-    return gpt.generate(model, prompt, { maxNewTokens, temperature, topK, seed });
+    return gpt.generate(model, prompt, { maxNewTokens, temperature, topK, topP, repetitionPenalty, seed });
   }
 
   /* ── hyper-parameter search and queue ───────────────────────────────── */
@@ -207,10 +261,10 @@ class TrainingLab {
     const prepared = this.examples(dataset, { version, dim, seed });
     const base = this.baseFor({ dim, hidden, classes: prepared.labels.length, seed });
     loraModule.trainBase(base, prepared.train, { epochs: 80 });
-    const search = new HyperSearch({ space: { rank: ranks, learningRate: learningRates }, objective: loraObjective({ base, train: prepared.train, test: prepared.test, epochs, seed }), mode, budget, seed });
+    const search = new HyperSearch({ space: { rank: ranks, learningRate: learningRates }, objective: loraObjective({ base, train: prepared.train, test: prepared.validation, epochs, seed }), mode, budget, seed });
     const result = search.run();
     this.counters.hpo += 1;
-    return { ...result, dataset: prepared.manifest };
+    return { ...result, dataset: prepared.manifest, selectionSplit: 'validation', untouchedTest: prepared.test.length, split: prepared.split };
   }
 
   enqueue(kind, payload = {}, options = {}) { return this.queue.enqueue({ kind, payload, ...options }); }
@@ -218,29 +272,79 @@ class TrainingLab {
   queueStatus() { return this.queue.status(); }
   queueList(options) { return this.queue.list(options); }
 
-  runLoraJob(payload, context) {
-    const result = this.trainLora(payload);
-    context.checkpoint({ adapter: result.adapter.id, accuracy: result.evaluation.adapted.accuracy });
-    return { ok: true, adapter: result.adapter.id, accuracy: result.evaluation.adapted.accuracy };
+  async runLoraJob(payload, context) {
+    const result = await this.trainLoraAsync({ ...payload, signal: context.signal });
+    context.checkpoint({ adapter: result.adapter.id, accuracy: result.evaluation.test.adapted.accuracy });
+    return { ok: true, adapter: result.adapter.id, accuracy: result.evaluation.test.adapted.accuracy };
   }
 
   runQloraJob(payload, context) {
-    const result = this.trainQlora(payload);
-    context.checkpoint({ adapter: result.adapter.id, accuracy: result.evaluation.adapted.accuracy });
-    return { ok: true, adapter: result.adapter.id, accuracy: result.evaluation.adapted.accuracy };
+    const result = this.trainQlora({ ...payload, signal: context.signal });
+    context.checkpoint({ adapter: result.adapter.id, accuracy: result.evaluation.test.adapted.accuracy });
+    return { ok: true, adapter: result.adapter.id, accuracy: result.evaluation.test.adapted.accuracy };
   }
 
-  runGptJob(payload, context) {
+  async runGptJob(payload, context) {
+    if (!Array.isArray(payload.texts) || !payload.texts.length) throw Object.assign(new Error('a gpt job needs texts'), { code: 'BAD_ARGUMENT' });
+    const name = String(payload.name || 'gpt-job').replace(/[^a-zA-Z0-9._-]/g, '-').slice(0, 60) || 'gpt-job';
+    const directory = path.join(this.dataDir, 'gpt');
+    fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
+    const resumeFile = path.join(directory, `${name}.resume.json`);
     const steps = 3;
-    let results = null;
-    // A checkpoint resumes at the next block of epochs instead of restarting the
-    // whole run. The queue stores the checkpoint even if the process dies.
-    const startAt = context.job && context.job.checkpoint && Number(context.job.checkpoint.value && context.job.checkpoint.value.block) || 0;
+    const perBlock = Math.max(1, Math.ceil((payload.epochs || 9) / steps));
+    // Real continuation: weights, vocabulary, Adam moments, step count and the
+    // epoch counter are loaded from the checkpoint. Nothing is retrained from
+    // scratch, so block 2 starts where block 1 stopped.
+    let model;
+    if (fs.existsSync(resumeFile)) model = gpt.load(resumeFile);
+    else model = gpt.initText(payload.texts, {
+      dim: payload.dim || 24,
+      hidden: payload.hidden || 48,
+      maxLen: payload.maxLen || 32,
+      blocks: payload.blocks || 2,
+      seed: payload.seed || 42,
+    }).model;
+    const completedEpochs = Number(model.training && model.training.progress && model.training.progress.epochs) || 0;
+    const startAt = Math.min(steps, Math.floor(completedEpochs / perBlock));
+    let report = null;
     for (let block = startAt; block < steps; block += 1) {
-      results = this.trainGpt({ ...payload, epochs: Math.max(1, Math.ceil((payload.epochs || 9) / steps)), name: payload.name || `gpt-${Date.now()}` });
-      context.checkpoint({ block: block + 1, artifact: results.artifact.id });
+      for (let step = 0; step < perBlock; step += 1) {
+        report = gpt.train(model, payload.texts.join('\n'), {
+          epochs: 1,
+          learningRate: payload.learningRate || 0.01,
+          validation: payload.validation || null,
+          seed: (payload.seed || 42) + block + step,
+          optimizer: model.training && model.training.optimizer,
+          signal: context.signal,
+        });
+        model.training = { optimizer: report.optimizer, progress: report.progress };
+        const saved = gpt.save(model, resumeFile, { optimizer: report.optimizer, progress: report.progress });
+        context.checkpoint({ block: Math.floor(report.progress.epochs / perBlock), epochs: report.progress.epochs, sha256: saved.sha256, artifact: resumeFile });
+        // Yield between epochs so a queued cancellation can interrupt a long
+        // generation-training run instead of waiting for it to finish.
+        await new Promise((resolve) => setImmediate(resolve));
+      }
     }
-    return { ok: true, artifact: results.artifact.id, report: results.report };
+    if (!report) {
+      // Every requested block was already complete in the checkpoint. Report
+      // the stored progress instead of inventing a fresh measurement.
+      report = { final: { trainLoss: null, validationLoss: null, validationPerplexity: null }, progress: (model.training && model.training.progress) || { epochs: completedEpochs } };
+    }
+    this.models.set(name, model);
+    const artifact = this.adapters.create({
+      name,
+      kind: 'gpt',
+      payload: { path: resumeFile, config: model.config, vocabSize: model.config.vocabSize, epochs: report.progress.epochs },
+      metrics: {
+        trainLoss: report.final.trainLoss,
+        validationLoss: report.final.validationLoss,
+        validationPerplexity: report.final.validationPerplexity,
+        parameters: model.order.reduce((sum, key) => sum + model.parameters[key].data.length, 0),
+      },
+      notes: `${model.config.blocks} causal blocks, resumable CPU checkpoint`,
+    });
+    this.counters.gpt += 1;
+    return { ok: true, artifact: artifact.id, path: resumeFile, report, epochs: report.progress.epochs, resumedFromBlock: startAt };
   }
 
   /* ── adapter lifecycle ─────────────────────────────────────────────── */
@@ -290,4 +394,4 @@ function splitFraction(length) {
   return Math.max(0.6, Math.min(0.9, 0.75 + (length % 7) * 0.01));
 }
 
-module.exports = { TrainingLab, shuffled, hash };
+module.exports = { TrainingLab, LearningLab, shuffled, hash };

@@ -56,6 +56,12 @@ function decode(ids, vocab) {
   return ids.map((id) => (id > 0 && id <= vocab.chars.length ? vocab.chars[id - 1] : '')).join('');
 }
 
+function abortIf(signal) {
+  if (signal && signal.aborted) {
+    throw signal.reason instanceof Error ? signal.reason : Object.assign(new Error('training cancelled'), { code: 'CANCELLED' });
+  }
+}
+
 function parameter(rows, cols, rng, scale) {
   return autograd.leaf(rows, cols, () => normal(rng) * scale);
 }
@@ -145,7 +151,7 @@ function prefixes(ids, { stride = 1 } = {}) {
   return samples;
 }
 
-function train(model, text, { epochs = 20, learningRate = 0.01, stride = 1, validation = null, seed = 42, onEpoch = null, maxSamples = 1200 } = {}) {
+function train(model, text, { epochs = 20, learningRate = 0.01, stride = 1, validation = null, seed = 42, onEpoch = null, maxSamples = 1200, optimizer = null, signal = null } = {}) {
   const vocab = model.vocab;
   if (!vocab) throw Object.assign(new Error('model has no vocabulary; call trainText instead'), { code: 'BAD_GPT' });
   const ids = encode(text, vocab);
@@ -156,19 +162,23 @@ function train(model, text, { epochs = 20, learningRate = 0.01, stride = 1, vali
   }
   const validationSamples = validation == null ? [] : prefixes(encode(validation, vocab), { stride: Math.max(1, stride) }).map((sample) => ({ ids: sample.ids.slice(-(model.config.maxLen - 1)), target: sample.target }));
   const parameters = model.order.map((name) => model.parameters[name]);
-  const optimizer = autograd.createAdam(parameters, { learningRate });
+  const activeOptimizer = optimizer || (model.training && model.training.optimizer) || autograd.createAdam(parameters, { learningRate });
+  if (!Array.isArray(activeOptimizer.states) || activeOptimizer.states.length !== parameters.length) throw Object.assign(new Error('optimizer state does not match the model'), { code: 'BAD_CHECKPOINT' });
+  const startEpoch = Number(model.training && model.training.progress && model.training.progress.epochs) || 0;
   const history = [];
   for (let epoch = 0; epoch < epochs; epoch += 1) {
+    abortIf(signal);
     let epochLoss = 0;
     for (const sample of samples) {
+      abortIf(signal);
       autograd.zeroGrad(parameters);
       const { loss } = nextTokenLoss(model, sample.ids, sample.target);
       autograd.backward(loss);
-      autograd.applyAdam(parameters, optimizer);
+      autograd.applyAdam(parameters, activeOptimizer);
       epochLoss += loss.data[0];
     }
     const record = {
-      epoch: epoch + 1,
+      epoch: startEpoch + epoch + 1,
       trainLoss: epochLoss / Math.max(1, samples.length),
       trainPerplexity: Math.exp(epochLoss / Math.max(1, samples.length)),
       validated: validationSamples.length > 0,
@@ -183,7 +193,16 @@ function train(model, text, { epochs = 20, learningRate = 0.01, stride = 1, vali
     history.push(record);
     if (onEpoch) onEpoch(record);
   }
-  return { ok: true, epochs, samples: samples.length, validationSamples: validationSamples.length, history, final: history[history.length - 1] || null };
+  return {
+    ok: true,
+    epochs: history.length,
+    samples: samples.length,
+    validationSamples: validationSamples.length,
+    history,
+    final: history[history.length - 1] || null,
+    optimizer: activeOptimizer,
+    progress: { epochs: startEpoch + history.length, learningRate },
+  };
 }
 
 function applySoftmax(values) {
@@ -198,7 +217,7 @@ function applySoftmax(values) {
   return out.map((value) => value / (sum || 1));
 }
 
-function generate(model, prompt, { maxNewTokens = 32, temperature = 0.8, topK = 0, seed = 42 } = {}) {
+function generate(model, prompt, { maxNewTokens = 32, temperature = 0.8, topK = 0, topP = 1, repetitionPenalty = 1, seed = 42 } = {}) {
   const vocab = model.vocab;
   if (!vocab) throw Object.assign(new Error('model has no vocabulary'), { code: 'BAD_GPT' });
   const rng = mulberry32(seed);
@@ -213,14 +232,27 @@ function generate(model, prompt, { maxNewTokens = 32, temperature = 0.8, topK = 
     if (temperature <= 0) {
       chosen = last.indexOf(Math.max(...last));
     } else {
-      const scaled = last.map((value) => value / temperature);
+      const recent = new Set(ids.slice(-64));
+      const adjusted = last.map((value, index) => (repetitionPenalty > 1 && recent.has(index) ? value / repetitionPenalty : value));
+      const scaled = adjusted.map((value) => value / temperature);
       let probabilities = applySoftmax(scaled);
       if (topK > 0 && topK < probabilities.length) {
         const threshold = [...probabilities].sort((a, b) => b - a)[topK - 1];
         probabilities = probabilities.map((value) => (value >= threshold ? value : 0));
-        const sum = probabilities.reduce((total, value) => total + value, 0) || 1;
-        probabilities = probabilities.map((value) => value / sum);
       }
+      if (topP > 0 && topP < 1) {
+        const order = probabilities.map((value, index) => ({ value, index })).sort((a, b) => b.value - a.value);
+        let cumulative = 0;
+        const keep = new Set();
+        for (const entry of order) {
+          if (cumulative >= topP) break;
+          keep.add(entry.index);
+          cumulative += entry.value;
+        }
+        probabilities = probabilities.map((value, index) => (keep.has(index) ? value : 0));
+      }
+      const sum = probabilities.reduce((total, value) => total + value, 0) || 1;
+      probabilities = probabilities.map((value) => value / sum);
       let draw = rng();
       chosen = probabilities.length - 1;
       for (let index = 0; index < probabilities.length; index += 1) {
@@ -235,14 +267,27 @@ function generate(model, prompt, { maxNewTokens = 32, temperature = 0.8, topK = 
   return { text: decode(generated, vocab), ids: generated, prompt, steps: generated.length };
 }
 
-function save(model, file) {
+function save(model, file, { optimizer = null, progress = null } = {}) {
   const directory = path.dirname(file);
   fs.mkdirSync(directory, { recursive: true });
+  const activeOptimizer = optimizer || (model.training && model.training.optimizer) || null;
   const payload = {
     format: FORMAT,
     config: model.config,
     vocab: model.vocab ? { chars: model.vocab.chars } : null,
     values: Object.fromEntries(model.order.map((name) => [name, Array.from(model.parameters[name].data)])),
+    training: activeOptimizer ? {
+      progress: progress || (model.training && model.training.progress) || null,
+      optimizer: {
+        learningRate: activeOptimizer.learningRate,
+        beta1: activeOptimizer.beta1,
+        beta2: activeOptimizer.beta2,
+        epsilon: activeOptimizer.epsilon,
+        weightDecay: activeOptimizer.weightDecay,
+        step: activeOptimizer.step,
+        states: activeOptimizer.states.map((state) => ({ m: Array.from(state.m), v: Array.from(state.v) })),
+      },
+    } : null,
   };
   const text = JSON.stringify(payload);
   fs.writeFileSync(file, text);
@@ -263,16 +308,43 @@ function load(file) {
   if (payload.vocab && Array.isArray(payload.vocab.chars)) {
     model.vocab = { chars: payload.vocab.chars, index: new Map(payload.vocab.chars.map((char, position) => [char, position + 1])) };
   }
+  if (payload.training && payload.training.optimizer) {
+    const saved = payload.training.optimizer;
+    const optimizer = autograd.createAdam(model.order.map((name) => model.parameters[name]), {
+      learningRate: saved.learningRate,
+      beta1: saved.beta1,
+      beta2: saved.beta2,
+      epsilon: saved.epsilon,
+      weightDecay: saved.weightDecay,
+    });
+    optimizer.step = saved.step || 0;
+    if (!Array.isArray(saved.states) || saved.states.length !== optimizer.states.length) throw Object.assign(new Error('checkpoint optimizer state is incomplete'), { code: 'BAD_CHECKPOINT' });
+    saved.states.forEach((state, index) => {
+      if (!Array.isArray(state.m) || !Array.isArray(state.v) || state.m.length !== optimizer.states[index].m.length) throw Object.assign(new Error('checkpoint optimizer shape mismatch'), { code: 'BAD_CHECKPOINT' });
+      optimizer.states[index].m = Float64Array.from(state.m);
+      optimizer.states[index].v = Float64Array.from(state.v);
+    });
+    model.training = { optimizer, progress: payload.training.progress || { epochs: 0 } };
+  }
   return model;
 }
 
-/** Builds a vocabulary, a model and trains it on supplied text in one call. */
-function trainText(texts, { epochs = 20, learningRate = 0.01, validation = null, dim = 24, hidden = 48, maxLen = 32, blocks = 2, seed = 42, stride = 1, maxVocab = 128, onEpoch = null } = {}) {
+/** Builds a vocabulary and an untrained model; used by resumable training. */
+function initText(texts, { dim = 24, hidden = 48, maxLen = 32, blocks = 2, seed = 42, maxVocab = 128 } = {}) {
   const list = Array.isArray(texts) ? texts : [texts];
   const vocab = buildVocab(list, { maxVocab });
   const model = createModel({ vocabSize: vocab.chars.length + 1, dim, hidden, maxLen, blocks, seed });
   model.vocab = vocab;
-  const report = train(model, list.join('\n'), { epochs, learningRate, validation, seed, stride, onEpoch });
+  model.training = { optimizer: null, progress: { epochs: 0 } };
+  return { model, vocab };
+}
+
+/** Builds a vocabulary, a model and trains it on supplied text in one call. */
+function trainText(texts, { epochs = 20, learningRate = 0.01, validation = null, dim = 24, hidden = 48, maxLen = 32, blocks = 2, seed = 42, stride = 1, maxVocab = 128, onEpoch = null, signal = null } = {}) {
+  const list = Array.isArray(texts) ? texts : [texts];
+  const { model, vocab } = initText(list, { dim, hidden, maxLen, blocks, seed, maxVocab });
+  const report = train(model, list.join('\n'), { epochs, learningRate, validation, seed, stride, onEpoch, signal });
+  model.training = { optimizer: report.optimizer, progress: report.progress };
   return { model, report, vocab };
 }
 
@@ -288,6 +360,7 @@ module.exports = {
   prefixes,
   train,
   trainText,
+  initText,
   generate,
   save,
   load,

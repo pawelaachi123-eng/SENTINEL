@@ -22,6 +22,15 @@ function hash(text) {
   return crypto.createHash('sha256').update(text).digest('hex');
 }
 
+function fnv1a(text) {
+  let value = 0x811c9dc5;
+  for (let index = 0; index < String(text).length; index += 1) {
+    value ^= String(text).charCodeAt(index);
+    value = Math.imul(value, 0x01000193) >>> 0;
+  }
+  return value;
+}
+
 function mulberry32(seed) {
   let state = seed >>> 0;
   return () => {
@@ -162,25 +171,83 @@ class DatasetRegistry {
     return { manifest, rows };
   }
 
-  /** Deterministic split. The same seed always yields the same membership. */
-  split(name, { version = null, seed = 42, ratios = { train: 0.7, validation: 0.15, test: 0.15 } } = {}) {
+  /** Deterministic, group-aware split. The same seed always yields the same membership. */
+  split(name, { version = null, seed = 42, ratios = { train: 0.7, validation: 0.15, test: 0.15 }, groupKey = null } = {}) {
     const { manifest, rows } = this.load(name, version);
     const total = Object.values(ratios).reduce((sum, value) => sum + value, 0);
     if (Math.abs(total - 1) > 1e-6) throw fail('split ratios must sum to 1', 'BAD_SPLIT');
-    const shuffled = rows.map((row, index) => ({ row, order: mulberry32(seed + index)() })).sort((a, b) => a.order - b.order).map((entry) => entry.row);
-    const sizes = {};
-    let assigned = 0;
-    for (const [key, ratio] of Object.entries(ratios)) {
-      sizes[key] = key === 'test' ? shuffled.length - assigned : Math.floor(shuffled.length * ratio);
-      assigned += sizes[key];
+    const keys = Object.keys(ratios);
+    // Rows that share a group key (the same normalised text by default) can
+    // never appear in two splits. That is the difference between a random row
+    // split and a leakage-free split: near-duplicate rows otherwise teach on
+    // one side and grade on the other.
+    const keyOf = (row) => {
+      if (typeof groupKey === 'function') return String(groupKey(row));
+      if (typeof groupKey === 'string') return String(row[groupKey]);
+      const text = typeof row.text === 'string' ? row.text : JSON.stringify(row);
+      return text.toLowerCase().normalize('NFC').replace(/\s+/g, ' ').trim();
+    };
+    const groups = new Map();
+    for (const row of rows) {
+      const key = keyOf(row);
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(row);
     }
-    const out = {};
-    let cursor = 0;
-    for (const [key, size] of Object.entries(sizes)) {
-      out[key] = shuffled.slice(cursor, cursor + size);
-      cursor += size;
+    const ordered = [...groups.entries()]
+      .map(([key, members]) => ({ key, members, order: mulberry32(seed + fnv1a(key))() }))
+      .sort((a, b) => a.order - b.order);
+    const out = Object.fromEntries(keys.map((key) => [key, []]));
+    if (ordered.length >= keys.length) {
+      const counts = Object.fromEntries(keys.map((key) => [key, 0]));
+      for (const group of ordered) {
+        // Assign to the split furthest below its target share; this keeps the
+        // ratios close without ever splitting a group.
+        let best = keys[0];
+        let bestDeficit = -Infinity;
+        for (const key of keys) {
+          const target = group.members.length === 0 ? 0 : (counts[key] + group.members.length) / Math.max(1e-9, ratios[key]);
+          const deficit = -target;
+          if (deficit > bestDeficit) { bestDeficit = deficit; best = key; }
+        }
+        out[best].push(...group.members);
+        counts[best] += group.members.length;
+      }
+      // Guarantee every split gets at least one group when there are enough.
+      for (const key of keys) {
+        if (out[key].length) continue;
+        const donor = keys.find((candidate) => out[candidate].length > 1);
+        if (!donor) continue;
+        out[key].push(out[donor].pop());
+      }
+    } else {
+      const shuffledRows = rows.map((row, index) => ({ row, order: mulberry32(seed + index)() })).sort((a, b) => a.order - b.order).map((entry) => entry.row);
+      let cursor = 0;
+      for (const key of keys) {
+        const size = key === keys[keys.length - 1] ? shuffledRows.length - cursor : Math.floor(shuffledRows.length * ratios[key]);
+        out[key] = shuffledRows.slice(cursor, cursor + size);
+        cursor += size;
+      }
     }
-    return { manifest: { name: manifest.name, version: manifest.version, sha256: manifest.sha256 }, seed, sizes, ...out };
+    const membership = new Map();
+    let leakedGroups = 0;
+    for (const key of keys) {
+      const seen = new Set();
+      for (const row of out[key]) seen.add(keyOf(row));
+      for (const group of seen) {
+        if (membership.has(group) && membership.get(group) !== key) leakedGroups += 1;
+        membership.set(group, key);
+      }
+    }
+    const sizes = Object.fromEntries(keys.map((key) => [key, out[key].length]));
+    return {
+      manifest: { name: manifest.name, version: manifest.version, sha256: manifest.sha256 },
+      seed,
+      sizes,
+      groups: groups.size,
+      groupAware: ordered.length >= keys.length,
+      leakage: { groupsAcrossSplits: leakedGroups, duplicateGroups: groups.size - ordered.length },
+      ...out,
+    };
   }
 
   /** Cheap dataset health: duplicates, empty text, label balance. */

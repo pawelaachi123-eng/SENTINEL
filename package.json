@@ -1,6 +1,6 @@
 {
   "name": "sentinel",
-  "version": "7.2.0",
+  "version": "8.0.0",
   "private": true,
   "description": "SENTINEL \u2014 local-first neural cognitive platform: real trained specialist networks, a typed cognitive hypercore, persistent memory/research, an audited tool system and a PC/phone agent with no cloud account",
   "author": "pawelaachi123-eng",
@@ -31,7 +31,7 @@
     "test:agents": "node test/agents.js",
     "test:executive": "node test/executive.js",
     "test:coding": "node test/coding.js",
-    "test:acceptance": "node scripts/acceptance-7.2.js"
+    "test:acceptance": "node scripts/acceptance-8.0.js"
   },
   "pkg": {
     "assets": [

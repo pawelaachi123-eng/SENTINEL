@@ -30,6 +30,13 @@ function normal(rng) {
   return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * rng());
 }
 
+function abortIf(signal) {
+  if (signal && signal.aborted) {
+    const reason = signal.reason instanceof Error ? signal.reason : Object.assign(new Error('training cancelled'), { code: 'CANCELLED' });
+    throw reason;
+  }
+}
+
 function fnv1a(text) {
   let value = 0x811c9dc5;
   for (let index = 0; index < text.length; index += 1) {
@@ -94,14 +101,16 @@ function argmax(values) {
   return best;
 }
 
-function trainBase(base, examples, { epochs = 120, learningRate = 0.05 } = {}) {
+function trainBase(base, examples, { epochs = 120, learningRate = 0.05, signal = null } = {}) {
   const parameters = base.order.map((key) => base.parameters[key]);
   const optimizer = autograd.createAdam(parameters, { learningRate });
   const history = [];
   for (let epoch = 0; epoch < epochs; epoch += 1) {
+    abortIf(signal);
     let lossSum = 0;
     let correct = 0;
     for (const example of examples) {
+      abortIf(signal);
       autograd.zeroGrad(parameters);
       const logits = forwardBase(base, example.vector);
       const { loss, probabilities: probs } = autograd.softmaxCrossEntropy(logits, [example.label]);
@@ -173,14 +182,20 @@ function evaluate(predict, examples) {
   return { cases: examples.length, correct, accuracy: Number((correct / examples.length).toFixed(4)) };
 }
 
-function trainAdapter(binding, base, adapter, examples, { epochs = 120, learningRate = 0.08, validation = [] } = {}) {
+function trainAdapter(binding, base, adapter, examples, { epochs = 120, learningRate = 0.08, validation = [], patience = 25, signal = null } = {}) {
   const parameters = adapter.order.map((key) => adapter.parameters[key]);
   const optimizer = autograd.createAdam(parameters, { learningRate });
   const history = [];
   const basePredict = (vector) => argmax(probabilities(forwardBase(base, vector)).slice());
+  const predict = (vector) => argmax(probabilities(forwardLora(binding, adapter, vector)));
+  let best = null;
+  let bestAccuracy = -1;
+  let stale = 0;
   for (let epoch = 0; epoch < epochs; epoch += 1) {
+    abortIf(signal);
     let lossSum = 0;
     for (const example of examples) {
+      abortIf(signal);
       autograd.zeroGrad(parameters);
       const logits = forwardLora(binding, adapter, example.vector);
       const { loss } = autograd.softmaxCrossEntropy(logits, [example.label]);
@@ -190,22 +205,142 @@ function trainAdapter(binding, base, adapter, examples, { epochs = 120, learning
     }
     const record = { epoch: epoch + 1, loss: Number((lossSum / examples.length).toFixed(4)) };
     if (validation.length) {
-      const adapted = evaluate((vector) => argmax(probabilities(forwardLora(binding, adapter, vector))), validation);
+      const adapted = evaluate(predict, validation);
       const frozen = evaluate(basePredict, validation);
       record.validation = adapted;
       record.frozenBaseline = frozen;
+      // Model selection uses validation only. The test fold is never read here.
+      if (adapted.accuracy > bestAccuracy) {
+        bestAccuracy = adapted.accuracy;
+        best = parameters.map((parameter) => Float64Array.from(parameter.data));
+        stale = 0;
+      } else {
+        stale += 1;
+      }
     }
     history.push(record);
+    if (validation.length && stale >= patience) break;
   }
-  const predict = (vector) => argmax(probabilities(forwardLora(binding, adapter, vector)));
-  return { ok: true, epochs, history, final: history[history.length - 1], adapter, evaluation: { adapted: evaluate(predict, validation), frozen: evaluate(basePredict, validation) }, predict };
+  if (best) parameters.forEach((parameter, index) => { parameter.data = Float64Array.from(best[index]); });
+  return {
+    ok: true,
+    epochs: history.length,
+    history,
+    final: history[history.length - 1],
+    adapter,
+    selectedEpoch: best ? bestAccuracy : null,
+    evaluation: {
+      validation: { adapted: evaluate(predict, validation), frozen: evaluate(basePredict, validation) },
+      adapted: evaluate(predict, validation),
+      frozen: evaluate(basePredict, validation),
+    },
+    predict,
+  };
 }
 
-function trainLora({ base, examples, validation = [], rank = 2, epochs = 120, learningRate = 0.08, seed = 7, target = 'w2' } = {}) {
+/**
+ * Cooperative async variant used by the durable queue. It yields to the event
+ * loop once per epoch, so an AbortSignal from a timer or another request is
+ * actually observed while computation is running; the synchronous variant
+ * remains for direct library use.
+ */
+async function trainBaseAsync(base, examples, { epochs = 120, learningRate = 0.05, signal = null } = {}) {
+  const parameters = base.order.map((key) => base.parameters[key]);
+  const optimizer = autograd.createAdam(parameters, { learningRate });
+  const history = [];
+  for (let epoch = 0; epoch < epochs; epoch += 1) {
+    abortIf(signal);
+    let lossSum = 0;
+    let correct = 0;
+    for (const example of examples) {
+      abortIf(signal);
+      autograd.zeroGrad(parameters);
+      const logits = forwardBase(base, example.vector);
+      const { loss, probabilities: probs } = autograd.softmaxCrossEntropy(logits, [example.label]);
+      autograd.backward(loss);
+      autograd.applyAdam(parameters, optimizer);
+      lossSum += loss.data[0];
+      if (argmax(probs) === example.label) correct += 1;
+    }
+    history.push({ epoch: epoch + 1, loss: Number((lossSum / examples.length).toFixed(4)), accuracy: Number((correct / examples.length).toFixed(4)) });
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  return { ok: true, epochs, history, final: history[history.length - 1], base };
+}
+
+async function trainAdapterAsync(binding, base, adapter, examples, { epochs = 120, learningRate = 0.08, validation = [], patience = 25, signal = null } = {}) {
+  const parameters = adapter.order.map((key) => adapter.parameters[key]);
+  const optimizer = autograd.createAdam(parameters, { learningRate });
+  const history = [];
+  const basePredict = (vector) => argmax(probabilities(forwardBase(base, vector)).slice());
+  const predict = (vector) => argmax(probabilities(forwardLora(binding, adapter, vector)));
+  let best = null;
+  let bestAccuracy = -1;
+  let stale = 0;
+  for (let epoch = 0; epoch < epochs; epoch += 1) {
+    abortIf(signal);
+    let lossSum = 0;
+    for (const example of examples) {
+      abortIf(signal);
+      autograd.zeroGrad(parameters);
+      const logits = forwardLora(binding, adapter, example.vector);
+      const { loss } = autograd.softmaxCrossEntropy(logits, [example.label]);
+      autograd.backward(loss);
+      autograd.applyAdam(parameters, optimizer);
+      lossSum += loss.data[0];
+    }
+    const record = { epoch: epoch + 1, loss: Number((lossSum / examples.length).toFixed(4)) };
+    if (validation.length) {
+      const adapted = evaluate(predict, validation);
+      record.validation = adapted;
+      record.frozenBaseline = evaluate(basePredict, validation);
+      if (adapted.accuracy > bestAccuracy) {
+        bestAccuracy = adapted.accuracy;
+        best = parameters.map((parameter) => Float64Array.from(parameter.data));
+        stale = 0;
+      } else {
+        stale += 1;
+      }
+    }
+    history.push(record);
+    await new Promise((resolve) => setImmediate(resolve));
+    if (validation.length && stale >= patience) break;
+  }
+  if (best) parameters.forEach((parameter, index) => { parameter.data = Float64Array.from(best[index]); });
+  return {
+    ok: true,
+    epochs: history.length,
+    history,
+    final: history[history.length - 1],
+    adapter,
+    selectedEpoch: best ? bestAccuracy : null,
+    evaluation: {
+      validation: { adapted: evaluate(predict, validation), frozen: evaluate(basePredict, validation) },
+      adapted: evaluate(predict, validation),
+      frozen: evaluate(basePredict, validation),
+    },
+    predict,
+  };
+}
+
+async function trainLoraAsync({ base, examples, validation = [], test = [], rank = 2, epochs = 120, learningRate = 0.08, seed = 7, target = 'w2', signal = null } = {}) {
   if (!base) throw Object.assign(new Error('trainLora needs a base model'), { code: 'BAD_ARGUMENT' });
   if (!Array.isArray(examples) || !examples.length) throw Object.assign(new Error('trainLora needs examples'), { code: 'BAD_ARGUMENT' });
   const adapter = createAdapter({ dim: base.config.dim, hidden: base.config.hidden, classes: base.config.classes, rank, seed, target });
-  const result = trainAdapter(base, base, adapter, examples, { epochs, learningRate, validation });
+  const result = await trainAdapterAsync(base, base, adapter, examples, { epochs, learningRate, validation, signal });
+  result.evaluation.test = { adapted: evaluate(result.predict, test), frozen: evaluate((vector) => argmax(probabilities(forwardBase(base, vector))), test) };
+  const checksum = crypto.createHash('sha256').update(JSON.stringify(adapter.parameters.a.data) + JSON.stringify(adapter.parameters.b.data)).digest('hex');
+  return { ...result, kind: 'lora', rank, trainableParameters: adapter.config.target === 'w1' ? base.config.dim * rank + rank * base.config.hidden : base.config.hidden * rank + rank * base.config.classes, frozenParameters: base.order.reduce((sum, key) => sum + base.parameters[key].data.length, 0), checksum, payload: toPayload(adapter, { kind: 'lora', baseChecksum: checksumOfBase(base) }) };
+}
+
+function trainLora({ base, examples, validation = [], test = [], rank = 2, epochs = 120, learningRate = 0.08, seed = 7, target = 'w2', signal = null } = {}) {
+  if (!base) throw Object.assign(new Error('trainLora needs a base model'), { code: 'BAD_ARGUMENT' });
+  if (!Array.isArray(examples) || !examples.length) throw Object.assign(new Error('trainLora needs examples'), { code: 'BAD_ARGUMENT' });
+  const adapter = createAdapter({ dim: base.config.dim, hidden: base.config.hidden, classes: base.config.classes, rank, seed, target });
+  const result = trainAdapter(base, base, adapter, examples, { epochs, learningRate, validation, signal });
+  const testPredict = result.predict;
+  const testFrozen = evaluate((vector) => argmax(probabilities(forwardBase(base, vector))), test);
+  result.evaluation.test = { adapted: evaluate(testPredict, test), frozen: testFrozen };
   const checksum = crypto.createHash('sha256').update(JSON.stringify(adapter.parameters.a.data) + JSON.stringify(adapter.parameters.b.data)).digest('hex');
   return { ...result, kind: 'lora', rank, trainableParameters: adapter.config.target === 'w1' ? base.config.dim * rank + rank * base.config.hidden : base.config.hidden * rank + rank * base.config.classes, frozenParameters: base.order.reduce((sum, key) => sum + base.parameters[key].data.length, 0), checksum, payload: toPayload(adapter, { kind: 'lora', baseChecksum: checksumOfBase(base) }) };
 }
@@ -232,13 +367,14 @@ function fromPayload(payload) {
   return adapter;
 }
 
-function trainQlora({ base, examples, validation = [], rank = 2, epochs = 120, learningRate = 0.08, seed = 7, target = 'w2' } = {}) {
+function trainQlora({ base, examples, validation = [], test = [], rank = 2, epochs = 120, learningRate = 0.08, seed = 7, target = 'w2', signal = null } = {}) {
   if (!base) throw Object.assign(new Error('trainQlora needs a base model'), { code: 'BAD_ARGUMENT' });
   const quantizedW1 = quantize4bit(base.parameters.w1);
   const quantizedW2 = quantize4bit(base.parameters.w2);
   const quantized = { format: 'sentinel-qlora-base-v1', config: base.config, parameters: { w1: quantizedW1.node, b1: base.parameters.b1, w2: quantizedW2.node, b2: base.parameters.b2 } };
   const adapter = createAdapter({ dim: base.config.dim, hidden: base.config.hidden, classes: base.config.classes, rank, seed, target });
-  const result = trainAdapter(quantized, quantized, adapter, examples, { epochs, learningRate, validation });
+  const result = trainAdapter(quantized, quantized, adapter, examples, { epochs, learningRate, validation, signal });
+  result.evaluation.test = { adapted: evaluate(result.predict, test), frozen: evaluate((vector) => argmax(probabilities(forwardBase(quantized, vector))), test) };
   const payload = toPayload(adapter, { kind: 'qlora', baseChecksum: checksumOfBase(base), quantization: { bits: 4, w1RelativeError: quantizedW1.relativeError, w2RelativeError: quantizedW2.relativeError } });
   return {
     ...result,
@@ -275,8 +411,11 @@ module.exports = {
   forwardBase,
   forwardLora,
   trainBase,
+  trainBaseAsync,
   trainLora,
+  trainLoraAsync,
   trainQlora,
+  abortIf,
   quantize4bit,
   createAdapter,
   fromPayload,

@@ -283,6 +283,118 @@ function rowsFor(shift, count = 120) {
     return `chunk ${hits[0].id.slice(0, 14)}`;
   });
 
+  /* ── leakage, cancellation and true continuation ────────────────────── */
+
+  await test('splits are group-aware and never leak the same text across folds', () => {
+    const rows = [];
+    for (let index = 0; index < 90; index += 1) rows.push({ text: `duplicate phrase ${index % 9}`, label: `class${index % 3}` });
+    try { lab.createDataset({ name: 'dups', rows }); } catch (err) { if (err.code !== 'DUPLICATE_DATASET') throw err; }
+    const split = lab.datasets.split('dups', { seed: 11 });
+    assert.equal(split.groupAware, true);
+    assert.equal(split.leakage.groupsAcrossSplits, 0);
+    const groups = {};
+    for (const fold of ['train', 'validation', 'test']) {
+      groups[fold] = new Set(split[fold].map((row) => row.text));
+      assert.ok(split[fold].length > 0, `${fold} fold is empty`);
+    }
+    for (const a of ['train', 'validation', 'test']) for (const b of ['train', 'validation', 'test']) {
+      if (a === b) continue;
+      for (const text of groups[a]) assert.equal(groups[b].has(text), false, `${text} spans ${a} and ${b}`);
+    }
+    return `${split.sizes.train}/${split.sizes.validation}/${split.sizes.test}, ${split.groups} groups`;
+  });
+
+  await test('label mappings are validated across source and target datasets', () => {
+    try { lab.createDataset({ name: 'binary', rows: rowsFor(0).map((row) => ({ text: row.text, label: row.label === 'alpha' ? 'yes' : 'no' })) }); } catch (err) { if (err.code !== 'DUPLICATE_DATASET') throw err; }
+    assert.throws(() => lab.trainLora({ dataset: 'binary', sourceDataset: 'source', epochs: 20 }), (err) => err.code === 'LABEL_MISMATCH');
+    return 'LABEL_MISMATCH raised';
+  });
+
+  await test('cancellation interrupts LoRA computation, not just queue state', async () => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(Object.assign(new Error('cancel now'), { code: 'CANCELLED' })), 15);
+    const started = Date.now();
+    await assert.rejects(
+      () => lab.trainLoraAsync({ dataset: 'source', dim: 16, hidden: 16, epochs: 5000, signal: controller.signal }),
+      (err) => err.code === 'CANCELLED',
+    );
+    clearTimeout(timer);
+    const elapsed = Date.now() - started;
+    assert.ok(elapsed < 1500, `cancellation took ${elapsed} ms`);
+    return `${elapsed} ms`;
+  });
+
+  await test('GPT checkpoints resume weights, Adam moments and the epoch counter', () => {
+    const corpus = 'alpha beta gamma delta alpha beta gamma delta '.repeat(8);
+    const { model } = gpt.initText(corpus, { dim: 8, hidden: 16, maxLen: 16, blocks: 1, seed: 5, maxVocab: 24 });
+    const first = gpt.train(model, corpus, { epochs: 1, learningRate: 0.01, seed: 5 });
+    model.training = { optimizer: first.optimizer, progress: first.progress };
+    const file = path.join(root, 'resume-check.json');
+    gpt.save(model, file, { optimizer: first.optimizer, progress: first.progress });
+    const loaded = gpt.load(file);
+    assert.ok(loaded.training && loaded.training.optimizer, 'optimizer state was not restored');
+    assert.equal(loaded.training.progress.epochs, 1);
+    const before = loaded.training.optimizer.step;
+    const second = gpt.train(loaded, corpus, { epochs: 1, optimizer: loaded.training.optimizer, seed: 6 });
+    assert.equal(second.final.epoch, 2);
+    assert.ok(second.optimizer.step > before, 'optimizer step did not continue');
+    loaded.training = { optimizer: second.optimizer, progress: second.progress };
+    gpt.save(loaded, file, { optimizer: second.optimizer, progress: second.progress });
+    const again = gpt.load(file);
+    assert.equal(again.training.progress.epochs, 2);
+    assert.equal(again.training.optimizer.step, second.optimizer.step);
+    return `epochs ${first.progress.epochs}→${again.training.progress.epochs}, step ${before}→${again.training.optimizer.step}`;
+  });
+
+  await test('the GPT job runner continues from its checkpoint instead of restarting', async () => {
+    const texts = ['abc abc abc abc abc abc. '];
+    const payload = { texts, name: 'resume-job', epochs: 3, dim: 8, hidden: 16, maxLen: 12, blocks: 1, seed: 2, maxVocab: 16 };
+    fs.rmSync(path.join(root, 'gpt', 'resume-job.resume.json'), { force: true });
+    const context = { signal: null, checkpoint: () => {}, job: { checkpoint: null } };
+    const first = await lab.runGptJob(payload, context);
+    const second = await lab.runGptJob(payload, { ...context, job: { checkpoint: { value: { block: 1 } } } });
+    assert.equal(second.resumedFromBlock, 3, 'a completed checkpoint was retrained');
+    assert.equal(second.epochs, first.epochs);
+    return `${first.epochs} epochs, block ${second.resumedFromBlock}`;
+  });
+
+  await test('the training queue cancels a running LoRA job within a bounded time', async () => {
+    const job = lab.enqueue('lora', { dataset: 'source', dim: 16, hidden: 24, epochs: 5000 }, { priority: 1 });
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    const started = Date.now();
+    assert.equal(lab.cancel(job.id).ok, true);
+    const finished = await lab.queue.wait(job.id, { timeoutMs: 5000 });
+    assert.equal(finished.status, 'cancelled');
+    assert.ok(Date.now() - started < 2000, 'cancellation did not stop real computation');
+    return `cancelled in ${Date.now() - started} ms`;
+  });
+
+  await test('checkpoint access is confined to the lab data directory', () => {
+    assert.throws(() => lab.generateGpt({ checkpointPath: '/etc/passwd' }), (err) => err.code === 'OUTSIDE_DATA_DIR');
+    assert.throws(() => lab.generateGpt({ checkpointPath: path.join(root, '..', 'escape.json') }), (err) => err.code === 'OUTSIDE_DATA_DIR');
+    return 'path traversal refused';
+  });
+
+  await test('the legacy lab entry point is a shim over one facade', () => {
+    const facade = require('../core/lab');
+    const shim = require('../core/lab.js');
+    assert.equal(typeof facade.TrainingLab, 'function');
+    assert.equal(typeof facade.LearningLab, 'function');
+    assert.equal(shim.TrainingLab, facade.TrainingLab);
+    assert.equal(shim.LearningLab, facade.LearningLab);
+    return 'one implementation, two import paths';
+  });
+
+  await test('top-p and repetition controls are applied during sampling', () => {
+    const corpus = 'the quick brown fox jumps over the lazy dog. '.repeat(4);
+    const { model } = gpt.trainText(corpus, { epochs: 2, dim: 8, hidden: 16, maxLen: 12, blocks: 1, seed: 3, maxVocab: 24 });
+    const a = gpt.generate(model, 'the ', { maxNewTokens: 12, temperature: 0.8, topP: 0.8, repetitionPenalty: 1.2, seed: 9 });
+    const b = gpt.generate(model, 'the ', { maxNewTokens: 12, temperature: 0.8, topP: 0.8, repetitionPenalty: 1.2, seed: 9 });
+    assert.equal(a.text, b.text);
+    assert.equal(a.ids.length, 12);
+    return `top-p determinism: ${a.text.slice(0, 12)}`;
+  });
+
   /* ── summary ────────────────────────────────────────────────────────── */
 
   const failed = results.filter((result) => !result.ok);
