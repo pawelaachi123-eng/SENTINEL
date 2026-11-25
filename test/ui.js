@@ -75,8 +75,20 @@ function makePage(url) {
   const agent = createAgent({ configPath: path.join(home, 'config.json') });
   agent.config.merge({ ports: { ui: 0, link: 0 } });
   agent.start();
-  await sleep(400);
-  const port = agent.http.server.address().port;
+  // Boot time varies on shared CI runners; wait for the real health endpoint
+  // instead of assuming a fixed delay.
+  let port = null;
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    await sleep(100);
+    const address = agent.http.server.address();
+    if (!address) continue;
+    port = address.port;
+    try {
+      const response = await globalThis.fetch(`http://127.0.0.1:${port}/api/health`);
+      if (response.ok && agent.aiReady) break;
+    } catch { /* the socket is not accepting yet */ }
+  }
+  if (!port) throw new Error('the agent did not start listening');
   const psk = agent.config.get('psk');
   const hostname = os.hostname();
 
