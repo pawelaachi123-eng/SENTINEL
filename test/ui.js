@@ -226,7 +226,7 @@ function makePage(url) {
     const graphText = aiDoc.querySelector('[data-panel="graph"]').textContent;
     check('the graph panel is fed by /api/graph', /Węzły|Węzły|Graf jest pusty/.test(graphText), graphText.slice(0, 100));
     const orgText = aiDoc.querySelector('[data-panel="org"]').textContent;
-    check('the organisation panel reports the real roster', /31 agentów/.test(orgText), orgText.slice(0, 100));
+    check('the organisation panel reports the real roster', new RegExp(`${agent.agents.agents.size} agentów`).test(orgText), orgText.slice(0, 100));
     const mcpText = aiDoc.querySelector('[data-panel="mcp"]').textContent;
     check('the MCP panel reports that it is opt-in', /Wyłączone w ustawieniach/.test(mcpText), mcpText.slice(0, 100));
 

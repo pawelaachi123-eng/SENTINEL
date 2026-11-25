@@ -539,6 +539,50 @@ class HttpApi {
       return this.json(res, 200, { ok: true, data: this.ai.graphRag.expand(query, { hops: Number(url.searchParams.get('hops')) || 2 }) });
     }
 
+    const codingReady = () => this.ai && this.ai.codeIndex;
+    if (route === '/api/coding' && req.method === 'GET') {
+      if (!codingReady()) return this.json(res, 503, { ok: false, error: 'code index not ready' });
+      let stats = this.ai.codeIndex.stats();
+      if (!stats.files) { this.ai.codeIndex.scan(); stats = this.ai.codeIndex.stats(); }
+      return this.json(res, 200, { ok: true, data: { stats, files: [...this.ai.codeIndex.files.values()].slice(0, 100) } });
+    }
+
+    if (route === '/api/coding/search' && (req.method === 'GET' || req.method === 'POST')) {
+      if (!codingReady()) return this.json(res, 503, { ok: false, error: 'code index not ready' });
+      const body = req.method === 'POST' ? await this.body(req).catch(() => ({})) : {};
+      const query = String(body.q || url.searchParams.get('q') || '').slice(0, 200);
+      if (!query) return this.json(res, 400, { ok: false, error: 'q is required' });
+      if (!this.ai.codeIndex.stats().files) this.ai.codeIndex.scan();
+      return this.json(res, 200, { ok: true, data: this.ai.codeIndex.search(query, { limit: Number(body.limit) || 30 }) });
+    }
+
+    if (route === '/api/coding/bugs' && req.method === 'GET') {
+      if (!codingReady()) return this.json(res, 503, { ok: false, error: 'code index not ready' });
+      if (!this.ai.codeIndex.stats().files) this.ai.codeIndex.scan();
+      const file = url.searchParams.get('file');
+      return this.json(res, 200, { ok: true, data: this.ai.codeIndex.bugs({ file: file || null, limit: Number(url.searchParams.get('limit')) || 100 }) });
+    }
+
+    if (route === '/api/coding/impact' && req.method === 'GET') {
+      if (!codingReady()) return this.json(res, 503, { ok: false, error: 'code index not ready' });
+      const file = String(url.searchParams.get('file') || '');
+      const symbol = String(url.searchParams.get('symbol') || '');
+      if (!file && !symbol) return this.json(res, 400, { ok: false, error: 'file or symbol is required' });
+      if (!this.ai.codeIndex.stats().files) this.ai.codeIndex.scan();
+      return this.json(res, 200, { ok: true, data: this.ai.codeIndex.impact({ file: file || null, symbol: symbol || null, depth: Number(url.searchParams.get('depth')) || 3 }) });
+    }
+
+    if (route === '/api/coding/rename' && req.method === 'POST') {
+      if (!codingReady() || !this.ai.refactorEngine) return this.json(res, 503, { ok: false, error: 'code index not ready' });
+      const body = await this.body(req).catch(() => ({}));
+      if (!this.ai.codeIndex.stats().files) this.ai.codeIndex.scan();
+      try {
+        return this.json(res, 200, { ok: true, data: this.ai.refactorEngine.rename({ symbol: body.symbol, to: body.to, files: body.files || null, limit: body.limit || 500 }) });
+      } catch (err) {
+        return this.json(res, 400, { ok: false, code: err.code || 'RENAME_FAILED', error: err.message });
+      }
+    }
+
     if (route === '/api/neural' && req.method === 'GET') {
       if (!this.ai) return this.json(res, 503, { ok: false, error: 'AI not ready' });
       // Cached metadata only: this endpoint must not trigger provider calls.

@@ -30,7 +30,8 @@
     "test:toolpacks": "node test/toolpacks.js",
     "test:agents": "node test/agents.js",
     "test:executive": "node test/executive.js",
-    "test:coding": "node test/coding.js"
+    "test:coding": "node test/coding.js",
+    "test:acceptance": "node scripts/acceptance-7.2.js"
   },
   "pkg": {
     "assets": [

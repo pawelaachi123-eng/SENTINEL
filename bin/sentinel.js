@@ -831,6 +831,79 @@ async function main() {
         return done(4);
       }
 
+      case 'coding': {
+        const index = agent.codeIndex;
+        const engine = agent.refactorEngine;
+        const action = rest[0] || 'stats';
+        const ensure = () => { if (!index.stats().files) index.scan(); };
+        if (action === 'stats') {
+          ensure();
+          const stats = index.stats();
+          if (args.json) console.log(JSON.stringify(stats, null, 2));
+          else {
+            console.log(bold('indeks kodu'));
+            console.log(`  pliki ${stats.files} · symbole ${stats.symbols} (${stats.uniqueSymbols} unikalnych) · importy ${stats.imports} · wywołania ${stats.calls}`);
+            console.log(`  języki: ${Object.entries(stats.languages).map(([k, v]) => `${k} ${v}`).join(' · ')} · błędy parsowania ${stats.errorFiles}`);
+            console.log(dim('  parsery pokrywają praktyczne podzbiory gramatyk i zgłaszają błędy zamiast zgadywać.'));
+          }
+          return done(0);
+        }
+        if (action === 'search') {
+          if (!rest[1]) { console.error(red('użycie: sentinel coding search <query>')); return done(4); }
+          ensure();
+          const rows = index.search(rest.slice(1).join(' '), { limit: args.max || 30 });
+          if (args.json) console.log(JSON.stringify(rows, null, 2));
+          else for (const row of rows) {
+            const first = row.definitions[0] || {};
+            console.log(`  ${first.file || '?'}:${first.line || '?'} ${first.kind || 'symbol'} ${row.name}${first.container ? ` (${first.container})` : ''} · ${row.definitions.length} definicji`);
+          }
+          return done(0);
+        }
+        if (action === 'bugs') {
+          ensure();
+          const rows = index.bugs({ file: rest[1] || null, limit: args.max || 100 });
+          if (args.json) console.log(JSON.stringify(rows, null, 2));
+          else for (const row of rows) console.log(`  ${row.file}:${row.line} ${row.severity} ${row.rule} · ${row.message}`);
+          return done(0);
+        }
+        if (action === 'impact') {
+          if (!rest[1]) { console.error(red('użycie: sentinel coding impact <file|symbol>')); return done(4); }
+          ensure();
+          const result = index.impact(rest[1].includes('/') || rest[1].includes('.') ? { file: rest[1], depth: Number(args.depth) || 3 } : { symbol: rest[1], depth: Number(args.depth) || 3 });
+          if (args.json) console.log(JSON.stringify(result, null, 2));
+          else {
+            console.log(bold('wpływ zmiany'));
+            for (const file of result.files || []) console.log(`  ${file.relative || file.file || file}`);
+            console.log(dim(`  ${result.count === undefined ? (result.files || []).length : result.count} plik(ów)`));
+          }
+          return done(0);
+        }
+        if (action === 'rename') {
+          if (!rest[1] || !args.to) { console.error(red('użycie: sentinel coding rename <symbol> --to <new-name> [--apply --approval <hash> --by <osoba>]')); return done(4); }
+          ensure();
+          try {
+            const proposal = engine.rename({ symbol: rest[1], to: args.to, limit: args.max || 500 });
+            if (!proposal.ok) { console.error(red(`weryfikacja nie powiodła się: ${JSON.stringify(proposal.verification)}`)); return done(4); }
+            if (!args.apply) {
+              if (args.json) console.log(JSON.stringify(proposal, null, 2));
+              else {
+                console.log(green(`✓ propozycja: ${proposal.files} plik(ów), ${proposal.replacements} zamian`));
+                console.log(`  hash zatwierdzenia: ${proposal.approvalHash}`);
+                console.log(dim('  zastosowanie: powtórz z --apply --approval <hash> --by <osoba>'));
+              }
+              return done(0);
+            }
+            const applied = engine.apply(proposal.patches, { approvedBy: args.by || 'cli', approvalHash: args.approval });
+            if (args.json) console.log(JSON.stringify(applied, null, 2));
+            else if (applied.ok) console.log(green(`✓ zastosowano w ${applied.files.join(', ')}`));
+            else console.error(red(`${applied.code}: ${applied.message || ''}`));
+            return done(applied.ok ? 0 : 4);
+          } catch (err) { console.error(red(err.message)); return done(4); }
+        }
+        console.error(red(`nieznana akcja coding: ${action}`));
+        return done(4);
+      }
+
       case 'training': {
         const tl = agent.trainingLab;
         const action = rest[0] || 'status';

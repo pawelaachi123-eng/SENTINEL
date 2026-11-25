@@ -1160,7 +1160,7 @@
     if (!host) return;
     host.textContent = 'Czytam laboratorium…';
     try {
-      const [lab, neural, research, hypercore, reranker, comm, briefing, proactive, specialists, calendar, training, graphrag] = await Promise.all([api('/api/lab'), api('/api/neural'), api('/api/research'), api('/api/hypercore'), api('/api/reranker'), api('/api/communication'), api('/api/briefing'), api('/api/proactive'), api('/api/specialists'), api('/api/calendar?days=7'), api('/api/training'), api('/api/graphrag')]);
+      const [lab, neural, research, hypercore, reranker, comm, briefing, proactive, specialists, calendar, training, graphrag, executive, coding] = await Promise.all([api('/api/lab'), api('/api/neural'), api('/api/research'), api('/api/hypercore'), api('/api/reranker'), api('/api/communication'), api('/api/briefing'), api('/api/proactive'), api('/api/specialists'), api('/api/calendar?days=7'), api('/api/training'), api('/api/graphrag'), api('/api/executive'), api('/api/coding')]);
       const data = lab.data || {};
       host.textContent = '';
       const active = data.active;
@@ -1220,6 +1220,21 @@
         el('h3', { text: 'Kalendarz' }),
         el('p', { class: 'mini-card-desc', text: calendar.data ? `${calendar.data.events} wydarzeń w lokalnym kalendarzu · ${calEvents.length} w ciągu 7 dni` : 'brak danych' }),
         el('div', { class: 'mini-card-tags' }, calEvents.slice(0, 3).map((entry) => el('span', { class: 'tag', text: `${new Date(entry.start).toISOString().slice(0, 10)} ${entry.summary}` }))),
+      ]);
+      const execData = executive.data || {};
+      const execBox = el('article', { class: 'card mini-card' }, [
+        el('h3', { text: 'Silnik wykonawczy' }),
+        el('p', { class: 'mini-card-desc', text: execData.pool ? `pula ${execData.pool.running}/${execData.pool.size} · kolejka ${execData.pool.queued} · ${execData.pool.counts ? `${execData.pool.counts.succeeded || 0} ukończonych, ${execData.pool.counts.failed || 0} nieudanych` : 'brak liczników'}` : 'stan niedostępny' }),
+        el('p', { class: 'mini-card-desc', text: execData.workflows && execData.workflows.counts ? `${execData.workflows.counts.running || 0} workflow w toku · ${execData.workflows.counts.done || 0} ukończonych` : 'brak workflow' }),
+        el('p', { class: 'mini-card-desc', text: execData.honest || 'trwałe joby i workflow, bez rozproszenia' }),
+      ]);
+      const codeData = coding.data || {};
+      const codeStats = codeData.stats || {};
+      const codeBox = el('article', { class: 'card mini-card' }, [
+        el('h3', { text: 'Indeks kodu' }),
+        el('p', { class: 'mini-card-desc', text: `${codeStats.files || 0} plików · ${codeStats.symbols || 0} symboli · ${codeStats.imports || 0} importów · ${codeStats.calls || 0} wywołań` }),
+        el('p', { class: 'mini-card-desc', text: codeStats.languages ? Object.entries(codeStats.languages).map(([name, count]) => `${name} ${count}`).join(' · ') : 'brak języków' }),
+        el('p', { class: 'mini-card-desc', text: 'Parsery pokrywają praktyczne podzbiory gramatyk; zmiany przechodzą weryfikację i wymagają zatwierdzenia.' }),
       ]);
       const specActive = specialists.data && specialists.data.specialists ? specialists.data.specialists.filter((entry) => entry.active) : [];
       const specBox = el('article', { class: 'card mini-card' }, [
@@ -1293,7 +1308,7 @@
         el('p', { class: 'mini-card-desc', text: graphData.stats ? `${graphData.stats.entities} encji · ${graphData.stats.edges} relacji · ${graphData.stats.documents} dokumentów · ${graphData.stats.contradictions} sprzeczności` : 'brak grafu' }),
         el('div', { class: 'mini-card-tags' }, (graphData.relations || []).slice(0, 5).map((relation) => el('span', { class: 'tag', text: `${relation.subject} —${relation.predicate}→ ${relation.object}` }))),
       ]);
-      host.append(el('div', { class: 'grid-cards' }, [neuralBox, researchBox, hyperBox, rerankBox, commBox, briefBox, proactiveBox, specBox, calendarBox, trainingBox, graphBox]));
+      host.append(el('div', { class: 'grid-cards' }, [neuralBox, researchBox, hyperBox, rerankBox, commBox, briefBox, proactiveBox, specBox, calendarBox, trainingBox, graphBox, execBox, codeBox]));
     } catch (err) {
       host.textContent = `Nie mogę wczytać laboratorium: ${err.message}`;
     }

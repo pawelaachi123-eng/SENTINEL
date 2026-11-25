@@ -163,7 +163,10 @@ class Agent extends EventEmitter {
       this.services.skills = this.skills;
       this.repoMap = new RepoMap({ root: pathsModule.workspaceDir(), log: this.log });
       this.services.repoMap = this.repoMap;
-      this.codeIndex = new CodeIndex({ root: pathsModule.workspaceDir(), log: this.log });
+      // The indexed root defaults to the sandbox workspace; operators can point
+      // code intelligence at a checkout without changing the agent's workspace.
+      this.codeRoot = process.env.SENTINEL_CODE_ROOT ? path.resolve(process.env.SENTINEL_CODE_ROOT) : pathsModule.workspaceDir();
+      this.codeIndex = new CodeIndex({ root: this.codeRoot, log: this.log });
       this.refactorEngine = new RefactorEngine({ index: this.codeIndex, log: this.log });
       this.services.codeIndex = this.codeIndex;
       this.services.refactorEngine = this.refactorEngine;
@@ -354,6 +357,11 @@ class Agent extends EventEmitter {
             runtime: this.runtime || null,
             org: this.org || null,
             lab: this.lab || null,
+            trainingLab: this.trainingLab || null,
+            executive: this.executive || null,
+            graphRag: this.graphRag || null,
+            codeIndex: this.codeIndex || null,
+            refactorEngine: this.refactorEngine || null,
             neural: this.neural || null,
             research: this.research || null,
             reranker: this.reranker || null,

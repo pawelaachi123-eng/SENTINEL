@@ -1,8 +1,8 @@
 {
   "version": "7.2.0",
-  "at": "2026-11-25T16:05:13.207Z",
+  "at": "2026-11-25T20:38:34.231Z",
   "platform": "linux/x64",
-  "tools": 670,
+  "tools": 689,
   "categories": {
     "ai": 13,
     "automation": 6,
@@ -25,8 +25,10 @@
     "memory": 21,
     "mobile": 3,
     "network": 11,
+    "orchestration": 9,
     "perf": 3,
     "productivity": 20,
+    "programming": 10,
     "reasoning": 10,
     "science": 63,
     "security": 18,
@@ -38,16 +40,16 @@
     "vision": 3,
     "voice": 4
   },
-  "categoryCount": 33,
+  "categoryCount": 35,
   "permissions": {
-    "read": 567,
-    "write": 64,
-    "system": 35,
+    "read": 579,
+    "write": 68,
+    "system": 38,
     "network": 3,
     "privileged": 1
   },
   "structural": {
-    "checked": 670,
+    "checked": 689,
     "problems": [],
     "ok": true
   },
@@ -60,7 +62,7 @@
         "tool": "system.info",
         "ok": true,
         "code": null,
-        "ms": 59,
+        "ms": 56,
         "message": null
       },
       {
@@ -81,14 +83,14 @@
         "tool": "graph.stats",
         "ok": true,
         "code": null,
-        "ms": 3,
+        "ms": 2,
         "message": null
       },
       {
         "tool": "runtime.status",
         "ok": true,
         "code": null,
-        "ms": 46,
+        "ms": 36,
         "message": null
       },
       {
@@ -102,7 +104,7 @@
         "tool": "task.list",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -123,7 +125,7 @@
         "tool": "kb.list",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -137,7 +139,7 @@
         "tool": "system.snapshot",
         "ok": true,
         "code": null,
-        "ms": 2,
+        "ms": 1,
         "message": null
       },
       {
@@ -158,21 +160,21 @@
         "tool": "lab.status",
         "ok": true,
         "code": null,
-        "ms": 2,
+        "ms": 1,
         "message": null
       },
       {
         "tool": "models.capabilities",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
         "tool": "reason.contradictions",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -200,7 +202,7 @@
         "tool": "memory.migrate_preview",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -214,21 +216,21 @@
         "tool": "data.csv_parse",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
         "tool": "data.csv_generate",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
         "tool": "data.json_flatten",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -242,14 +244,14 @@
         "tool": "data.json_diff",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
         "tool": "data.table_group",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -284,7 +286,7 @@
         "tool": "data.join",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -298,14 +300,14 @@
         "tool": "stats.percentile",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
         "tool": "stats.histogram",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -340,7 +342,7 @@
         "tool": "stats.sample",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -368,28 +370,28 @@
         "tool": "text.redact",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
         "tool": "text.slugify",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
         "tool": "text.levenshtein",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
         "tool": "text.similarity",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -403,7 +405,7 @@
         "tool": "text.keywords",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -424,7 +426,7 @@
         "tool": "time.diff",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -466,21 +468,21 @@
         "tool": "reranker.status",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
         "tool": "communication.status",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
         "tool": "communication.history",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -508,14 +510,14 @@
         "tool": "science.quadratic",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
         "tool": "science.gcd_lcm",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
@@ -529,14 +531,14 @@
         "tool": "planning.critical_path",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
         "tool": "planning.pert",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
@@ -550,7 +552,7 @@
         "tool": "calendar.week_number",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -585,14 +587,14 @@
         "tool": "calendar.upcoming",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
         "tool": "calendar.export_ics",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
@@ -613,7 +615,7 @@
         "tool": "specialists.status",
         "ok": true,
         "code": null,
-        "ms": 4,
+        "ms": 3,
         "message": null
       },
       {
@@ -655,7 +657,7 @@
         "tool": "encode.uuid",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -704,7 +706,7 @@
         "tool": "finx.fee_adjusted_return",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -732,14 +734,14 @@
         "tool": "finx.margin",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
         "tool": "finx.markup",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
@@ -767,7 +769,7 @@
         "tool": "finx.real_return",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -795,7 +797,7 @@
         "tool": "finx.vat_add",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
@@ -809,7 +811,7 @@
         "tool": "geom.arc_length",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -837,7 +839,7 @@
         "tool": "geom.cuboid_volume",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -865,7 +867,7 @@
         "tool": "geom.midpoint_2d",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
@@ -886,7 +888,7 @@
         "tool": "geom.rectangle_perimeter",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -935,7 +937,7 @@
         "tool": "geom.triangle_area_base_height",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
@@ -949,7 +951,7 @@
         "tool": "basex.binary_string",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -984,7 +986,7 @@
         "tool": "basex.to_decimal",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
@@ -1005,7 +1007,7 @@
         "tool": "bits.next_power_of_two",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -1145,14 +1147,14 @@
         "tool": "numext.acosh",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
         "tool": "numext.add",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
@@ -1208,7 +1210,7 @@
         "tool": "numext.ceil",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -1222,7 +1224,7 @@
         "tool": "numext.combinations",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
@@ -1264,7 +1266,7 @@
         "tool": "numext.exp",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -1292,7 +1294,7 @@
         "tool": "numext.gcd",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
@@ -1334,7 +1336,7 @@
         "tool": "numext.lerp",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -1369,7 +1371,7 @@
         "tool": "numext.max",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
@@ -1404,7 +1406,7 @@
         "tool": "numext.percent_of",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -1446,7 +1448,7 @@
         "tool": "numext.remap",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
@@ -1474,7 +1476,7 @@
         "tool": "numext.sin",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -1530,7 +1532,7 @@
         "tool": "seqx.arithmetic_nth",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
@@ -1544,7 +1546,7 @@
         "tool": "seqx.batch",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -1579,7 +1581,7 @@
         "tool": "seqx.geometric_sum",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -1593,7 +1595,7 @@
         "tool": "seqx.square_pyramidal",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
@@ -1621,7 +1623,7 @@
         "tool": "setx.difference",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": 2,
         "message": null
       },
       {
@@ -1663,28 +1665,28 @@
         "tool": "setx.union",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
         "tool": "phys.acceleration",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
         "tool": "phys.centripetal_acceleration",
         "ok": true,
         "code": null,
-        "ms": 2,
+        "ms": null,
         "message": null
       },
       {
         "tool": "phys.density",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -1733,14 +1735,14 @@
         "tool": "phys.kinetic_energy",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
         "tool": "phys.momentum",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -1796,7 +1798,7 @@
         "tool": "phys.velocity",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -1817,7 +1819,7 @@
         "tool": "phys.weight",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
@@ -1852,7 +1854,7 @@
         "tool": "unitsx.dms_to_decimal",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -1936,7 +1938,7 @@
         "tool": "checksumx.constant_time_check_prefix",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -1950,7 +1952,7 @@
         "tool": "checksumx.hmac_sha256",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
@@ -1964,7 +1966,7 @@
         "tool": "checksumx.random_hex",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -2006,14 +2008,14 @@
         "tool": "statx.coefficient_of_variation",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
         "tool": "statx.correlation_pearson",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -2097,7 +2099,7 @@
         "tool": "statx.iqr",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
@@ -2139,14 +2141,14 @@
         "tool": "statx.mode",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
         "tool": "statx.moving_average",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
@@ -2188,7 +2190,7 @@
         "tool": "statx.stddev_population",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -2216,7 +2218,7 @@
         "tool": "statx.variance_sample",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
@@ -2244,7 +2246,7 @@
         "tool": "fmtx.bullet_list",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -2265,7 +2267,7 @@
         "tool": "fmtx.csv_quote",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
@@ -2279,7 +2281,7 @@
         "tool": "fmtx.from_roman",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -2321,14 +2323,14 @@
         "tool": "fmtx.scientific",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
         "tool": "fmtx.table_markdown",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -2384,14 +2386,14 @@
         "tool": "txtx.count_sentences",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
         "tool": "txtx.count_words",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -2468,14 +2470,14 @@
         "tool": "txtx.mask",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
         "tool": "txtx.ngrams",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
@@ -2496,14 +2498,14 @@
         "tool": "txtx.remove_diacritics",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
         "tool": "txtx.reverse",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
@@ -2531,14 +2533,14 @@
         "tool": "txtx.snake_case",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
         "tool": "txtx.strip_html",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
@@ -2559,7 +2561,7 @@
         "tool": "txtx.truncate",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -2573,7 +2575,7 @@
         "tool": "txtx.upper",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
@@ -2615,7 +2617,7 @@
         "tool": "datex.add_hours",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
@@ -2636,7 +2638,7 @@
         "tool": "datex.business_days_between",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -2657,7 +2659,7 @@
         "tool": "datex.days_in_month",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
@@ -2692,7 +2694,7 @@
         "tool": "datex.end_of_month",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -2713,7 +2715,7 @@
         "tool": "datex.iso_week",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
@@ -2748,7 +2750,7 @@
         "tool": "datex.start_of_month",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -2775,5 +2777,5 @@
     ],
     "note": "Only these tools were executed. Every other tool is unverified, not \"verified\"."
   },
-  "unexecuted": 282
+  "unexecuted": 301
 }
