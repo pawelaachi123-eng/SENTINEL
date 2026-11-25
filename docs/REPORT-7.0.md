@@ -197,8 +197,8 @@ additionally require `--consent <token>` that a model cannot mint.
 7. **No live model/GPU/provider measurements; no real call, SMS or email.**
 8. **No multi-file parser-backed patch engine, GraphRAG pipeline, scheduler or UI
    communication actions.**
-9. **Installer not executed; Windows CI for 7.0 not yet run at the time of this
-   writing.** The final CI result is recorded in the PR/commit status.
+9. **Installer not executed.** Windows/Linux source CI is green for this slice;
+   the installer itself has not been run on a Windows machine.
 10. **No binary artifacts by design.** Android/ESP32 source exists but was not
     compiled or tested on hardware.
 
