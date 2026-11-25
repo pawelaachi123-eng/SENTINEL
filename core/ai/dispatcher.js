@@ -71,7 +71,32 @@ class Dispatcher {
       approvals,
       toolLog,
       async tool(name, args = {}) {
-        const result = await dispatcher.tools.execute(name, args, { source: 'ai', sessionId, signal, runId });
+        let advisory = null;
+        const specialists = dispatcher.services && dispatcher.services.specialists;
+        const descriptor = dispatcher.tools.get ? dispatcher.tools.get(name) : null;
+        if (specialists && descriptor) {
+          try {
+            const execution = dispatcher.tools.execution && dispatcher.tools.execution.get(name);
+            const predicted = specialists.failureRisk({
+              permission: descriptor.permission,
+              requiresNetwork: descriptor.requiresNetwork,
+              timeoutMs: descriptor.timeoutMs,
+              args,
+              retries: 0,
+              recentFailures: execution ? execution.fail : 0,
+              approval: false,
+              concurrentCalls: 0,
+              dependencyDepth: 0,
+              queueDelayMs: 0,
+              payloadRisk: false,
+            });
+            if (predicted && predicted.ok) advisory = { label: predicted.label, confidence: predicted.confidence, temperature: predicted.temperature, neural: predicted.neural, model: predicted.model };
+          } catch (err) {
+            if (dispatcher.log) dispatcher.log.debug('ai', `failure predictor unavailable: ${err.message}`);
+          }
+        }
+        const raw = await dispatcher.tools.execute(name, args, { source: 'ai', sessionId, signal, runId });
+        const result = advisory ? { ...raw, advisory } : raw;
         dispatcher.counters.toolCalls += 1;
         toolLog.push({ name, ok: result.ok, code: result.code || null, ms: result.ms });
         if (result.code === 'APPROVAL_REQUIRED' && result.approval) {

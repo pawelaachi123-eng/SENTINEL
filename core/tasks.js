@@ -184,6 +184,8 @@ class TaskManager {
       preconditions: Array.isArray(step.preconditions) ? step.preconditions.slice(0, 6) : [],
       acceptance: step.acceptance || step.acceptanceCriteria || null,
       dependsOn: Array.isArray(step.dependsOn) ? step.dependsOn : [],
+      when: step.when || null,
+      conditionSkipped: false,
       status: 'pending',
       attempts: 0,
       maxAttempts: Math.max(1, Math.min(Number(step.maxAttempts || (policy && policy.maxAttempts) || DEFAULT_POLICY.maxAttempts), 5)),
@@ -438,7 +440,7 @@ class TaskManager {
    * backoff instead of being retried in a tight loop.
    */
   /** Marks a step as superseded by a replanned branch; its error is preserved. */
-  skipStep(id, stepId, reason = 'superseded by a replanned step') {
+  skipStep(id, stepId, reason = 'superseded by a replanned step', { conditional = false } = {}) {
     const task = this.get(id);
     if (!task) return null;
     const step = task.steps.find((entry) => entry.id === stepId);
@@ -446,6 +448,7 @@ class TaskManager {
     step.status = 'skipped';
     step.superseded = true;
     step.supersededReason = String(reason).slice(0, 200);
+    step.conditionSkipped = Boolean(conditional);
     step.finishedAt = this.now();
     task.progress = Math.round((task.steps.filter((entry) => entry.status === 'done' || entry.status === 'skipped').length / Math.max(1, task.steps.length)) * 100);
     this.persist(task);
@@ -532,10 +535,11 @@ class TaskManager {
     if (['paused', 'cancelled', 'done', 'failed', 'timeout', 'interrupted'].includes(task.status)) return [];
     if (task.deadline && this.now() > task.deadline) return [];
     const status = new Map(task.steps.map((step) => [step.id, step.status]));
+    const satisfied = (dependency) => status.get(dependency) === 'done' || (task.steps.find((step) => step.id === dependency) || {}).conditionSkipped === true;
     return task.steps.filter((step) => {
       if (['running', 'done', 'skipped', 'failed', 'cancelled'].includes(step.status)) return false;
       if (step.nextAttemptAt && step.nextAttemptAt > this.now()) return false;
-      return (step.dependsOn || []).every((dependency) => status.get(dependency) === 'done');
+      return (step.dependsOn || []).every(satisfied);
     });
   }
 
@@ -544,7 +548,11 @@ class TaskManager {
     const task = this.get(id);
     if (!task) return [];
     const status = new Map(task.steps.map((step) => [step.id, step.status]));
-    return task.steps.filter((step) => step.status === 'pending' && (step.dependsOn || []).some((dependency) => ['failed', 'skipped'].includes(status.get(dependency))));
+    return task.steps.filter((step) => step.status === 'pending' && (step.dependsOn || []).some((dependency) => {
+      const parent = task.steps.find((entry) => entry.id === dependency);
+      if (parent && parent.conditionSkipped) return false;
+      return ['failed', 'skipped'].includes(status.get(dependency));
+    }));
   }
 
   cancelAll(reason = 'global stop') {

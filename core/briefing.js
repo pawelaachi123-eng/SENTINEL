@@ -21,18 +21,19 @@ function parseTime(value) {
 }
 
 class DailyBriefing {
-  constructor({ memory = null, tasks = null, hypercore = null, approvals = null, now = () => Date.now() } = {}) {
+  constructor({ memory = null, tasks = null, hypercore = null, approvals = null, calendar = null, now = () => Date.now() } = {}) {
     this.memory = memory;
     this.tasks = tasks;
     this.hypercore = hypercore;
     this.approvals = approvals;
+    this.calendar = calendar;
     this.now = now;
   }
 
   generate({ horizonHours = 24, limit = 12 } = {}) {
     const now = this.now();
     const horizon = now + Math.max(1, Math.min(30 * 24, Number(horizonHours) || 24)) * 3600000;
-    const sections = { overdue: [], upcoming: [], tasks: [], goals: [], conflicts: [], approvals: [], notes: [] };
+    const sections = { overdue: [], upcoming: [], tasks: [], goals: [], conflicts: [], approvals: [], calendar: [], notes: [] };
 
     if (this.memory && typeof this.memory.due === 'function') {
       for (const entry of this.memory.due({ before: now, limit: 50 })) {
@@ -42,6 +43,12 @@ class DailyBriefing {
       for (const record of records) {
         if (record.kind !== 'prospective' || !record.dueAt || record.supersededBy) continue;
         if (record.dueAt > now && record.dueAt <= horizon) sections.upcoming.push({ id: record.id, text: record.text, dueAt: iso(record.dueAt), kind: 'reminder', source: 'memory.due' });
+      }
+    }
+
+    if (this.calendar && typeof this.calendar.upcoming === 'function') {
+      for (const event of this.calendar.upcoming({ from: now, to: horizon, limit: 30 })) {
+        sections.calendar.push({ id: event.id, text: event.summary, start: iso(event.start), end: iso(event.end), recurring: event.occurrence === true, source: 'calendar.upcoming' });
       }
     }
 
@@ -76,12 +83,14 @@ class DailyBriefing {
       ...sections.approvals.map((item) => ({ ...item, section: 'approvals', urgency: 0.8 })),
       ...sections.tasks.map((item) => ({ ...item, section: 'tasks', urgency: 0.7 })),
       ...sections.goals.map((item) => ({ ...item, section: 'goals', urgency: item.overdue ? 0.95 : 0.6 })),
+      ...sections.calendar.map((item) => ({ ...item, section: 'calendar', urgency: 0.55 })),
       ...sections.upcoming.map((item) => ({ ...item, section: 'upcoming', urgency: 0.5 })),
     ].sort((a, b) => b.urgency - a.urgency || String(a.id).localeCompare(String(b.id))).slice(0, Math.max(1, Math.min(50, Number(limit) || 12)));
 
     const lines = ordered.map((item, index) => {
       if (item.section === 'overdue') return `${index + 1}. PO TERMINIE: ${item.text} (${item.dueAt}) [${item.id}]`;
       if (item.section === 'upcoming') return `${index + 1}. Wkrótce: ${item.text} (${item.dueAt}) [${item.id}]`;
+      if (item.section === 'calendar') return `${index + 1}. Kalendarz: ${item.text} (${item.start}${item.recurring ? ', powtarza się' : ''}) [${item.id}]`;
       if (item.section === 'tasks') return `${index + 1}. Zadanie ${item.status} (${item.progress || 0}%): ${item.text} [${item.id}]`;
       if (item.section === 'goals') return `${index + 1}. Cel ${item.status} (p${item.priority}${item.deadline ? `, do ${item.deadline}` : ''}): ${item.text} [${item.id}]`;
       if (item.section === 'conflicts') return `${index + 1}. Sprzeczność do rozstrzygnięcia: ${item.values.map((value) => JSON.stringify(value)).join(' vs ')} [${item.id}]`;

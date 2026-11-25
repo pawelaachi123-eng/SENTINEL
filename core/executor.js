@@ -113,6 +113,33 @@ class Executor {
     return { ok: errors.length === 0, errors, question };
   }
 
+  /** A small, explicit condition language; no eval and no model-generated code. */
+  evaluateWhen(condition, results) {
+    if (!condition) return true;
+    if (typeof condition === 'boolean') return condition;
+    if (typeof condition === 'string') {
+      if (condition === 'true') return true;
+      if (condition === 'false') return false;
+      return Object.prototype.hasOwnProperty.call(results, condition) && Boolean(results[condition]);
+    }
+    if (typeof condition !== 'object') return true;
+    if (Array.isArray(condition.all)) return condition.all.every((entry) => this.evaluateWhen(entry, results));
+    if (Array.isArray(condition.any)) return condition.any.some((entry) => this.evaluateWhen(entry, results));
+    if (condition.not) return !this.evaluateWhen(condition.not, results);
+    const value = condition.step ? results[condition.step] : condition.value;
+    const picked = condition.path && value && typeof value === 'object' ? condition.path.split('.').reduce((current, key) => (current === undefined || current === null ? undefined : current[key]), value) : value;
+    const op = condition.op || (condition.equals !== undefined ? 'eq' : condition.exists !== undefined ? 'exists' : 'eq');
+    if (op === 'exists') return (picked !== undefined && picked !== null) === (condition.exists !== false);
+    if (op === 'eq') return picked === condition.value;
+    if (op === 'neq') return picked !== condition.value;
+    if (op === 'truthy') return Boolean(picked);
+    if (op === 'falsy') return !picked;
+    if (op === 'contains') return Array.isArray(picked) ? picked.includes(condition.value) : String(picked ?? '').includes(String(condition.value));
+    if (op === 'gte') return Number(picked) >= Number(condition.value);
+    if (op === 'lte') return Number(picked) <= Number(condition.value);
+    return false;
+  }
+
   /** Classification used for concurrency and retry decisions. */
   classify(step) {
     if (step.tool) {
@@ -355,7 +382,20 @@ class Executor {
 
       this.emit(taskId, 'batch', { steps: batch.map((entry) => entry.step.id), parallel: batch.length > 1 });
 
-      const outcomes = await Promise.all(batch.map(async ({ step, info }) => {
+      const runnable = [];
+      for (const entry of batch) {
+        const { step } = entry;
+        const allowed = this.evaluateWhen(step.when, results);
+        if (!allowed) {
+          this.tasks.skipStep(taskId, step.id, `condition not met: ${JSON.stringify(step.when).slice(0, 160)}`, { conditional: true });
+          this.emit(taskId, 'step-skipped', { step: step.id, reason: 'condition' });
+          continue;
+        }
+        runnable.push(entry);
+      }
+      if (!runnable.length) continue;
+
+      const outcomes = await Promise.all(runnable.map(async ({ step, info }) => {
         if (info.kind === 'tool') counters.toolCalls += 1;
         else counters.modelCalls += 1;
         this.tasks.stepStart(taskId, step.id);

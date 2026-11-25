@@ -509,6 +509,28 @@ class HttpApi {
       return this.json(res, 200, { ok: true, data: this.ai.briefing.generate({ horizonHours: 24 }) });
     }
 
+    if (route === '/api/calendar' && req.method === 'GET') {
+      if (!this.ai || !this.ai.calendar) return this.json(res, 503, { ok: false, error: 'Calendar not ready' });
+      const now = Date.now();
+      const days = Math.max(0.01, Math.min(366, Number(new URL(req.url, 'http://local').searchParams.get('days')) || 7));
+      const events = this.ai.calendar.upcoming({ from: now, to: now + days * 86400000, limit: 200 });
+      return this.json(res, 200, { ok: true, data: { ...this.ai.calendar.status(), days, events } });
+    }
+
+    if (route === '/api/calendar/event' && req.method === 'POST') {
+      if (!this.ai || !this.ai.calendar) return this.json(res, 503, { ok: false, error: 'Calendar not ready' });
+      const body = await this.body(req).catch(() => ({}));
+      const result = this.ai.calendar.add({ summary: body.summary, start: body.start, durationMinutes: body.durationMinutes, description: body.description, rrule: body.rrule }, { source: 'http' });
+      return this.json(res, result.ok ? 201 : 400, result.ok ? { ok: true, data: result.event } : { ok: false, code: result.code, error: result.message });
+    }
+
+    if (route === '/api/calendar/import' && req.method === 'POST') {
+      if (!this.ai || !this.ai.calendar) return this.json(res, 503, { ok: false, error: 'Calendar not ready' });
+      const body = await this.body(req).catch(() => ({}));
+      const result = this.ai.calendar.importIcs(String(body.ics || ''));
+      return this.json(res, result.ok ? 200 : 400, { ok: result.ok, data: { imported: result.imported, updated: result.updated, unchanged: result.unchanged, errors: result.errors } });
+    }
+
     if (route === '/api/proactive' && req.method === 'GET') {
       if (!this.ai || !this.ai.proactive) return this.json(res, 503, { ok: false, error: 'Proactive engine not ready' });
       return this.json(res, 200, { ok: true, data: this.ai.proactive.status() });
@@ -524,10 +546,13 @@ class HttpApi {
       const body = await this.body(req).catch(() => ({}));
       const task = String(body.task || 'tools');
       const text = String(body.text || '').slice(0, 2000);
-      if (!text) return this.json(res, 400, { ok: false, error: 'text is required' });
+      if (!text && task !== 'failure') return this.json(res, 400, { ok: false, error: 'text is required' });
       let result;
       if (task === 'relevance') result = this.ai.specialists.memoryRelevance({ query: text, memory: String(body.memory || '').slice(0, 4000), recency: body.recency, importance: body.importance });
       else if (task === 'complexity') result = this.ai.specialists.complexity(text);
+      else if (task === 'semantic') result = this.ai.specialists.semanticSimilarity({ query: text, passage: String(body.passage || '').slice(0, 4000) });
+      else if (task === 'context') result = this.ai.specialists.contextImportance({ query: text, chunk: String(body.chunk || '').slice(0, 4000), position: Number(body.position) || 0 });
+      else if (task === 'failure') result = this.ai.specialists.failureRisk({ ...(body.descriptor || {}), permission: body.permission || (body.descriptor && body.descriptor.permission) || 'read' });
       else result = this.ai.specialists.predict(task, text);
       return this.json(res, result.ok ? 200 : 400, { ok: Boolean(result.ok), data: result, code: result.code || null, error: result.message || null });
     }

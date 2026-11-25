@@ -38,6 +38,8 @@ jobs:
         run: node test/ai.js
       - name: Deep checks (cognition, neural, memory, executor, tools)
         run: node test/deep.js
+      - name: Property tests (seeded invariants)
+        run: node test/properties.js
       - name: Deterministic evaluation suite (providers disabled)
         run: node scripts/eval.js
       - name: Tool inventory audit (structure + real executions)

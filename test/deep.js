@@ -1011,6 +1011,36 @@ test('the executor runs a DAG in dependency order and injects typed outputs', as
   assert.equal(h.tasks.get(task.id).progress, 100);
 });
 
+test('conditional steps branch on typed results without eval and do not block their branch', async () => {
+  const h = harness({ tools: { 'fake.read': { permission: 'read', result: { mode: 'skip', value: 3 } }, 'fake.other': { permission: 'read', result: { value: 9 } } } });
+  const task = h.tasks.create({
+    title: 'conditional',
+    steps: [
+      { id: 'probe', title: 'probe', tool: 'fake.read' },
+      { id: 'skipped', title: 'should not run', tool: 'fake.other', dependsOn: ['probe'], when: { step: 'probe', path: 'mode', op: 'eq', value: 'run' } },
+      { id: 'after', title: 'branch continues', tool: 'fake.other', dependsOn: ['skipped'] },
+    ],
+  });
+  const result = await h.executor.run(task.id);
+  assert.equal(result.status, 'done', JSON.stringify(result.error));
+  assert.equal(result.steps.find((step) => step.step.id === 'skipped').skipped, true);
+  assert.equal(result.steps.find((step) => step.step.id === 'after').ok, true);
+  assert.equal(h.calls.tools.filter((call) => call.name === 'fake.other').length, 1);
+  assert.equal(h.tasks.get(task.id).steps.find((step) => step.id === 'skipped').conditionSkipped, true);
+
+  const h2 = harness({ tools: { 'fake.read': { permission: 'read', result: { mode: 'run' } }, 'fake.other': { permission: 'read', result: { value: 1 } } } });
+  const task2 = h2.tasks.create({
+    title: 'conditional true',
+    steps: [
+      { id: 'probe', title: 'probe', tool: 'fake.read' },
+      { id: 'runs', title: 'runs', tool: 'fake.other', dependsOn: ['probe'], when: { all: [{ step: 'probe', path: 'mode', op: 'eq', value: 'run' }, { not: { step: 'probe', path: 'mode', op: 'eq', value: 'stop' } }] } },
+    ],
+  });
+  const second = await h2.executor.run(task2.id);
+  assert.equal(second.status, 'done', JSON.stringify(second.error));
+  assert.equal(second.steps.find((step) => step.step.id === 'runs').ok, true);
+});
+
 test('read-only steps run concurrently; a write step is serialised', async () => {
   const h = harness({ dispatcherDelay: 60 });
   const parallel = h.tasks.create({
@@ -2926,6 +2956,40 @@ test('the 7.0 tool packs are registered with valid schemas', async () => {
   }
 });
 
+test('calendar imports real ICS, expands bounded recurrence and never invents a timezone', () => {
+  const { CalendarStore } = require('../core/calendar');
+  const clock = Date.parse('2026-03-10T12:00:00Z');
+  const store = new CalendarStore({ now: () => clock });
+  const ics = [
+    'BEGIN:VCALENDAR', 'X-WR-CALNAME:Praca', 'BEGIN:VEVENT', 'UID:standup', 'DTSTART:20260311T090000Z', 'DTEND:20260311T091500Z', 'SUMMARY:Standup\, zespół', 'DESCRIPTION:Linia\\nDruga', 'END:VEVENT',
+    'BEGIN:VEVENT', 'DTSTART;TZID=Europe/Warsaw:20260312T100000', 'SUMMARY:Lekcja', 'RRULE:FREQ=DAILY;COUNT=3', 'END:VEVENT',
+    'BEGIN:VEVENT', 'DTSTART:not-a-date', 'SUMMARY:broken', 'END:VEVENT', 'END:VCALENDAR',
+  ].join('\r\n');
+  const imported = store.importIcs(ics);
+  assert.equal(imported.imported, 2);
+  assert.equal(imported.errors.length, 1);
+  assert.equal(imported.calendarName, 'Praca');
+  const standup = [...store.events.values()].find((event) => event.uid === 'standup');
+  assert.equal(standup.summary, 'Standup, zespół');
+  assert.equal(standup.description, 'Linia\nDruga');
+  const lesson = [...store.events.values()].find((event) => event.uid !== 'standup');
+  assert.equal(lesson.timezone, 'Europe/Warsaw');
+  assert.equal(Number.isFinite(lesson.start), true);
+  const upcoming = store.upcoming({ from: clock, to: clock + 5 * 86400000, limit: 20 });
+  assert.equal(upcoming.filter((event) => event.uid === lesson.uid).length, 3);
+  assert.ok(upcoming.every((event) => event.summary && Number.isFinite(event.start)));
+  const updated = store.importIcs(ics.replace(/^SUMMARY:Standup.*$/m, 'SUMMARY:Standup po zmianie'));
+  assert.equal(updated.imported, 0);
+  assert.equal(updated.updated, 1);
+  assert.equal([...store.events.values()].filter((event) => event.uid === 'standup').length, 1);
+  const exported = store.exportIcs({ from: clock, to: clock + 5 * 86400000 });
+  assert.match(exported, /BEGIN:VCALENDAR/);
+  assert.match(exported, /SUMMARY:Standup po zmianie/);
+  assert.ok((exported.match(/UID:standup/g) || []).length === 1);
+  assert.equal(store.status().sources.includes('ics'), true);
+  assert.equal(store.add({ summary: '', start: clock }).ok, false);
+});
+
 test('daily briefing composes cited state and never invents an appointment', () => {
   const { DailyBriefing } = require('../core/briefing');
   const now = Date.parse('2026-03-10T12:00:00Z');
@@ -2972,13 +3036,13 @@ test('proactive rules are opt-in, deduplicated, quiet-hour aware and honest abou
   assert.match(status.honesty, /no microphone/);
 });
 
-test('four specialists train, clear their named baselines and serve gated predictions', () => {
+test('seven specialists train, clear their named baselines and serve calibrated gated predictions', () => {
   const { SpecialistZoo } = require('../core/specialists');
   const dir = fs.mkdtempSync(path.join(home, 'specialists-train-'));
   const zoo = new SpecialistZoo({ paths: { dataDir: () => dir } });
   assert.equal(zoo.train('tools', {}).code, 'APPROVAL_REQUIRED');
   assert.equal(zoo.recommendTool('sprawdź RAM').code, 'NO_MODEL');
-  for (const task of ['tools', 'routing', 'relevance', 'complexity']) {
+  for (const task of ['tools', 'routing', 'relevance', 'complexity', 'semantic', 'context', 'failure']) {
     const trained = zoo.train(task, { approvedBy: 'deep-test' });
     assert.equal(trained.ok, true, `${task}: ${trained.message}`);
     const experiment = trained.experiment;
@@ -2995,9 +3059,123 @@ test('four specialists train, clear their named baselines and serve gated predic
   assert.equal(simple.label, 'simple');
   const hard = zoo.complexity('zbadaj temat, zbierz źródła, porównaj i napisz raport');
   assert.ok(['medium', 'complex'].includes(hard.label), 'complexity model returned an unknown label');
+  assert.equal(zoo.semanticSimilarity({ query: 'jak przywrócić backup', passage: 'Przywróć z zweryfikowanej migawki i sprawdź sumę kontrolną.' }).label, 'match');
+  assert.equal(zoo.contextImportance({ query: 'zaplanuj wdrożenie bez utraty danych', chunk: 'Najpierw wykonaj backup i sprawdź sumę kontrolną.' }).label, 'critical');
+  const highRiskScenario = require('../core/ml/data/specialists-ext').failure.items.find((item) => item.label === 'high');
+  const risk = zoo.failureRisk(highRiskScenario);
+  assert.equal(risk.label, 'high', `unexpected failure risk ${risk.label}`);
+  assert.ok(risk.confidence > 0.5);
   const status = zoo.status();
-  assert.equal(status.specialists.filter((entry) => entry.active).length, 4);
+  assert.equal(status.specialists.filter((entry) => entry.active).length, 7);
   assert.ok(fs.existsSync(zoo.experiments('tools')[0].artifact.path));
+  assert.ok(status.specialists.every((entry) => entry.active.calibration && Number.isFinite(entry.active.calibration.temperature)));
+});
+
+test('temperature calibration is fitted on validation rows and reports ECE before and after', () => {
+  const cal = require('../core/ml/calibration');
+  const rows = [
+    { probabilities: [0.99, 0.01], label: 0, predicted: 0 },
+    { probabilities: [0.95, 0.05], label: 0, predicted: 0 },
+    { probabilities: [0.90, 0.10], label: 1, predicted: 0 },
+    { probabilities: [0.80, 0.20], label: 0, predicted: 0 },
+    { probabilities: [0.70, 0.30], label: 1, predicted: 0 },
+  ];
+  const fit = cal.fitTemperature(rows);
+  assert.ok(fit.temperature >= 0.75 && fit.temperature <= 2);
+  const before = cal.summary(rows, 1);
+  const after = cal.summary(rows, fit.temperature);
+  assert.ok(after.brier <= before.brier + 1e-9, `Brier worsened: ${before.brier} → ${after.brier}`);
+  assert.ok(after.ece <= before.ece + 1e-9, `ECE worsened: ${before.ece} → ${after.ece}`);
+  const probabilities = cal.tempered([0.8, 0.15, 0.05], fit.temperature);
+  assert.ok(Math.abs(probabilities.reduce((sum, value) => sum + value, 0) - 1) < 1e-9);
+  assert.equal(probabilities.indexOf(Math.max(...probabilities)), 0);
+});
+
+test('group-disjoint specialist datasets keep test topics and scenarios out of training', () => {
+  const { SpecialistZoo } = require('../core/specialists');
+  const dir = fs.mkdtempSync(path.join(home, 'specialists-groups-'));
+  const zoo = new SpecialistZoo({ paths: { dataDir: () => dir } });
+  for (const task of ['semantic', 'context', 'failure']) {
+    const spec = zoo.spec(task);
+    const split = zoo.split(spec);
+    const trainGroups = new Set(split.train.map((item) => item.group));
+    const testGroups = new Set(split.test.map((item) => item.group));
+    assert.ok(split.test.length >= 80, `${task} only ${split.test.length} test cases`);
+    for (const group of testGroups) assert.ok(!trainGroups.has(group), `${task} leaked group ${group}`);
+    for (const label of spec.labels) {
+      assert.ok(split.train.some((item) => item.label === label), `${task} training lacks ${label}`);
+      assert.ok(split.test.some((item) => item.label === label), `${task} test lacks ${label}`);
+    }
+  }
+});
+
+test('brain reranks memory and context with trained specialist predictions', () => {
+  const { Brain } = require('../core/brain');
+  const now = Date.parse('2026-03-10T12:00:00Z');
+  const fake = {
+    memoryRelevance: ({ memory }) => ({ ok: true, label: /backup|kopi/i.test(memory) ? 'relevant' : 'irrelevant', confidence: 0.92, temperature: 1.1 }),
+    contextImportance: ({ chunk }) => ({ ok: true, label: /backup|kopi/i.test(chunk) ? 'critical' : 'background', confidence: 0.88, temperature: 0.9 }),
+  };
+  const brain = new Brain({ specialists: fake, now: () => now });
+  const memories = brain.rerankMemories('jak przywrócić backup', [
+    { record: { id: 'm1', text: 'Kawa jest w kuchni.', createdAt: now }, score: 1 },
+    { record: { id: 'm2', text: 'Procedura przywracania kopii zapasowej.', createdAt: now }, score: 0.4 },
+  ]);
+  assert.equal(memories[0].record.id, 'm2');
+  assert.equal(memories[0].neuralRelevance.label, 'relevant');
+  assert.equal(memories[1].neuralRelevance.label, 'irrelevant');
+  const documents = brain.rerankDocuments('jak przywrócić backup', [
+    { id: 'd1', text: 'Kawa jest w kuchni.', score: 1 },
+    { id: 'd2', text: 'Backup: sprawdź sumę kontrolną przed przywróceniem.', score: 0.3 },
+  ]);
+  assert.equal(documents[0].id, 'd2');
+  assert.equal(documents[0].neuralImportance.label, 'critical');
+  assert.equal(documents[1].neuralImportance.label, 'background');
+});
+
+test('the dispatcher attaches an advisory failure prediction without blocking execution', async () => {
+  const { Dispatcher } = require('../core/ai/dispatcher');
+  const { AgentRegistry } = require('../core/ai/agents');
+  const agents = new AgentRegistry();
+  let calls = 0;
+  const tools = {
+    get: () => ({ permission: 'system', requiresNetwork: true, timeoutMs: 30000 }),
+    execution: new Map(),
+    execute: async () => { calls += 1; return { ok: true, data: 42 }; },
+  };
+  const dispatcher = new Dispatcher({ agents, tools, llm: null, config: { get: () => null }, services: { specialists: { failureRisk: () => ({ ok: true, label: 'high', confidence: 0.8, temperature: 1.2, model: { experimentId: 'fake' } }) } } });
+  const runtime = dispatcher.createRuntime({ text: 'run', sessionId: 's' });
+  const result = await runtime.tool('system.snapshot', {});
+  assert.equal(calls, 1);
+  assert.equal(result.ok, true);
+  assert.equal(result.advisory.label, 'high');
+  assert.equal(result.advisory.confidence, 0.8);
+});
+
+test('unified retrieval fuses lexical, vector and graph scores with honest provenance', () => {
+  const { UnifiedRetriever, bm25Scores, benchmarkFromRelevanceData } = require('../core/retrieval/unified');
+  const { cases } = require('../core/ml/data/relevance');
+  const documents = [
+    { id: 'backup', text: 'Przywróć kopię zapasową z zweryfikowanej migawki i sprawdź sumę kontrolną.', group: 'backup', tags: ['backup', 'restore'] },
+    { id: 'gpu', text: 'Karta graficzna wymaga przepływu powietrza i limitu mocy.', group: 'gpu', tags: ['gpu'] },
+    { id: 'coffee', text: 'Kawa jest w kuchni.', group: 'kitchen', tags: [] },
+  ];
+  const retriever = new UnifiedRetriever({ documents });
+  const result = retriever.search('jak przywrócić kopię zapasową', { limit: 2 });
+  assert.equal(result.ok, true);
+  assert.equal(result.results[0].id, 'backup');
+  assert.ok(result.results[0].lexical > 0);
+  assert.ok(result.results[0].provenance.group === 'backup');
+  assert.equal(typeof result.provenance.neural, 'object');
+  const bm25 = bm25Scores(documents, 'kawa');
+  assert.ok(bm25[2] > bm25[0]);
+  const { documents: corpus, cases: items } = benchmarkFromRelevanceData(cases());
+  assert.ok(corpus.length > 40 && items.length > 40);
+  const report = new UnifiedRetriever({ documents: corpus }).benchmark(items, { k: 3 });
+  for (const mode of ['lexical', 'vector', 'hybrid', 'neural']) {
+    assert.ok(report.modes[mode].ndcgAtK >= 0 && report.modes[mode].ndcgAtK <= 1);
+    assert.ok(report.latency[mode].p95 >= report.latency[mode].p50);
+  }
 });
 
 test('a promoted routing model can supply the dispatcher hint without overriding strong keywords', () => {

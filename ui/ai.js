@@ -1160,7 +1160,7 @@
     if (!host) return;
     host.textContent = 'Czytam laboratorium…';
     try {
-      const [lab, neural, research, hypercore, reranker, comm, briefing, proactive, specialists] = await Promise.all([api('/api/lab'), api('/api/neural'), api('/api/research'), api('/api/hypercore'), api('/api/reranker'), api('/api/communication'), api('/api/briefing'), api('/api/proactive'), api('/api/specialists')]);
+      const [lab, neural, research, hypercore, reranker, comm, briefing, proactive, specialists, calendar] = await Promise.all([api('/api/lab'), api('/api/neural'), api('/api/research'), api('/api/hypercore'), api('/api/reranker'), api('/api/communication'), api('/api/briefing'), api('/api/proactive'), api('/api/specialists'), api('/api/calendar?days=7')]);
       const data = lab.data || {};
       host.textContent = '';
       const active = data.active;
@@ -1215,14 +1215,20 @@
         el('h3', { text: 'Proaktywność' }),
         el('p', { class: 'mini-card-desc', text: proactive.data && proactive.data.counts ? `${proactive.data.counts.enabled}/${proactive.data.counts.rules} reguł · kanał: ${proactive.data.deliveryConfigured ? 'skonfigurowany' : 'brak'}` : 'brak danych' }),
       ]);
+      const calEvents = calendar.data && Array.isArray(calendar.data.events) ? calendar.data.events : [];
+      const calendarBox = el('article', { class: 'card mini-card' }, [
+        el('h3', { text: 'Kalendarz' }),
+        el('p', { class: 'mini-card-desc', text: calendar.data ? `${calendar.data.events} wydarzeń w lokalnym kalendarzu · ${calEvents.length} w ciągu 7 dni` : 'brak danych' }),
+        el('div', { class: 'mini-card-tags' }, calEvents.slice(0, 3).map((entry) => el('span', { class: 'tag', text: `${new Date(entry.start).toISOString().slice(0, 10)} ${entry.summary}` }))),
+      ]);
       const specActive = specialists.data && specialists.data.specialists ? specialists.data.specialists.filter((entry) => entry.active) : [];
       const specBox = el('article', { class: 'card mini-card' }, [
         el('h3', { text: 'Specjaliści' }),
-        el('p', { class: 'mini-card-desc', text: `${specActive.length}/4 aktywnych modeli` }),
+        el('p', { class: 'mini-card-desc', text: `${specActive.length}/${specialists.data && specialists.data.specialists ? specialists.data.specialists.length : 0} aktywnych modeli` }),
         el('div', { class: 'mini-card-tags' }, specActive.slice(0, 4).map((entry) => el('span', { class: 'tag', text: `${entry.task}: ${entry.active.metrics.accuracy} vs ${entry.active.baseline.accuracy}` }))),
         el('p', { class: 'mini-card-desc', text: specialists.data ? specialists.data.honest : 'brak danych' }),
       ]);
-      host.append(el('div', { class: 'grid-cards' }, [neuralBox, researchBox, hyperBox, rerankBox, commBox, briefBox, proactiveBox, specBox]));
+      host.append(el('div', { class: 'grid-cards' }, [neuralBox, researchBox, hyperBox, rerankBox, commBox, briefBox, proactiveBox, specBox, calendarBox]));
     } catch (err) {
       host.textContent = `Nie mogę wczytać laboratorium: ${err.message}`;
     }

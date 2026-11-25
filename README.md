@@ -130,7 +130,7 @@ and `node scripts/audit-tools.js` (**342** tools, **0** structural problems,
 **83** executed successfully, **259** explicitly unexecuted).
 
 Counts, measurements and the full delivery report are in
-[`docs/REPORT-7.0.md`](docs/REPORT-7.0.md), [`docs/REPORT-6.0.md`](docs/REPORT-6.0.md), [`docs/REPORT-5.0.md`](docs/REPORT-5.0.md), [`docs/REPORT-4.0.md`](docs/REPORT-4.0.md) and
+[`docs/REPORT-7.1.md`](docs/REPORT-7.1.md), [`docs/REPORT-7.0.md`](docs/REPORT-7.0.md), [`docs/REPORT-6.0.md`](docs/REPORT-6.0.md), [`docs/REPORT-5.0.md`](docs/REPORT-5.0.md), [`docs/REPORT-4.0.md`](docs/REPORT-4.0.md) and
 [`docs/PROGRESS.md`](docs/PROGRESS.md); research and licences in
 [`docs/research.md`](docs/research.md). Windows CI is green for 7.0 at the revision on the PR; no GPU was available, no
 live model evaluation was run, no real call was placed, and 259 tools remain

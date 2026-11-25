@@ -1,4 +1,4 @@
-# SENTINEL 7.0 — progress and verification log
+# SENTINEL 7.0–7.1 — progress and verification log
 
 Branch: `arena/15fbea48-sentinel`. **Source-only build: no EXE, MSI, APK, AAB,
 BIN, HEX or UF2, and no packaging/publishing jobs.** The persistent ledger is
@@ -305,3 +305,65 @@ node bin/sentinel-agent.js --open
 
 `SENTINEL_HOME` must be set when testing away from the default data directory;
 tests use temporary directories and never touch a real install.
+
+
+## 7.1 slice — neural specialists, retrieval measurement, conditional execution, calendar
+
+The authoritative requirement-level status is `docs/REQUIREMENTS-7.1.md`. This
+section records what changed and how it was measured; it does **not** claim the
+7.1 quotas were reached.
+
+### Implemented
+
+- **Three new specialists** (`semantic`, `context`, `failure`) trained on 1,852
+  authored items with group-disjoint splits. Seven models total.
+- **Calibration** (`core/ml/calibration.js`): temperature scaling with ECE and
+  Brier score; calibrated confidence only, labels unchanged.
+- **5-fold cross-validation** (`SpecialistZoo.crossValidate`) over all authored
+  items: tools 0.8734 vs 0.7722, routing 0.8936 vs 0.8085, relevance 0.975 vs
+  0.6833, complexity 0.9 vs 0.825.
+- **Integration**: brain reranks memory/context with specialist predictions;
+  dispatcher attaches an advisory failure prediction; routing hint can come
+  from a promoted model without overriding strong keywords.
+- **Seven specialist API/CLI paths** and seven tool entries; the UI card reports
+  active/total models without inventing activity.
+- **Unified retriever** (`core/retrieval/unified.js`): BM25 + hashed vector +
+  graph proximity + RRF, optional semantic/reranker boosts, provenance and
+  nDCG/MRR/recall/latency benchmark. New neural mode measured at NDCG@3 0.5040
+  vs lexical 0.4683; hybrid 0.4704. Hybrid's MRR is worse than lexical, so no
+  hybrid improvement is claimed.
+- **Conditional executor steps** (`when` with `all/any/not` and typed operators,
+  no eval). A false condition is recorded as `conditionSkipped` and does not
+  block dependents. Both branches are tested.
+- **Calendar** (`core/calendar.js`): RFC 5545 VEVENT import/export, UID updates,
+  bounded recurrence, limits, per-event errors, honest TZID labelling; wired to
+  the daily briefing, five tools, CLI, HTTP and the UI lab card.
+- **Property tests** (`test/properties.js`): 5 seeded invariants, included in
+  `npm test` and the Linux workflow.
+
+### Measured state
+
+| Measure | Value |
+|---|---|
+| First-party source lines | 62,366 |
+| Tools / categories | 350 / 29 |
+| Executed / unexecuted audit | 86 / 264 |
+| Agents | 31 |
+| Checks | 351 (23 + 25 + 48 + 160 + 5 + 90) |
+| Specialists | 7 |
+
+Targets (103,465 lines, 1,000 tools, 120 agents, 2,000 checks) are not met.
+Filler modules, name-only agents and invented tests were not added; the gap is
+recorded in the requirements ledger.
+
+### Verification commands
+
+```bash
+node scripts/check.js
+node test/run.js && node test/ai.js && node test/ui.js
+node test/deep.js && node test/properties.js
+node scripts/eval.js
+node scripts/audit-tools.js --no-write
+SENTINEL_HOME=/tmp/spec71 npm run bench:specialists
+SENTINEL_HOME=/tmp/retr npm run bench:retrieval
+```

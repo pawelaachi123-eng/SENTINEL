@@ -135,7 +135,7 @@ const RULES = [
 const LEVEL_ORDER = { error: 0, warn: 1, info: 2 };
 
 class Brain {
-  constructor({ config, log, now = () => Date.now(), llm = null, memory = null, knowledge = null, tools = null, agents = null, tasks = null, dispatcher = null, store = null, approvals = null, commander = null, stats = null, link = null, tunnel = null, automation = null, paths = null, cognitive = null, context = null, experience = null, events = null, metrics = null, semantics = null, executor = null, graph = null } = {}) {
+  constructor({ config, log, now = () => Date.now(), llm = null, memory = null, knowledge = null, tools = null, agents = null, tasks = null, dispatcher = null, store = null, approvals = null, commander = null, stats = null, link = null, tunnel = null, automation = null, paths = null, cognitive = null, context = null, experience = null, events = null, metrics = null, semantics = null, executor = null, graph = null, specialists = null } = {}) {
     this.config = config;
     this.log = log;
     this.now = now;
@@ -162,6 +162,7 @@ class Brain {
     this.semantics = semantics;
     this.executor = executor;
     this.graph = graph;
+    this.specialists = specialists;
     this.context = context;
     this.experience = experience;
     this.events = events;
@@ -307,6 +308,45 @@ class Brain {
     return true;
   }
 
+
+  /** Optional trained relevance model: reorders memory hits, never invents one. */
+  rerankMemories(question, hits) {
+    if (!this.specialists || !Array.isArray(hits) || !hits.length) return hits;
+    const now = this.now();
+    return hits.map((hit) => {
+      const record = hit.record || hit;
+      const text = String(record.text || '');
+      const ageDays = Math.max(0, (now - (record.updatedAt || record.createdAt || now)) / 86400000);
+      const recency = Math.pow(0.5, ageDays / 30);
+      let prediction;
+      try {
+        prediction = this.specialists.memoryRelevance({ query: question, memory: text, recency, importance: record.importance ?? 0.5 });
+      } catch (err) {
+        return hit;
+      }
+      if (!prediction || !prediction.ok) return hit;
+      const weight = prediction.label === 'relevant' ? 0.55 + 0.45 * prediction.confidence : 0.12 + 0.18 * prediction.confidence;
+      return { ...hit, score: Number((Number(hit.score || 0) * weight).toFixed(6)), neuralRelevance: { label: prediction.label, confidence: prediction.confidence, temperature: prediction.temperature, usedFallback: prediction.usedFallback } };
+    }).sort((a, b) => Number(b.score || 0) - Number(a.score || 0));
+  }
+
+  /** Optional trained context-importance model: demotes background chunks. */
+  rerankDocuments(question, documents) {
+    if (!this.specialists || !Array.isArray(documents) || !documents.length) return documents;
+    return documents.map((document, index) => {
+      const text = String(document.text || document.excerpt || '');
+      if (!text) return document;
+      let prediction;
+      try {
+        prediction = this.specialists.contextImportance({ query: question, chunk: text, position: index, recency: Math.max(0, 1 - index / documents.length), prior: 0.3 });
+      } catch (err) {
+        return document;
+      }
+      if (!prediction || !prediction.ok) return document;
+      const weight = prediction.label === 'critical' ? 1 : prediction.label === 'useful' ? 0.62 : 0.18;
+      return { ...document, score: Number((Number(document.score || 0) * weight).toFixed(6)), neuralImportance: { label: prediction.label, confidence: prediction.confidence, temperature: prediction.temperature } };
+    }).sort((a, b) => Number(b.score || 0) - Number(a.score || 0));
+  }
 
   /* ── cognitive core ─────────────────────────────────────────────────── */
 
@@ -458,7 +498,7 @@ class Brain {
 
     // 1. recall — memory and knowledge in parallel, never blocking each other
     emitted('recall', { memories: memoryLimit, documents: documentLimit });
-    const [memories, documents] = await Promise.all([
+    const [memoryHits, documentHits] = await Promise.all([
       this.memory
         ? this.memory.recall(question, { limit: memoryLimit, sessionId }).catch((err) => {
             this.log && this.log.debug('brain', `memory recall failed: ${err.message}`);
@@ -472,6 +512,8 @@ class Brain {
           })
         : Promise.resolve([]),
     ]);
+    const memories = this.rerankMemories(question, memoryHits);
+    const documents = this.rerankDocuments(question, documentHits);
 
     // 1b. structural recall: typed relationships with provenance. This is how a
     // question about a project can reach a file, a symbol and the test that

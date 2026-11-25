@@ -1,6 +1,6 @@
 {
   "name": "sentinel",
-  "version": "7.0.0",
+  "version": "7.1.0",
   "private": true,
   "description": "SENTINEL \u2014 local-first neural cognitive platform: real trained specialist networks, a typed cognitive hypercore, persistent memory/research, an audited tool system and a PC/phone agent with no cloud account",
   "author": "pawelaachi123-eng",
@@ -14,7 +14,7 @@
     "start": "node bin/sentinel-agent.js --open",
     "agent": "node bin/sentinel-agent.js",
     "pair": "node bin/sentinel-agent.js --pair",
-    "test": "node test/run.js && node test/ui.js && node test/ai.js && node test/deep.js",
+    "test": "node test/run.js && node test/ui.js && node test/ai.js && node test/deep.js && node test/properties.js",
     "check": "node scripts/check.js",
     "mobile:sync": "node scripts/sync-mobile.js",
     "test:core": "node test/run.js",
@@ -23,7 +23,9 @@
     "test:ai": "node test/ai.js",
     "bench:lab": "node scripts/lab-bench.js",
     "bench:neural": "node scripts/neural-bench.js",
-    "bench:specialists": "node scripts/specialists-bench.js"
+    "bench:specialists": "node scripts/specialists-bench.js",
+    "bench:retrieval": "node scripts/retrieval-bench.js",
+    "test:properties": "node test/properties.js"
   },
   "pkg": {
     "assets": [

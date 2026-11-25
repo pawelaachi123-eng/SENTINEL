@@ -46,6 +46,7 @@ const { RerankerLab } = require('./reranker');
 const { HyperCore } = require('./cognition/hypercore');
 const { CommunicationManager } = require('./communication');
 const { DailyBriefing } = require('./briefing');
+const { CalendarStore } = require('./calendar');
 const { ProactiveEngine } = require('./proactive');
 const { SpecialistZoo } = require('./specialists');
 const { Organisation } = require('./org');
@@ -106,6 +107,7 @@ class Agent extends EventEmitter {
       this.memory = new Memory({ store: this.store, embedder: this.embedder, log: this.log, config: this.config });
       this.knowledge = new Knowledge({ store: this.store, embedder: this.embedder, log: this.log, config: this.config });
       this.tasks = new TaskManager({ store: this.store, log: this.log });
+      this.calendar = new CalendarStore({ store: this.store });
       this.approvals = new ApprovalQueue({ log: this.log });
       this.llm = new LlmClient({ config: this.config, log: this.log, metrics: this.metrics, events: this.events, experience: this.experience });
       this.runtime = new RuntimeManager({ config: this.config, llm: this.llm, log: this.log });
@@ -127,6 +129,7 @@ class Agent extends EventEmitter {
         memory: this.memory,
         knowledge: this.knowledge,
         tasks: this.tasks,
+        calendar: this.calendar,
         approvals: this.approvals,
         llm: this.llm,
         sandbox: this.sandbox,
@@ -163,7 +166,7 @@ class Agent extends EventEmitter {
       this.services.hypercore = this.hypercore;
       this.communication = new CommunicationManager({ config: this.config, store: this.store, log: this.log });
       this.services.communication = this.communication;
-      this.briefing = new DailyBriefing({ memory: this.memory, tasks: this.tasks, hypercore: this.hypercore, approvals: this.approvals });
+      this.briefing = new DailyBriefing({ memory: this.memory, tasks: this.tasks, hypercore: this.hypercore, approvals: this.approvals, calendar: this.calendar });
       this.services.briefing = this.briefing;
       this.proactive = new ProactiveEngine({ store: this.store, log: this.log });
       this.services.proactive = this.proactive;
@@ -181,6 +184,7 @@ class Agent extends EventEmitter {
         memory: this.memory,
         knowledge: this.knowledge,
         tasks: this.tasks,
+        calendar: this.calendar,
         approvals: this.approvals,
         services: this.services,
       });
@@ -341,6 +345,7 @@ class Agent extends EventEmitter {
             hypercore: this.hypercore || null,
             communication: this.communication || null,
             briefing: this.briefing || null,
+            calendar: this.calendar || null,
             proactive: this.proactive || null,
             specialists: this.specialists || null,
             incidents: this.incidents || null,

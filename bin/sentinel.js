@@ -49,6 +49,7 @@ const HELP = `SENTINEL ${require('../package.json').version} — your own assist
   sentinel agents [--json]                the specialist roster
   sentinel tools [query] [--json]         every tool the assistant may call
   sentinel brief [--json]                 dzienny briefing: terminy, zadania, cele, zgody
+  sentinel calendar [status|upcoming|add <opis>|import <plik.ics>] [--at ISO] [--days N]
   sentinel proactive [status]             reguły proaktywne (opt-in, bez podsłuchu)
   sentinel tasks [--json]                 recent tasks and their steps
   sentinel automations [list|run <id>|remove <id>]
@@ -65,7 +66,9 @@ const HELP = `SENTINEL ${require('../package.json').version} — your own assist
     hypercore [status|goals|conflicts|focus]  typowany stan poznawczy i uwaga
     reranker [status|train|promote <id>|rerank <q> <kandydaci...>]  reranker z NDCG
     specialists [status|train <zadanie>|promote <zadanie> <id>|predict <zadanie> <tekst>]
-                                             cztery małe modele: narzędzia, routing, pamięć, złożoność
+                                             siedem małych modeli: narzędzia, routing, pamięć, złożoność,
+                                             podobieństwo, ważność kontekstu, ryzyko błędu
+    specialists similarity <q> <fragment> | context <q> <fragment> | failure <uprawnienie>
     comm [status|consent <dest>|grant <token>|call <dest> <tekst>|sms <dest> <tekst>]
                                              połączenia/SMS tylko za zgodą; mock domyślnie
   sentinel graph [zapytanie]              knowledge graph stats or a multi-hop query
@@ -104,6 +107,9 @@ function parse(argv) {
     else if (arg === '--approve') out.approve = argv[++index] || 'cli-operator';
     else if (arg === '--consent') out.consent = argv[++index];
     else if (arg === '--budget') out.budget = Number(argv[++index]);
+    else if (arg === '--at') out.at = argv[++index];
+    else if (arg === '--days') out.days = Number(argv[++index]);
+    else if (arg === '--file') out.file = argv[++index];
     else out._.push(arg);
   }
   return out;
@@ -397,6 +403,47 @@ async function main() {
         const briefing = agent.briefing.generate({ horizonHours: args.max || 24 });
         if (args.json) console.log(JSON.stringify(briefing, null, 2));
         else process.stdout.write(`${briefing.text}\n`);
+        return done(0);
+      }
+
+      case 'calendar': {
+        const action = rest[0] || 'upcoming';
+        if (action === 'status') {
+          const status = agent.calendar.status();
+          if (args.json) console.log(JSON.stringify(status, null, 2));
+          else console.log(`${status.events} wydarzeń · ${status.upcoming24h} w ciągu 24 h · źródła: ${status.sources.join(', ') || 'brak'}`);
+          return done(0);
+        }
+        if (action === 'add') {
+          const summary = rest.slice(1).join(' ').trim();
+          if (!summary) {
+            console.error(red('użycie: sentinel calendar add <opis> --at 2026-11-23T09:00:00Z'));
+            return done(2);
+          }
+          const result = agent.calendar.add({ summary, start: args.at || new Date().toISOString(), durationMs: 3600000 }, { source: 'cli' });
+          if (!result.ok) {
+            console.error(red(`${result.code}: ${result.message}`));
+            return done(1);
+          }
+          console.log(green(`dodano: ${result.event.summary} — ${new Date(result.event.start).toISOString()}`));
+          return done(0);
+        }
+        if (action === 'import') {
+          if (!args.file) {
+            console.error(red('użycie: sentinel calendar import <plik.ics>'));
+            return done(2);
+          }
+          const result = agent.calendar.importIcs(fs.readFileSync(args.file, 'utf8'));
+          console.log(`${result.imported || 0} nowych, ${result.updated || 0} zaktualizowanych, ${result.unchanged || 0} bez zmian, ${result.errors.length} błędów`);
+          for (const error of result.errors) console.error(amber(`  linia ${error.line}: ${error.reason}`));
+          return done(result.ok ? 0 : 1);
+        }
+        const days = Math.max(0.01, args.days || 7);
+        const now = Date.now();
+        const events = agent.calendar.upcoming({ from: now, to: now + days * 86400000, limit: 100 });
+        if (args.json) console.log(JSON.stringify(events, null, 2));
+        else if (!events.length) console.log(dim('brak wydarzeń w tym zakresie'));
+        else for (const event of events) console.log(`  ${new Date(event.start).toISOString().slice(0, 16).replace('T', ' ')}  ${event.summary}${event.occurrence ? ' (powtarza się)' : ''}`);
         return done(0);
       }
 
@@ -875,7 +922,7 @@ async function main() {
 
       case 'specialists': {
         const action = rest[0] || 'status';
-        const tasks = ['tools', 'routing', 'relevance', 'complexity'];
+        const tasks = ['tools', 'routing', 'relevance', 'complexity', 'semantic', 'context', 'failure'];
         if (action === 'status') {
           const status = agent.specialists.status();
           if (args.json) console.log(JSON.stringify(status, null, 2));
@@ -928,6 +975,34 @@ async function main() {
             return done(4);
           }
           console.log(green(`✓ aktywny model ${task}: ${result.active.experimentId}`));
+          return done(0);
+        }
+        if (action === 'similarity' || action === 'context') {
+          const query = rest[1];
+          const passage = rest.slice(2).join(' ');
+          if (!query || !passage) {
+            console.error(red(`użycie: sentinel specialists ${action} <pytanie> <fragment>`));
+            return done(4);
+          }
+          const result = action === 'similarity'
+            ? agent.specialists.semanticSimilarity({ query, passage })
+            : agent.specialists.contextImportance({ query, chunk: passage });
+          if (!result.ok) {
+            console.error(red(`✗ ${result.code}: ${result.message}`));
+            return done(4);
+          }
+          if (args.json) console.log(JSON.stringify(result, null, 2));
+          else console.log(`${blue(result.label)} ${dim(`pewność ${result.confidence} · kalibracja T=${result.temperature}`)}`);
+          return done(0);
+        }
+        if (action === 'failure') {
+          const result = agent.specialists.failureRisk({ permission: rest[1] || 'read', requiresNetwork: rest.includes('--network'), recentFailures: Number(rest[2]) || 0 });
+          if (!result.ok) {
+            console.error(red(`✗ ${result.code}: ${result.message}`));
+            return done(4);
+          }
+          if (args.json) console.log(JSON.stringify(result, null, 2));
+          else console.log(`${blue(result.label)} ${dim(`pewność ${result.confidence} · kalibracja T=${result.temperature}`)}`);
           return done(0);
         }
         if (action === 'predict') {
