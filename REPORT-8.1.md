@@ -21,7 +21,7 @@ NOT_STARTED, 2 BLOCKED of 34 tracked requirements**. Only VERIFIED counts.
 
 ## Measured on this checkout
 
-- **84,517 first-party lines** across 298 tracked files (target 1,000,000 — not met).
+- **84,532 first-party lines** across 298 tracked files (target 1,000,000 — not met).
 - **689 tools in 35 categories** (targets 1,000 and 2,000 — not met).
 - **123 specialist agents** (target 250 — not met).
 - **2,058 checks** in 13 suites, all passing (2,000 target met; 10,000 stretch target not met).
@@ -31,7 +31,7 @@ NOT_STARTED, 2 BLOCKED of 34 tracked requirements**. Only VERIFIED counts.
 
 ## Honest gaps
 
-- **1M lines**: 915,483 lines short. Not reachable by aliases, generated prose or duplicates; it needs real subsystem growth.
+- **1M lines**: 915,468 lines short. Not reachable by aliases, generated prose or duplicates; it needs real subsystem growth.
 - **Tools**: 311 to 1,000 and 1,311 to 2,000. The remaining 74 unexecuted tools are mostly provider, device, approval-gated write paths, process control, MCP and installer paths that need hardware or explicit consent.
 - **Agents**: 127 short. Further specialists need non-overlapping contracts and measured quality.
 - **Checks**: 7,944 short of 10,000.

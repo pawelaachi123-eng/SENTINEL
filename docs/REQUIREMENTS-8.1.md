@@ -30,7 +30,7 @@ The large numeric targets are separate rows and remain open:
 
 | Target | Measured | State |
 |---|---:|---|
-| 1,000,000 source lines | 84,517 | not met |
+| 1,000,000 source lines | 84,532 | not met |
 | 2,000 tools | 689 | not met |
 | 100 categories | 35 | not met |
 | 250 agents | 123 | not met |

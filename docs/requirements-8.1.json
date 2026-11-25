@@ -17,7 +17,7 @@
     "checks": 10000
   },
   "measured": {
-    "sourceLines": 84517,
+    "sourceLines": 84532,
     "tools": 689,
     "toolCategories": 35,
     "agents": 123,
