@@ -16,6 +16,7 @@
  */
 
 const fs = require('node:fs');
+const { spawnSync: spawnGit } = require('node:child_process');
 const { removeHome } = require('./lib/cleanup');
 const os = require('node:os');
 const path = require('node:path');
@@ -285,6 +286,30 @@ async function runFlows(agent, record, workspace) {
   };
   const fsPath = (name) => `audit-flow/${name}`;
 
+  // A throw-away git repository verifies the read and write git tools without
+  // touching the checkout. The repository lives inside the sandbox workspace.
+  const gitDir = path.join(workspace, 'audit-flow', 'git');
+  fs.mkdirSync(gitDir, { recursive: true });
+  const git = (...args) => spawnGit('git', ['-C', gitDir, '-c', 'user.name=Audit', '-c', 'user.email=audit@example.invalid', ...args], { encoding: 'utf8' });
+  if (git('init', '-q').status === 0) {
+    fs.writeFileSync(path.join(gitDir, 'tracked.txt'), 'one\n');
+    git('add', 'tracked.txt');
+    git('commit', '-q', '-m', 'audit fixture one');
+    fs.writeFileSync(path.join(gitDir, 'tracked.txt'), 'one\ntwo\n');
+    git('add', 'tracked.txt');
+    git('commit', '-q', '-m', 'audit fixture two');
+    const repo = 'audit-flow/git';
+    await exec('git.status', { repo });
+    await exec('git.log', { repo, limit: 2 });
+    await exec('git.diff', { repo, range: 'HEAD~1..HEAD' });
+    await exec('git.show', { repo, ref: 'HEAD' });
+    await exec('git.branches', { repo });
+    await exec('git.blame', { repo, path: 'audit-flow/git/tracked.txt' });
+    await exec('git.remote', { repo });
+    fs.appendFileSync(path.join(gitDir, 'tracked.txt'), 'three\n');
+    await exec('git.status', { repo });
+  }
+
   await exec('fs.mkdir', { path: 'audit-flow' });
   await exec('fs.write', { path: fsPath('one.txt'), content: 'alpha beta\n', overwrite: true });
   await exec('fs.append', { path: fsPath('one.txt'), content: 'gamma\n' });
@@ -341,6 +366,79 @@ async function runFlows(agent, record, workspace) {
   }
 
   await exec('coding.verify', { symbol: 'add', to: 'sum' });
+  await exec('memory.consolidate', {});
+  await exec('memory.summarise', {});
+  await exec('memory.summarize', { keep: 5 });
+  await exec('memory.summary', {});
+
+  const kb = await exec('kb.index.text', { title: 'Audit knowledge fixture', text: 'Atlas depends on Sentinel. Sentinel depends on Node. The audit fixture is local.' });
+  await exec('kb.reindex', {});
+  const kbId = kb ? findId(kb.data) : null;
+  if (kbId) await exec('kb.remove', { docId: kbId });
+
+  const skill = await exec('skill.propose', { name: 'Audit addition skill', description: 'Add two integers with the numeric tool.', steps: [{ tool: 'numext.add', args: { a: 2, b: 3 } }] });
+  const skillId = skill && skill.data && skill.data.skill ? skill.data.skill.id : null;
+  if (skillId) {
+    await exec('skill.validate', { id: skillId, score: 1, cases: 1, passed: 1, approvedBy: 'audit fixture' });
+    await exec('skill.retire', { id: skillId, reason: 'audit fixture cleanup', approvedBy: 'audit fixture' });
+  }
+
+  const workflow = await exec('executive.workflow_create', { name: 'Audit workflow', steps: [{ id: 'add', tool: 'numext.add', args: { a: 1, b: 2 } }] });
+  const workflowId = workflow ? findId(workflow.data) : null;
+  if (workflowId) {
+    await exec('executive.workflow_status', { id: workflowId });
+    await exec('executive.workflow_cancel', { id: workflowId });
+  }
+
+  const research = await exec('research.start', { question: 'What is the Atlas orbit period in the audit fixture?', online: false });
+  const researchId = research && research.data && research.data.session ? research.data.session.id : null;
+  if (researchId) {
+    await exec('research.add_source', { id: researchId, title: 'Audit fixture source', text: 'Atlas orbit period is twelve days in the local audit fixture.', reliability: 'high' });
+    await exec('research.evidence', { id: researchId, query: 'Atlas orbit' });
+    await exec('research.report', { id: researchId });
+  }
+
+  // Loopback only: these calls do not leave the machine and do not depend on
+  // any external service being reachable.
+  await exec('net.dns', { name: 'localhost' });
+  await exec('net.port.check', { host: '127.0.0.1', port: 7878 });
+  await exec('net.ping', { host: '127.0.0.1', count: 1 });
+  await exec('models.discover', {});
+
+  // Tiny CPU GPT fixtures: 1,496 parameters, one epoch, deterministic seed-free
+  // but short enough to finish inside the per-tool timeout.
+  const gptOne = await exec('training.gpt', { texts: ['atlas orbit twelve days', 'sentinel audit fixture'], name: 'audit-gpt', epochs: 1, maxLen: 8, dim: 8, blocks: 1 });
+  const artifactOne = gptOne && gptOne.data && gptOne.data.artifact ? gptOne.data.artifact : null;
+  if (artifactOne) await exec('training.generate', { name: artifactOne.name, checkpointPath: artifactOne.file, prompt: 'atlas', maxNewTokens: 3 });
+  const gptTwo = await exec('training.gpt', { texts: ['another audit sentence', 'atlas period fixture'], name: 'audit-gpt-two', epochs: 1, maxLen: 8, dim: 8, blocks: 1 });
+  const artifactTwo = gptTwo && gptTwo.data && gptTwo.data.artifact ? gptTwo.data.artifact : null;
+  if (artifactOne && artifactTwo) await exec('training.compare', { ids: [artifactOne.id, artifactTwo.id] });
+
+  // Document and archive fixtures are built locally with the system zip tool;
+  // the audit never downloads a sample file.
+  const fixtureDir = path.join(workspace, 'audit-flow', 'docs');
+  fs.mkdirSync(path.join(fixtureDir, 'word'), { recursive: true });
+  fs.mkdirSync(path.join(fixtureDir, 'xl', 'worksheets'), { recursive: true });
+  fs.writeFileSync(path.join(fixtureDir, 'note.txt'), 'audit archive fixture\n');
+  fs.writeFileSync(
+    path.join(fixtureDir, 'word', 'document.xml'),
+    '<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>Audit Heading</w:t></w:r></w:p><w:p><w:r><w:t>Audit paragraph.</w:t></w:r></w:p></w:body></w:document>',
+  );
+  fs.writeFileSync(
+    path.join(fixtureDir, 'xl', 'worksheets', 'sheet1.xml'),
+    '<?xml version="1.0"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row><c t="inlineStr"><is><t>Name</t></is></c><c t="inlineStr"><is><t>Value</t></is></c></row><row><c t="inlineStr"><is><t>Atlas</t></is></c><c><v>12</v></c></row></sheetData></worksheet>',
+  );
+  const zipFixture = (archive, entry) => spawnGit('zip', ['-q', '-r', path.join(fixtureDir, archive), entry], { cwd: fixtureDir, encoding: 'utf8' });
+  if (zipFixture('archive.zip', 'note.txt').status === 0) {
+    await exec('fs.zip.list', { path: 'audit-flow/docs/archive.zip' });
+    await exec('fs.zip.read', { path: 'audit-flow/docs/archive.zip', entry: 'note.txt' });
+  }
+  if (zipFixture('outline.docx', 'word').status === 0) await exec('doc.docx.outline', { path: 'audit-flow/docs/outline.docx' });
+  if (zipFixture('sheet.xlsx', 'xl').status === 0) await exec('doc.xlsx.rows', { path: 'audit-flow/docs/sheet.xlsx', maxRows: 5 });
+  fs.writeFileSync(path.join(fixtureDir, 'fixture.pdf'), '%PDF-1.4\n1 0 obj\n<< /Type /Pages /Count 1 >>\nendobj\ntrailer\n<< /Root 1 0 R >>\n%%EOF\n');
+  await exec('doc.pdf.pages', { path: 'audit-flow/docs/fixture.pdf' });
+
+  await exec('healing.backup', {});
   await exec('healing.diagnose', { quick: true });
   await exec('healing.backups', {});
   await exec('healing.propose', { problem: 'audit fixture: no real problem' });

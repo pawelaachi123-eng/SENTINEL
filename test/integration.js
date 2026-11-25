@@ -85,6 +85,24 @@ async function check(name, fn) {
       return `${result.data.stats.files} files, ${result.data.stats.symbols} symbols`;
     });
 
+    await check('skill validate reaches promotion without a formatting crash', async () => {
+      const proposed = await agent.tools.execute('skill.propose', { name: 'integration skill', description: 'Add two integers.', steps: [{ tool: 'numext.add', args: { a: 2, b: 3 } }] }, { source: 'integration' });
+      assert.equal(proposed.ok, true, proposed.message);
+      const id = proposed.data.skill.id;
+      const validated = await agent.tools.execute('skill.validate', { id, score: 1, cases: 1, passed: 1, approvedBy: 'integration test' }, { source: 'integration' });
+      assert.equal(validated.ok, true, validated.message);
+      assert.equal(validated.data.skill.status, 'validated');
+      await agent.tools.execute('skill.retire', { id, reason: 'integration cleanup', approvedBy: 'integration test' }, { source: 'integration' });
+      return id;
+    });
+
+    await check('runtime.free reports provider state instead of crashing in its formatter', async () => {
+      const result = await agent.tools.execute('runtime.free', {}, { source: 'integration' });
+      assert.notEqual(result.code, 'TOOL_FAILED');
+      assert.equal(typeof result.text, 'string');
+      return `${result.ok ? 'ok' : result.code}: ${result.text.slice(0, 60)}`;
+    });
+
     await check('training and executive services are the same objects the agent exposes', () => {
       assert.equal(agent.services.trainingLab, agent.trainingLab);
       assert.equal(agent.services.executive, agent.executive);

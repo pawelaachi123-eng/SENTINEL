@@ -66,6 +66,6 @@ module.exports = [
       }
       return { ok: results.length > 0 && results.every((entry) => entry.ok), results };
     },
-    format: (data) => data.results.map((entry) => `${entry.model}: ${entry.ok ? 'wyładowany' : entry.message}`).join('\n'),
+    format: (data) => (data.results || []).map((entry) => `${entry.model}: ${entry.ok ? 'wyładowany' : entry.message}`).join('\n') || data.message || data.code || 'brak modeli do wyładowania',
   },
 ];

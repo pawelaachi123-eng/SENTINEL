@@ -21,7 +21,7 @@
     "tools": 689,
     "toolCategories": 35,
     "agents": 123,
-    "checks": 2056,
+    "checks": 2058,
     "sourceFiles": 298,
     "note": "sourceLines/tools/agents measured by the 8.1 acceptance gate on this checkout; checks = 1830 behavioural + 210 conformance + 10 integration + 6 graph-integrity checks."
   },
@@ -91,7 +91,8 @@
         "test/integration.js"
       ],
       "evidence": [
-        "579 of 581 fixture calls verified; 110 tool names still unexecuted"
+        "615 of 619 fixture calls verified; 74 tool names still unexecuted",
+        "two formatter crashes found by execution: skill.validate and runtime.free"
       ],
       "blockers": [
         "provider, device, training, process-control, MCP and installer tools need external hardware or credentials",
@@ -140,7 +141,7 @@
         "test/requirements.js"
       ],
       "evidence": [
-        "2,056 checks across 13 suites"
+        "2,058 checks across 13 suites"
       ],
       "blockers": []
     },

@@ -76,7 +76,7 @@ module.exports = [
       const gate = { heldOut: true, ok: args.score >= 1, score: args.score, cases: args.cases || 0, passed: args.passed || 0, mode: 'reported-by-caller' };
       return library(ctx).validate(args.id, { gate, approvedBy: args.approvedBy, note: args.note || null });
     },
-    format: (data) => (data.ok ? `zwalidowano v${data.skill.version} (${data.validation.score})` : `odrzucono: ${data.code}`),
+    format: (data) => (data.ok ? `zwalidowano v${data.skill.version} (${data.skill.validation.score})` : `odrzucono: ${data.code}`),
   },
   {
     name: 'skill.retire',

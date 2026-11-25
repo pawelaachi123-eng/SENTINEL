@@ -34,8 +34,8 @@ The large numeric targets are separate rows and remain open:
 | 2,000 tools | 689 | not met |
 | 100 categories | 35 | not met |
 | 250 agents | 123 | not met |
-| 10,000 checks | 2,056 | not met |
-| 2,000 checks | 2,056 | **met** |
+| 10,000 checks | 2,058 | not met |
+| 2,000 checks | 2,058 | **met** |
 
 ## Verified in 8.1
 
