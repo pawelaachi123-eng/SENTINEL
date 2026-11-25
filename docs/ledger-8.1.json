@@ -1,10 +1,10 @@
 {
-  "generatedAt": "2026-11-25T22:06:49.090Z",
+  "generatedAt": "2026-11-25T22:07:56.413Z",
   "version": "8.1.0",
   "measured": {
     "firstPartyLines": {
-      "files": 289,
-      "lines": 82332
+      "files": 298,
+      "lines": 84132
     },
     "tools": {
       "tools": 689,
@@ -23,7 +23,7 @@
       "symbols": 3113,
       "uniqueSymbols": 2095,
       "imports": 752,
-      "calls": 36243,
+      "calls": 36248,
       "languages": {
         "powershell": 2,
         "javascript": 189,
@@ -33,86 +33,86 @@
         "python": 1
       },
       "errorFiles": 0,
-      "scanMs": 909,
+      "scanMs": 889,
       "truncated": false
     },
     "suites": [
       {
         "suite": "run",
         "exit": 0,
-        "ms": 1379,
+        "ms": 1365,
         "tail": " 23 tests passed."
       },
       {
         "suite": "ui",
         "exit": 0,
-        "ms": 11542,
+        "ms": 11567,
         "tail": " 48/48 UI checks passed"
       },
       {
         "suite": "ai",
         "exit": 0,
-        "ms": 2618,
+        "ms": 2557,
         "tail": " 25 assistant checks passed."
       },
       {
         "suite": "deep",
         "exit": 0,
-        "ms": 21261,
+        "ms": 21176,
         "tail": " 160 deep checks passed."
       },
       {
         "suite": "properties",
         "exit": 0,
-        "ms": 78,
+        "ms": 75,
         "tail": " 5 property checks passed."
       },
       {
         "suite": "toolpacks",
         "exit": 0,
-        "ms": 77,
+        "ms": 66,
         "tail": "✓ 302 tools, 1510 schema/execute/expectation checks passed"
       },
       {
         "suite": "agents",
         "exit": 0,
-        "ms": 198,
+        "ms": 181,
         "tail": "✓ 123 agents; routing 82/86 (95.3%)   ✓ 7 agent checks passed"
       },
       {
         "suite": "training",
         "exit": 0,
-        "ms": 3505,
+        "ms": 3267,
         "tail": " 23 of 23 training checks passed."
       },
       {
         "suite": "executive",
         "exit": 0,
-        "ms": 2594,
+        "ms": 2567,
         "tail": " 15 of 15 executive checks passed."
       },
       {
         "suite": "coding",
         "exit": 0,
-        "ms": 101,
+        "ms": 102,
         "tail": " 14 of 14 coding checks passed."
       },
       {
         "suite": "conformance",
         "exit": 0,
-        "ms": 2506,
+        "ms": 2473,
         "tail": "210 of 210 conformance checks passed."
       },
       {
         "suite": "integration",
         "exit": 0,
-        "ms": 2475,
+        "ms": 2558,
         "tail": " 10 of 10 integration checks passed."
       },
       {
         "suite": "requirements",
         "exit": 0,
-        "ms": 35,
+        "ms": 39,
         "tail": " 6 of 6 requirements checks passed."
       }
     ]
@@ -245,7 +245,7 @@
     },
     "millionLines": {
       "state": "not met",
-      "detail": "82332/1000000"
+      "detail": "84132/1000000"
     },
     "windowsInstaller": {
       "state": "not run",
@@ -259,7 +259,7 @@
   "targets": {
     "lineTarget": 1000000,
     "lineState": "not met",
-    "millionLineGap": 917668,
+    "millionLineGap": 915868,
     "toolsTarget": 2000,
     "toolsState": "not met",
     "agentTarget": 250,

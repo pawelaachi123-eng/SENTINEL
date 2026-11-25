@@ -17,12 +17,12 @@
     "checks": 10000
   },
   "measured": {
-    "sourceLines": 82326,
+    "sourceLines": 84132,
     "tools": 689,
     "toolCategories": 35,
     "agents": 123,
     "checks": 2056,
-    "sourceFiles": 289,
+    "sourceFiles": 298,
     "note": "sourceLines/tools/agents measured by the 8.1 acceptance gate on this checkout; checks = 1830 behavioural + 210 conformance + 10 integration + 6 graph-integrity checks."
   },
   "requirements": [
