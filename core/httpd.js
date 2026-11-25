@@ -349,6 +349,8 @@ class HttpApi {
       }
       if (this.ai && this.ai.llm) this.ai.llm.cancelAll('stopped by the user');
       if (this.ai && this.ai.brain) this.ai.brain.cancelAll('stopped by the user');
+      if (this.ai && this.ai.executive) this.ai.executive.pool.cancelAll('STOP pressed');
+      if (this.ai && this.ai.executive) this.ai.executive.workflows.cancelAll('STOP pressed');
       this.log.warn('ai', `STOP pressed (${stopped} run(s))`);
       return this.json(res, 200, { ok: true, stopped });
     }
@@ -466,6 +468,23 @@ class HttpApi {
       const text = String(body.text || '').slice(0, 1000);
       if (!text) return this.json(res, 400, { ok: false, error: 'text is required' });
       return this.json(res, 200, { ok: true, data: this.ai.lab.classify(text) });
+    }
+
+    if (route === '/api/executive' && req.method === 'GET') {
+      if (!this.ai || !this.ai.executive) return this.json(res, 503, { ok: false, error: 'executive not ready' });
+      return this.json(res, 200, { ok: true, data: this.ai.executive.status() });
+    }
+
+    if (route === '/api/executive/workflows' && req.method === 'GET') {
+      if (!this.ai || !this.ai.executive) return this.json(res, 503, { ok: false, error: 'executive not ready' });
+      return this.json(res, 200, { ok: true, data: this.ai.executive.workflows.list({ limit: 30 }) });
+    }
+
+    if (route === '/api/executive/cancel' && req.method === 'POST') {
+      if (!this.ai || !this.ai.executive) return this.json(res, 503, { ok: false, error: 'executive not ready' });
+      const body = await this.body(req).catch(() => ({}));
+      const result = body.workflowId ? this.ai.executive.workflows.cancel(String(body.workflowId)) : this.ai.executive.pool.cancel(String(body.jobId || ''));
+      return this.json(res, 200, { ok: result.ok, data: result });
     }
 
     if (route === '/api/training' && req.method === 'GET') {

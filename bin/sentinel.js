@@ -760,6 +760,77 @@ async function main() {
         return done(4);
       }
 
+      case 'executive': {
+        const engine = agent.executive;
+        const action = rest[0] || 'status';
+        engine.start();
+        if (action === 'status') {
+          const status = engine.status();
+          if (args.json) console.log(JSON.stringify(status, null, 2));
+          else {
+            console.log(bold('silnik wykonawczy'));
+            console.log(`  pula: ${status.pool.running}/${status.pool.size} · kolejka ${status.pool.queued} · joby ${JSON.stringify(status.pool.counts)}`);
+            console.log(`  workflow: ${JSON.stringify(status.workflows.counts)} · retry ${status.workflows.counters.retried} · replan ${status.workflows.counters.replanned}`);
+            for (const workflow of status.workflows.workflows) console.log(`  ${workflow.id} ${workflow.status} · ${workflow.steps.filter((step) => step.status === 'done').length}/${workflow.steps.length}`);
+            console.log(dim(`  ${status.honest}`));
+          }
+          return done(0);
+        }
+        if (action === 'jobs') {
+          const jobs = engine.pool.list({ limit: args.max || 30 });
+          if (args.json) console.log(JSON.stringify(jobs, null, 2));
+          else for (const job of jobs) console.log(`  ${job.id} ${job.kind} ${job.status} attempts ${job.attempts}${job.error ? ` · ${job.error.code}` : ''}`);
+          return done(0);
+        }
+        if (action === 'submit') {
+          const kind = rest[1];
+          if (!kind) { console.error(red('użycie: sentinel executive submit <kind> [--payload JSON]')); return done(4); }
+          const payload = args.payload ? JSON.parse(args.payload) : {};
+          const job = engine.submit({ kind, payload, priority: args.priority || 5 });
+          console.log(green(`✓ ${job.id} ${job.status}`));
+          return done(0);
+        }
+        if (action === 'cancel') {
+          if (!rest[1]) { console.error(red('użycie: sentinel executive cancel <job-id|workflow-id>')); return done(4); }
+          const result = engine.workflows.get(rest[1]) ? engine.workflows.cancel(rest[1]) : engine.pool.cancel(rest[1]);
+          console.log(result.ok ? green(`✓ ${result.status}`) : red(result.code));
+          return done(result.ok ? 0 : 4);
+        }
+        if (action === 'workflows') {
+          const rows = engine.workflows.list({ limit: args.max || 20 });
+          if (args.json) console.log(JSON.stringify(rows, null, 2));
+          else for (const workflow of rows) console.log(`  ${workflow.id} ${workflow.status} · ${workflow.usage.steps}/${workflow.budget.steps} kroków · ${workflow.name}`);
+          return done(0);
+        }
+        if (action === 'workflow') {
+          if (!rest[1] || !require('node:fs').existsSync(rest[1])) { console.error(red('użycie: sentinel executive workflow <plan.json>')); return done(4); }
+          const plan = JSON.parse(require('node:fs').readFileSync(rest[1], 'utf8'));
+          const workflow = engine.workflows.create({ name: plan.name || rest[1], steps: plan.steps, budget: plan.budget || {} });
+          console.log(green(`✓ ${workflow.id} · ${workflow.steps.length} kroków`));
+          const result = await engine.workflows.run(workflow.id, {
+            invoke: async (step, context) => {
+              if (step.agent) throw Object.assign(new Error('agent steps need a runner'), { code: 'NO_AGENT_RUNNER' });
+              const outcome = await agent.tools.execute(step.tool, step.args, { source: 'workflow', signal: context.signal });
+              if (!outcome.ok) throw Object.assign(new Error(outcome.message || outcome.code), { code: outcome.code || 'TOOL_FAILED' });
+              return outcome.data;
+            },
+          });
+          if (args.json) console.log(JSON.stringify(result, null, 2));
+          else {
+            console.log(`${result.status}: ${result.steps.filter((step) => step.status === 'done').length}/${result.steps.length} gotowych`);
+            for (const step of result.steps) console.log(`  ${step.id} ${step.status} attempts ${step.attempts}${step.error ? ` · ${step.error.code}` : ''}`);
+          }
+          return done(result.status === 'done' ? 0 : 5);
+        }
+        if (action === 'stop') {
+          const result = await engine.stop('stopped from the CLI');
+          console.log(green(`✓ zatrzymano ${result.pool.counts.cancelled || 0} zadań i ${result.workflows.counts.cancelled || 0} workflow`));
+          return done(0);
+        }
+        console.error(red(`nieznana akcja executive: ${action}`));
+        return done(4);
+      }
+
       case 'training': {
         const tl = agent.trainingLab;
         const action = rest[0] || 'status';

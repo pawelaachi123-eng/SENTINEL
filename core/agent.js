@@ -44,6 +44,8 @@ const { SkillLibrary } = require('./skills');
 const { RepoMap } = require('./repomap');
 const { LearningLab } = require('./lab');
 const { TrainingLab } = require('./lab/index.js');
+const { Executive } = require('./executive');
+const { CodeIndex, RefactorEngine } = require('./coding');
 const { ResearchService } = require('./research');
 const { RerankerLab } = require('./reranker');
 const { HyperCore } = require('./cognition/hypercore');
@@ -161,10 +163,16 @@ class Agent extends EventEmitter {
       this.services.skills = this.skills;
       this.repoMap = new RepoMap({ root: pathsModule.workspaceDir(), log: this.log });
       this.services.repoMap = this.repoMap;
+      this.codeIndex = new CodeIndex({ root: pathsModule.workspaceDir(), log: this.log });
+      this.refactorEngine = new RefactorEngine({ index: this.codeIndex, log: this.log });
+      this.services.codeIndex = this.codeIndex;
+      this.services.refactorEngine = this.refactorEngine;
       this.lab = new LearningLab({ paths: pathsModule, store: this.store, log: this.log });
       this.services.lab = this.lab;
       this.trainingLab = new TrainingLab({ dataDir: path.join(pathsModule.dataDir(), 'training'), sourceRoot: path.resolve(__dirname, '..'), log: this.log });
       this.services.trainingLab = this.trainingLab;
+      this.executive = new Executive({ dataDir: path.join(pathsModule.dataDir(), 'executive'), log: this.log, poolSize: 2, maxConcurrent: 2 });
+      this.services.executive = this.executive;
       this.research = new ResearchService({ store: this.store, log: this.log, workspaceDir: pathsModule.workspaceDir() });
       this.services.research = this.research;
       this.reranker = new RerankerLab({ paths: pathsModule, store: this.store, log: this.log });
@@ -530,6 +538,7 @@ class Agent extends EventEmitter {
 
   stop() {
     try { if (this.trainingLab) this.trainingLab.queue.stop({ cancelRunning: true }); } catch { /* queue is optional */ }
+    try { if (this.executive) this.executive.stop('agent stopping'); } catch { /* scheduler is optional */ }
     clearInterval(this.brainTimer);
     if (this.automation) this.automation.stop();
     for (const watchdog of this.watchdogs || []) watchdog.stop();

@@ -10,7 +10,7 @@
 
 const { ToolRegistry } = require('./registry');
 
-const MODULES = ['system', 'network', 'files', 'code', 'docs', 'math', 'dev', 'device', 'memory', 'ai', 'tasks', 'security', 'voice', 'patch', 'graph', 'mcp', 'runtime', 'org', 'neural', 'reason', 'skills', 'repo', 'lab', 'research', 'analytics', 'text', 'hypercore', 'reranker', 'communication', 'science', 'productivity', 'assistant', 'calendar', 'numext', 'statx', 'txtx', 'datex', 'geom', 'phys', 'unitsx', 'seqx', 'matrix', 'setx', 'bits', 'fmtx', 'finx', 'checksumx', 'training', 'specialist'];
+const MODULES = ['system', 'network', 'files', 'code', 'docs', 'math', 'dev', 'device', 'memory', 'ai', 'tasks', 'security', 'voice', 'patch', 'graph', 'mcp', 'runtime', 'org', 'neural', 'reason', 'skills', 'repo', 'lab', 'research', 'analytics', 'text', 'hypercore', 'reranker', 'communication', 'science', 'productivity', 'assistant', 'calendar', 'numext', 'statx', 'txtx', 'datex', 'geom', 'phys', 'unitsx', 'seqx', 'matrix', 'setx', 'bits', 'fmtx', 'finx', 'checksumx', 'training', 'executive', 'coding', 'specialist'];
 
 /**
  * @param {{config, log, sandbox, approvals, services}} deps

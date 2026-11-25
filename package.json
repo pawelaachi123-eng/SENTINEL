@@ -14,7 +14,7 @@
     "start": "node bin/sentinel-agent.js --open",
     "agent": "node bin/sentinel-agent.js",
     "pair": "node bin/sentinel-agent.js --pair",
-    "test": "node test/run.js && node test/ui.js && node test/ai.js && node test/deep.js && node test/properties.js && node test/toolpacks.js && node test/agents.js && node test/training.js",
+    "test": "node test/run.js && node test/ui.js && node test/ai.js && node test/deep.js && node test/properties.js && node test/toolpacks.js && node test/agents.js && node test/training.js && node test/executive.js && node test/coding.js",
     "check": "node scripts/check.js",
     "mobile:sync": "node scripts/sync-mobile.js",
     "test:core": "node test/run.js",
@@ -28,7 +28,9 @@
     "test:properties": "node test/properties.js",
     "test:training": "node test/training.js",
     "test:toolpacks": "node test/toolpacks.js",
-    "test:agents": "node test/agents.js"
+    "test:agents": "node test/agents.js",
+    "test:executive": "node test/executive.js",
+    "test:coding": "node test/coding.js"
   },
   "pkg": {
     "assets": [
