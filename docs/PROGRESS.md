@@ -1,4 +1,41 @@
-# SENTINEL 6.0 — progress and verification log
+# SENTINEL 7.0 — progress and verification log
+
+Branch: `arena/15fbea48-sentinel`. **Source-only build: no EXE, MSI, APK, AAB,
+BIN, HEX or UF2, and no packaging/publishing jobs.** The persistent ledger is
+`docs/REQUIREMENTS-7.0.md`; the measured report is `docs/REPORT-7.0.md`.
+
+## 7.0 state (this slice)
+
+Implemented and tested: matrix reverse-mode autodiff with gradient checks; a
+trainable single-block transformer and gated sentiment lab; a gated retrieval
+reranker trained against a lexical baseline; a typed cognitive hypercore with
+budgets, conflicts, deduction and persistence; a consent-based communication
+manager with mock + Twilio adapters and signed webhooks; 48 new science,
+productivity, hypercore, reranker, communication, assistant and specialist tools;
+four gated specialist classifiers (tool selection, agent routing, memory
+relevance, task complexity) measured against named baselines; cited daily
+briefing; opt-in proactive rules; source-only CI; CLI/API/UI panels. See the
+ledger for what remains — notably 120+ agents, 1,000+ tools and 2,000+ tests were
+**not** reached.
+
+| Gate | Result |
+| --- | --- |
+| `node test/run.js` | 23 passed |
+| `node test/ai.js` | 25 passed |
+| `node test/ui.js` | **48/48** |
+| `node test/deep.js` | **153/153** |
+| `node scripts/check.js` | all checks passed (includes source-only policy) |
+| `node scripts/eval.js` | **90/90**, score 1, **mock mode** |
+| `node scripts/audit-tools.js` | **342 tools / 29 categories / 0 problems / 83 executed / 259 unexecuted** |
+| `npm run bench:neural` | intent 0.796 vs 0.755; transformer 1.000 vs 0.964; reranker NDCG@3 0.8443 vs 0.8273 |
+| `npm run bench:specialists` | tools 0.8125 vs 0.6875; routing 1.000 vs 0.875; relevance 0.9444 vs 0.6667; complexity 0.8333 vs 0.8333 |
+| source lines | **60,431** (+6,966 over 6.0) |
+| Windows CI | recorded on the PR; see the commit status |
+
+No GPU, live model, provider account or real phone call was available. No metric
+here is a language-model benchmark, and no communication was actually delivered.
+
+# Historical: SENTINEL 6.0 progress log
 
 Branch: `arena/15fbea48-sentinel`. Everything below was executed in this
 repository unless explicitly labelled otherwise. The persistent requirement

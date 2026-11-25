@@ -478,12 +478,12 @@ if (Test-Path $cli) {
   }
 }
 
-# 6.0: verify the deterministic core on the installed copy. This runs without a
+# 7.0: verify the deterministic core on the installed copy. This runs without a
 # model and without network; a failure is reported, not hidden, but it does not
 # roll back a working install.
 $evalScript = Join-Path $InstallDir "scripts\eval.js"
 if (Test-Path $evalScript) {
-  Say "Weryfikuję rdzeń deterministyczny (6.0)" "step"
+  Say "Weryfikuję rdzeń deterministyczny (7.0)" "step"
   Push-Location $InstallDir
   try {
     $evalOutput = & node $evalScript 2>&1
@@ -492,11 +492,11 @@ if (Test-Path $evalScript) {
   } catch { Add-Warning "evaluation could not run: $($_.Exception.Message)" } finally { Pop-Location }
 }
 
-# 6.0: read-only health of the new subsystems. Training is never started by the
+# 7.0: read-only health of the new subsystems. Training is never started by the
 # installer; that needs a person and an explicit approval.
 $cliScript = Join-Path $InstallDir "bin\sentinel.js"
 if (Test-Path $cliScript) {
-  Say "Sprawdzam laboratorium i runtime (6.0)" "step"
+  Say "Sprawdzam laboratorium, hypercore i komunikację (7.0)" "step"
   Push-Location $InstallDir
   try {
     $labOutput = & node $cliScript lab 2>&1
@@ -505,7 +505,17 @@ if (Test-Path $cliScript) {
     $neuralOutput = & node $cliScript neural 2>&1
     $neuralOutput | ForEach-Object { if (-not $Quiet) { Write-Host "  $_" } }
     if ($LASTEXITCODE -ne 0) { Add-Warning "neural runtime status could not be read" }
-  } catch { Add-Warning "6.0 subsystem check could not run: $($_.Exception.Message)" } finally { Pop-Location }
+    # Read-only: these commands do not train, call, send or change state.
+    $hyperOutput = & node $cliScript hypercore status 2>&1
+    $hyperOutput | ForEach-Object { if (-not $Quiet) { Write-Host "  $_" } }
+    if ($LASTEXITCODE -ne 0) { Add-Warning "cognitive hypercore status could not be read" }
+    $rerankOutput = & node $cliScript reranker status 2>&1
+    $rerankOutput | ForEach-Object { if (-not $Quiet) { Write-Host "  $_" } }
+    if ($LASTEXITCODE -ne 0) { Add-Warning "reranker status could not be read" }
+    $commOutput = & node $cliScript comm status 2>&1
+    $commOutput | ForEach-Object { if (-not $Quiet) { Write-Host "  $_" } }
+    if ($LASTEXITCODE -ne 0) { Add-Warning "communication status could not be read" }
+  } catch { Add-Warning "7.0 subsystem check could not run: $($_.Exception.Message)" } finally { Pop-Location }
 }
 
 Say "Done" "step"

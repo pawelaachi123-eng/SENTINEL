@@ -2670,6 +2670,368 @@ test('the new tool modules are registered once with complete schemas', () => {
   }
 });
 
+/* ── 7.0: neural library, hypercore, reranker, communications ─────────── */
+
+const autograd = require('../core/ml/autograd');
+const transformer = require('../core/ml/transformer');
+const sentiment = require('../core/ml/data/sentiment');
+const { RerankerLab } = require('../core/reranker');
+const { HyperCore } = require('../core/cognition/hypercore');
+const { CommunicationManager, TwilioAdapter, normaliseDestination } = require('../core/communication');
+
+test('matrix autograd passes a numeric gradient check', () => {
+  const x = autograd.fromRows([[0.4, -0.2, 0.7], [0.1, 0.3, -0.5]]);
+  const w = autograd.leaf(3, 2, (index) => (index % 2 ? 0.2 : -0.1));
+  const bias = autograd.leaf(1, 2, 0.05);
+  const gamma = autograd.leaf(1, 2, 1);
+  const beta = autograd.leaf(1, 2, 0);
+  const build = () => {
+    const hidden = autograd.relu(autograd.addBias(autograd.matmul(x, w), bias));
+    const normalised = autograd.layerNorm(hidden, gamma, beta);
+    const attention = autograd.rowSoftmax(normalised);
+    const pooled = autograd.meanRows(attention);
+    return autograd.softmaxCrossEntropy(pooled, [0]).loss;
+  };
+  const check = autograd.checkGradient(build, [w, bias, gamma, beta], { checks: 8 });
+  assert.equal(check.ok, true, `worst gradient error ${check.worst}`);
+  assert.ok(check.checked >= 6);
+});
+
+test('compact transformer passes a gradient check on every parameter group', () => {
+  const check = transformer.gradientCheck();
+  assert.equal(check.ok, true, `worst gradient error ${check.worst}`);
+  assert.ok(check.checked >= 8);
+});
+
+test('transformer training is real, reproducible and checkpointed with a checksum', () => {
+  const items = sentiment.items.slice(0, 180);
+  const options = { items, labels: sentiment.labels, epochs: 3, dim: 8, hidden: 16, maxLen: 10, seed: 9, batchSize: 8, patience: 3 };
+  const first = transformer.train(options);
+  const second = transformer.train(options);
+  assert.ok(first.metrics.cases > 0);
+  assert.equal(first.metrics.accuracy, second.metrics.accuracy, 'same seed must reproduce the held-out score');
+  assert.ok(first.history.every((entry) => Number.isFinite(entry.trainLoss)));
+  const checkpoint = transformer.toCheckpoint(first.model, { vocab: first.vocab, labels: sentiment.labels, metrics: first.metrics, dataset: 'sentiment-synthetic' });
+  const loaded = transformer.fromCheckpoint(JSON.parse(JSON.stringify(checkpoint)));
+  const encoded = transformer.encode(items[0].text, loaded.vocab, 10);
+  assert.equal(transformer.predict(loaded.model, encoded).probabilities.length, 3);
+  checkpoint.parameters[0][0] += 0.1;
+  assert.throws(() => transformer.fromCheckpoint(checkpoint), /checksum/i);
+});
+
+test('the transformer sentiment lab refuses untrained claims and promotes only a gated model', () => {
+  const dir = fs.mkdtempSync(path.join(home, 'sentiment-lab-'));
+  const lab = new (require('../core/lab').LearningLab)({ paths: { dataDir: () => dir } });
+  assert.equal(lab.classifySentiment('dobry produkt').code, 'NO_MODEL');
+  assert.equal(lab.trainSentiment({}).code, 'APPROVAL_REQUIRED');
+  const trained = lab.trainSentiment({ approvedBy: 'deep-test', epochs: 4, seed: 7 });
+  assert.equal(trained.ok, true);
+  assert.ok(trained.experiment.metrics.cases >= 50);
+  assert.equal(trained.experiment.dataset.labels.length, 3);
+  assert.ok(trained.experiment.training.history.every((entry) => Number.isFinite(entry.validationLoss)));
+  assert.equal(trained.experiment.gate.passed, true);
+  assert.equal(lab.promoteSentiment(trained.experiment.id, {}).code, 'APPROVAL_REQUIRED');
+  assert.equal(lab.promoteSentiment(trained.experiment.id, { approvedBy: 'deep-test' }).ok, true);
+  const positive = lab.classifySentiment('nowy SENTINEL jest szybki i niezawodny');
+  assert.equal(positive.label, 'positive');
+  const negative = lab.classifySentiment('nowy SENTINEL jest wolny i ciągle się psuje');
+  assert.equal(negative.label, 'negative');
+  assert.ok(lab.status().sentiment.active);
+});
+
+test('reranker refuses to train or promote without a named human', () => {
+  const dir = fs.mkdtempSync(path.join(home, 'reranker-refuse-'));
+  const lab = new RerankerLab({ paths: { dataDir: () => dir } });
+  assert.equal(lab.train({}).code, 'APPROVAL_REQUIRED');
+  assert.equal(lab.promote('nothing', { approvedBy: 'tester' }).code, 'NOT_FOUND');
+  assert.equal(lab.rerank({ query: 'backup', candidates: ['x'] }).code, 'NO_MODEL');
+});
+
+test('reranker trains, beats the lexical baseline on held-out topics and promotes', () => {
+  const dir = fs.mkdtempSync(path.join(home, 'reranker-train-'));
+  const lab = new RerankerLab({ paths: { dataDir: () => dir } });
+  const trained = lab.train({ approvedBy: 'deep-test' });
+  assert.equal(trained.ok, true);
+  const experiment = trained.experiment;
+  assert.ok(experiment.metrics.testQueries > 0);
+  assert.ok(experiment.metrics.ndcgAt3 >= experiment.baseline.ndcgAt3, `NDCG ${experiment.metrics.ndcgAt3} < ${experiment.baseline.ndcgAt3}`);
+  assert.equal(experiment.gate.passed, true);
+  assert.equal(lab.promote(experiment.id, {}).code, 'APPROVAL_REQUIRED');
+  assert.equal(lab.promote(experiment.id, { approvedBy: 'deep-test' }).ok, true);
+  const ranked = lab.rerank({ query: 'jak przywrócić kopię zapasową', candidates: ['karta graficzna się przegrzewa', 'procedura przywracania kopii zapasowej', 'tunel VPN nie działa', 'kopia zapasowa i suma kontrolna'] });
+  assert.equal(ranked.ok, true);
+  assert.match(ranked.ranked[0].doc, /kopi|przywrac|backup/i);
+  const artifact = JSON.parse(fs.readFileSync(experiment.artifact.path, 'utf8'));
+  assert.equal(artifact.format, 'sentinel-reranker-v1');
+  assert.equal(artifact.checkpoint.checksum, experiment.artifact.checksum);
+});
+
+test('hypercore keeps contradictory beliefs side by side instead of overwriting', () => {
+  const core = new HyperCore();
+  const evidence = core.addEvidence({ content: 'RAM 32 GB', source: 'system.info', trust: 0.9, untrusted: false });
+  const first = core.addBelief({ statement: 'RAM is 32 GB', key: 'ram.gb', value: 32, confidence: 0.9, evidenceIds: [evidence.id] });
+  const second = core.addBelief({ statement: 'RAM is 16 GB', key: 'ram.gb', value: 16, confidence: 0.7, source: 'stale-log' });
+  assert.equal(second.conflicts.length, 1);
+  const conflict = second.conflicts[0];
+  assert.equal(conflict.resolution, null);
+  assert.equal(core.status().counts.beliefs, 2);
+  assert.equal(core.beliefs.get(first.belief.id).status, 'contested');
+  assert.equal(core.resolveConflict(conflict.id, { resolution: 'accepted-left' }).code, 'APPROVAL_REQUIRED');
+  assert.equal(core.resolveConflict(conflict.id, { resolution: 'accepted-left', approvedBy: 'deep-test' }).ok, true);
+  assert.equal(core.beliefs.get(second.belief.id).status, 'superseded');
+});
+
+test('hypercore deduction is bounded and never auto-resolves a contradiction', () => {
+  const core = new HyperCore();
+  core.addBelief({ statement: 'RAM is 32 GB', key: 'ram.gb', value: 32, confidence: 0.9, source: 'system.info' });
+  core.addRule({ when: [{ key: 'ram.gb', value: 32 }], then: { key: 'memory.sufficient', value: true }, confidence: 0.85 });
+  core.addBelief({ statement: 'Memory is not sufficient', key: 'memory.sufficient', value: false, confidence: 0.8, source: 'benchmark' });
+  const result = core.deduce({ maxIterations: 4 });
+  assert.equal(result.derived.length, 1);
+  assert.ok(result.derived[0].derived, 'derived belief must be marked as derived');
+  assert.equal(result.conflicts.length, 1);
+  assert.equal(result.conflicts[0].status, 'open');
+  assert.equal(core.status().counts.openConflicts, 1);
+});
+
+test('hypercore attention is deterministic, budgeted and never drops hard constraints', () => {
+  const core = new HyperCore();
+  core.addGoal({ description: 'finish the audit report', priority: 0.9, deadline: new Date(Date.now() + 3600000).toISOString(), status: 'active' });
+  core.addConstraint({ statement: 'never send private data externally', kind: 'hard' });
+  const first = core.focus({ tokenBudget: 80, reason: 'test' });
+  const second = core.focus({ tokenBudget: 80, reason: 'test' });
+  assert.deepEqual(first.trace.selected, second.trace.selected, 'attention must be deterministic');
+  assert.ok(first.items.some((item) => item.kind === 'constraint'), 'hard constraint was dropped');
+  assert.ok(first.items.length <= core.budgets.attentionItems);
+  assert.ok(first.trace.estimatedTokens >= 0);
+  assert.ok(/estimate/.test(first.trace.tokenEstimateMethod));
+});
+
+test('hypercore budgets and persistence survive a reload', () => {
+  const rows = new Map();
+  const fakeStore = { get: (collection, id) => rows.get(`${collection}:${id}`), put: (collection, id, value) => rows.set(`${collection}:${id}`, JSON.parse(JSON.stringify(value))) };
+  const core = new HyperCore({ store: fakeStore });
+  core.beginTask({ budgets: { toolCalls: 2 } });
+  assert.equal(core.spend({ toolCalls: 1 }).ok, true);
+  assert.equal(core.spend({ toolCalls: 2 }).code, 'BUDGET_EXCEEDED');
+  const goal = core.addGoal({ description: 'remember this goal', priority: 0.7 });
+  assert.equal(core.save().ok, true);
+  const reloaded = new HyperCore({ store: fakeStore });
+  assert.equal(reloaded.goals.get(goal.id).description, 'remember this goal');
+  assert.equal(reloaded.status().counts.goals, 1);
+});
+
+test('communications are disabled by default and unconfigured channels say NOT_CONFIGURED', async () => {
+  const manager = new CommunicationManager({ config: { get: (key, fallback) => fallback }, store: null });
+  const result = await manager.call({ to: '+48123123123', message: 'test', consentToken: 'x' });
+  assert.equal(result.code, 'NOT_CONFIGURED');
+  assert.equal(manager.status().liveCalls, false);
+});
+
+test('a call needs granted consent bound to the exact destination and is never silently live', async () => {
+  const dir = fs.mkdtempSync(path.join(home, 'comm-'));
+  const store = openStore({ dir });
+  const manager = new CommunicationManager({ config: { get: (key, fallback) => key === 'communication.enabled' ? true : fallback }, store });
+  const request = manager.requestConsent({ destination: '+48123123123', reason: 'reminder' });
+  assert.equal(request.ok, true);
+  assert.equal((await manager.call({ to: '+48123123123', message: 'test', consentToken: request.consent.token })).code, 'CONSENT_NOT_GRANTED');
+  manager.grantConsent(request.consent.token, { approvedBy: 'tester' });
+  assert.equal((await manager.call({ to: '+48999111222', message: 'test', consentToken: request.consent.token })).code, 'CONSENT_DESTINATION_MISMATCH');
+  const call = await manager.call({ to: '+48123123123', message: 'Przypomnienie o spotkaniu', consentToken: request.consent.token });
+  assert.equal(call.ok, true);
+  assert.equal(call.communication.simulated, true);
+  assert.match(String(call.communication.status), /simulated/);
+  assert.equal((await manager.call({ to: '+48123123123', message: 'again', consentToken: request.consent.token })).code, 'CONSENT_USED');
+  assert.equal(manager.completeMock(call.communication.id).communication.delivered, true);
+  assert.equal(manager.history.length, 1);
+  store.close?.();
+});
+
+test('emergency, premium and malformed destinations are blocked', () => {
+  assert.equal(normaliseDestination('112').ok, false);
+  assert.equal(normaliseDestination('+19005550100').code, 'PREMIUM_BLOCKED');
+  assert.equal(normaliseDestination('+48123123123').ok, true);
+});
+
+test('the Twilio adapter builds a documented request and verifies signed webhooks (no network)', async () => {
+  let captured = null;
+  const fetchImpl = async (url, options) => {
+    captured = { url, options };
+    return { ok: true, status: 201, json: async () => ({ sid: 'CA123', status: 'queued' }) };
+  };
+  const adapter = new TwilioAdapter({ accountSid: 'AC123', authToken: 'secret-token', from: '+48123123123', publicBaseUrl: 'https://example.test', fetchImpl });
+  const result = await adapter.startCall({ to: '+48999111222', message: 'Test <call>', language: 'pl', id: 'abc' });
+  assert.equal(result.ok, true);
+  assert.equal(result.providerId, 'CA123');
+  assert.match(captured.url, /Accounts\/AC123\/Calls\.json$/);
+  assert.match(captured.options.headers.authorization, /^Basic /);
+  assert.match(String(captured.options.body.get('Twiml')), /<Say language="pl-PL">/);
+  assert.match(String(captured.options.body.get('Twiml')), /&lt;call&gt;/);
+  const crypto = require('node:crypto');
+  const params = { CallSid: 'CA123', CallStatus: 'completed' };
+  const url = 'https://example.test/api/communication/twilio';
+  const signature = crypto.createHmac('sha1', 'secret-token').update(`${url}${Object.keys(params).sort().map((key) => `${key}${params[key]}`).join('')}`).digest('base64');
+  assert.equal(adapter.verifyWebhook({ url, params, signature }).ok, true);
+  assert.equal(adapter.verifyWebhook({ url, params, signature: 'bad' }).code, 'BAD_SIGNATURE');
+});
+
+test('science tools compute real values and reject invalid units', async () => {
+  const science = require('../core/tools/science.tools');
+  const tool = (name) => science.find((entry) => entry.name === name);
+  assert.equal((await tool('science.length_convert').run({ value: 1, from: 'km', to: 'm' })).value, 1000);
+  assert.equal((await tool('science.temperature_convert').run({ value: 0, from: 'C', to: 'K' })).value, 273.15);
+  const factors = await tool('science.prime_factors').run({ n: 360 });
+  assert.equal(factors.expression, '2^3 × 3^2 × 5');
+  const quadratic = await tool('science.quadratic').run({ a: 1, b: -3, c: 2 });
+  assert.deepEqual(quadratic.roots.map((root) => root.real).sort(), [1, 2]);
+  await assert.rejects(tool('science.length_convert').run({ value: 1, from: 'km', to: 'kg' }), /same supported family/);
+  assert.equal((await tool('science.temperature_convert').run({ value: -500, from: 'C', to: 'K' })).code, 'BELOW_ABSOLUTE_ZERO');
+});
+
+test('productivity tools compute schedules, critical paths and exact budget splits', async () => {
+  const productivity = require('../core/tools/productivity.tools');
+  const tool = (name) => productivity.find((entry) => entry.name === name);
+  const path = await tool('planning.critical_path').run({ tasks: [{ id: 'a', duration: 3 }, { id: 'b', duration: 2, dependsOn: ['a'] }, { id: 'c', duration: 5, dependsOn: ['a'] }, { id: 'd', duration: 1, dependsOn: ['b', 'c'] }] });
+  assert.equal(path.projectDuration, 9);
+  assert.deepEqual(path.criticalPath, ['a', 'c', 'd']);
+  const cycle = await tool('planning.critical_path').run({ tasks: [{ id: 'a', duration: 1, dependsOn: ['b'] }, { id: 'b', duration: 1, dependsOn: ['a'] }] });
+  assert.equal(cycle.code, 'CYCLE');
+  const split = await tool('finance.budget_split').run({ amount: 100, weights: [1, 1, 1] });
+  assert.equal(split.total, 100);
+  assert.equal(split.shares.reduce((sum, value) => sum + value, 0), 100);
+  const week = await tool('calendar.week_number').run({ date: '2026-01-01' });
+  assert.equal(week.week, 1);
+  assert.equal(week.year, 2026);
+});
+
+test('the 7.0 tool packs are registered with valid schemas', async () => {
+  const agent = new Agent({ configPath: path.join(home, 'config-tools7.json') });
+  agent.config.merge({ ports: { ui: 0, link: 0 } });
+  agent.start();
+  await new Promise((resolve) => setTimeout(resolve, 200));
+  try {
+    assert.ok(agent.tools.get('hypercore.status'));
+    assert.ok(agent.tools.get('reranker.rerank'));
+    assert.ok(agent.tools.get('communication.call'));
+    assert.equal(agent.tools.get('science.length_convert').permission, 'read');
+    assert.equal(agent.tools.get('planning.critical_path').category, 'productivity');
+    const specialistData = require('../core/ml/data/specialists');
+    for (const item of specialistData.tools.items) assert.ok(agent.tools.get(item.label), `specialist dataset references unknown tool ${item.label}`);
+    assert.ok(agent.tools.get('specialists.status'));
+    assert.equal(agent.tools.get('specialists.train').permission, 'system');
+    assert.ok(agent.tools.list().length >= 325, `only ${agent.tools.list().length} tools`);
+    assert.ok(agent.tools.categories().length >= 29);
+  } finally {
+    agent.stop();
+  }
+});
+
+test('daily briefing composes cited state and never invents an appointment', () => {
+  const { DailyBriefing } = require('../core/briefing');
+  const now = Date.parse('2026-03-10T12:00:00Z');
+  const memory = {
+    due: () => [{ record: { id: 'm1', text: 'zapłacić rachunek', dueAt: now - 3600000, kind: 'prospective' }, overdue: true }],
+    list: () => [{ id: 'm1', kind: 'prospective', text: 'zapłacić rachunek', dueAt: now - 3600000 }, { id: 'm2', kind: 'prospective', text: 'przegląd projektu', dueAt: now + 3600000 }],
+  };
+  const tasks = { list: () => [{ id: 't1', title: 'wdrożyć poprawkę', status: 'running', progress: 40 }] };
+  const hypercore = {
+    inspect: (type) => type === 'goal'
+      ? { items: [{ id: 'g1', description: 'dokończyć raport', status: 'active', priority: 0.8, deadline: '2026-03-11T12:00:00Z' }] }
+      : { items: [{ id: 'c1', key: 'ram.gb', status: 'open', left: { value: 32 }, right: { value: 16 } }] },
+  };
+  const briefing = new DailyBriefing({ memory, tasks, hypercore, approvals: { list: () => [] }, now: () => now });
+  const result = briefing.generate({ horizonHours: 24 });
+  assert.ok(result.items.length >= 4);
+  assert.ok(result.items.some((item) => item.id === 'm1' && item.section === 'overdue'));
+  assert.ok(result.items.some((item) => item.id === 't1' && item.section === 'tasks'));
+  assert.ok(result.items.some((item) => item.id === 'c1' && item.section === 'conflicts'));
+  assert.ok(result.text.includes('[m1]') && result.text.includes('[t1]'));
+  assert.ok(result.text.includes('Bez modelu'));
+  assert.ok(!result.text.includes('2027'));
+});
+
+test('proactive rules are opt-in, deduplicated, quiet-hour aware and honest about delivery', () => {
+  const { ProactiveEngine } = require('../core/proactive');
+  let clock = Date.parse('2026-03-10T12:00:00Z');
+  const engine = new ProactiveEngine({ now: () => clock, quietHours: [22, 7], maxPerHour: 1 });
+  const added = engine.addRule({ name: 'task finished', event: 'task.completed', conditions: [{ field: 'status', op: 'eq', value: 'done' }] });
+  assert.equal(added.ok, true);
+  const first = engine.evaluate({ type: 'task.completed', id: 't1', status: 'done' });
+  assert.equal(first.candidates, 1);
+  assert.equal(first.delivered, 0);
+  assert.equal(first.notifications[0].delivery.code, 'NOT_CONFIGURED');
+  assert.equal(engine.evaluate({ type: 'task.completed', id: 't2', status: 'done' }).suppressed[0].suppressed, 'cooldown');
+  clock += 31 * 60 * 1000;
+  assert.equal(engine.evaluate({ type: 'task.completed', id: 't3', status: 'done' }).candidates, 0);
+  clock = Date.parse('2026-03-10T23:00:00Z');
+  const quiet = engine.evaluate({ type: 'task.completed', id: 't4', status: 'done' });
+  assert.equal(quiet.candidates, 0);
+  assert.equal(quiet.suppressed[0].suppressed, 'quiet-hours');
+  const status = engine.status();
+  assert.equal(status.deliveryConfigured, false);
+  assert.match(status.honesty, /no microphone/);
+});
+
+test('four specialists train, clear their named baselines and serve gated predictions', () => {
+  const { SpecialistZoo } = require('../core/specialists');
+  const dir = fs.mkdtempSync(path.join(home, 'specialists-train-'));
+  const zoo = new SpecialistZoo({ paths: { dataDir: () => dir } });
+  assert.equal(zoo.train('tools', {}).code, 'APPROVAL_REQUIRED');
+  assert.equal(zoo.recommendTool('sprawdź RAM').code, 'NO_MODEL');
+  for (const task of ['tools', 'routing', 'relevance', 'complexity']) {
+    const trained = zoo.train(task, { approvedBy: 'deep-test' });
+    assert.equal(trained.ok, true, `${task}: ${trained.message}`);
+    const experiment = trained.experiment;
+    assert.ok(experiment.metrics.cases >= 6);
+    assert.ok(experiment.metrics.accuracy >= experiment.baseline.accuracy, `${task}: ${experiment.metrics.accuracy} < ${experiment.baseline.accuracy}`);
+    assert.equal(experiment.gate.passed, true);
+    assert.equal(zoo.promote(task, experiment.id, {}).code, 'APPROVAL_REQUIRED');
+    assert.equal(zoo.promote(task, experiment.id, { approvedBy: 'deep-test' }).ok, true);
+  }
+  assert.equal(zoo.recommendTool('sprawdź ile mam RAM').label, 'system.info');
+  assert.equal(zoo.route('napraw błąd w teście').label, 'code');
+  assert.equal(zoo.memoryRelevance({ query: 'jak przywrócić backup', memory: 'procedura przywracania kopii zapasowej' }).label, 'relevant');
+  const simple = zoo.complexity('pokaż RAM');
+  assert.equal(simple.label, 'simple');
+  const hard = zoo.complexity('zbadaj temat, zbierz źródła, porównaj i napisz raport');
+  assert.ok(['medium', 'complex'].includes(hard.label), 'complexity model returned an unknown label');
+  const status = zoo.status();
+  assert.equal(status.specialists.filter((entry) => entry.active).length, 4);
+  assert.ok(fs.existsSync(zoo.experiments('tools')[0].artifact.path));
+});
+
+test('a promoted routing model can supply the dispatcher hint without overriding strong keywords', () => {
+  const { Dispatcher } = require('../core/ai/dispatcher');
+  const { AgentRegistry } = require('../core/ai/agents');
+  const agents = new AgentRegistry();
+  const fake = {
+    route: () => ({ ok: true, task: 'routing', label: 'devices', confidence: 0.91, neural: { label: 'devices', confidence: 0.91 }, baseline: 'devices', usedFallback: false, model: { experimentId: 'fake' } }),
+  };
+  const dispatcher = new Dispatcher({ agents, tools: {}, llm: null, config: { get: () => null }, services: { specialists: fake } });
+  const unknown = dispatcher.route('zzzzz qqqqq');
+  assert.equal(unknown.primary.name, 'mobile');
+  assert.equal(unknown.specialist.domain, 'devices');
+  assert.match(unknown.reason, /specialist model/);
+  const strong = dispatcher.route('pokaż RAM i GPU');
+  assert.equal(strong.primary.name, 'hardware');
+  assert.equal(strong.specialist.domain, 'devices', 'the hint must remain visible for audit');
+  const unavailable = new Dispatcher({ agents, tools: {}, llm: null, config: { get: () => null }, services: { specialists: { route: () => ({ ok: false, code: 'NO_MODEL' }) } } });
+  assert.equal(unavailable.route('zzzzz qqqqq').primary.name, 'conversation');
+});
+
+test('communication configuration is safe by default and preserves user values', () => {
+  const { defaults, deepMerge } = require('../core/config');
+  const base = defaults();
+  assert.equal(base.communication.enabled, false);
+  assert.equal(base.communication.provider, 'mock');
+  assert.equal(base.communication.twilio.authToken, '');
+  assert.ok(base.communication.maxCallsPerDay > 0);
+  const merged = deepMerge(base, { communication: { enabled: true, maxCallsPerDay: 2 } });
+  assert.equal(merged.communication.enabled, true);
+  assert.equal(merged.communication.maxCallsPerDay, 2);
+  assert.equal(merged.communication.maxSmsPerDay, base.communication.maxSmsPerDay);
+});
+
 /* ── runner ───────────────────────────────────────────────────────────── */
 
 (async () => {

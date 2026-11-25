@@ -42,6 +42,12 @@ const { SkillLibrary } = require('./skills');
 const { RepoMap } = require('./repomap');
 const { LearningLab } = require('./lab');
 const { ResearchService } = require('./research');
+const { RerankerLab } = require('./reranker');
+const { HyperCore } = require('./cognition/hypercore');
+const { CommunicationManager } = require('./communication');
+const { DailyBriefing } = require('./briefing');
+const { ProactiveEngine } = require('./proactive');
+const { SpecialistZoo } = require('./specialists');
 const { Organisation } = require('./org');
 const { ExperienceStore } = require('./experience');
 const { EventBus } = require('./events');
@@ -151,6 +157,18 @@ class Agent extends EventEmitter {
       this.services.lab = this.lab;
       this.research = new ResearchService({ store: this.store, log: this.log, workspaceDir: pathsModule.workspaceDir() });
       this.services.research = this.research;
+      this.reranker = new RerankerLab({ paths: pathsModule, store: this.store, log: this.log });
+      this.services.reranker = this.reranker;
+      this.hypercore = new HyperCore({ store: this.store, log: this.log });
+      this.services.hypercore = this.hypercore;
+      this.communication = new CommunicationManager({ config: this.config, store: this.store, log: this.log });
+      this.services.communication = this.communication;
+      this.briefing = new DailyBriefing({ memory: this.memory, tasks: this.tasks, hypercore: this.hypercore, approvals: this.approvals });
+      this.services.briefing = this.briefing;
+      this.proactive = new ProactiveEngine({ store: this.store, log: this.log });
+      this.services.proactive = this.proactive;
+      this.specialists = new SpecialistZoo({ paths: pathsModule, store: this.store, log: this.log });
+      this.services.specialists = this.specialists;
       this.agents = new AgentRegistry();
       this.org = new Organisation({ agents: this.agents, log: this.log });
       this.services.org = this.org;
@@ -319,6 +337,12 @@ class Agent extends EventEmitter {
             lab: this.lab || null,
             neural: this.neural || null,
             research: this.research || null,
+            reranker: this.reranker || null,
+            hypercore: this.hypercore || null,
+            communication: this.communication || null,
+            briefing: this.briefing || null,
+            proactive: this.proactive || null,
+            specialists: this.specialists || null,
             incidents: this.incidents || null,
             tasks: this.tasks || null,
           }

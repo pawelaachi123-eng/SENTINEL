@@ -1,0 +1,601 @@
+{
+  "version": "7.0.0",
+  "at": "2026-11-25T05:00:10.441Z",
+  "platform": "linux/x64",
+  "node": "v22.22.3",
+  "hardware": "CPU only; no GPU was used or measured",
+  "totalMs": 2822,
+  "models": {
+    "intent": {
+      "architecture": "MLP 384→24→12→10, ReLU, softmax cross-entropy, Adam",
+      "dataset": {
+        "items": 346,
+        "labels": 10,
+        "provenance": "synthetic, project-authored, non-sensitive",
+        "split": {
+          "train": 249,
+          "validation": 48,
+          "test": 49,
+          "hash": "2f242fc5a566d8197c6405a7b0e7d4a94b31b7572232fe2c76e7127251f00aee",
+          "contamination": {
+            "clean": true,
+            "problems": [],
+            "checked": 346
+          },
+          "curated": [
+            {
+              "moved": "move project directory without deleting",
+              "from": "validation",
+              "twin": "list project directory without deleting"
+            },
+            {
+              "moved": "fix a unit test and show the result",
+              "from": "validation",
+              "twin": "add a unit test and show the result"
+            },
+            {
+              "moved": "run a model checkpoint with metrics",
+              "from": "test",
+              "twin": "show a model checkpoint with metrics"
+            }
+          ]
+        },
+        "hash": "f666c9c2b2fffafac8971aa6ac4c58fede18bff2da79ae78c625a43ecaa37293"
+      },
+      "metrics": {
+        "cases": 49,
+        "correct": 39,
+        "accuracy": 0.796,
+        "macroF1": 0.799,
+        "perClass": {
+          "chat": {
+            "support": 5,
+            "recall": 0.6,
+            "hits": 3
+          },
+          "code": {
+            "support": 5,
+            "recall": 0.6,
+            "hits": 3
+          },
+          "documents": {
+            "support": 5,
+            "recall": 1,
+            "hits": 5
+          },
+          "files": {
+            "support": 5,
+            "recall": 0.8,
+            "hits": 4
+          },
+          "learning": {
+            "support": 4,
+            "recall": 1,
+            "hits": 4
+          },
+          "memory": {
+            "support": 5,
+            "recall": 0.8,
+            "hits": 4
+          },
+          "network": {
+            "support": 5,
+            "recall": 0.6,
+            "hits": 3
+          },
+          "planning": {
+            "support": 5,
+            "recall": 1,
+            "hits": 5
+          },
+          "security": {
+            "support": 5,
+            "recall": 0.6,
+            "hits": 3
+          },
+          "status": {
+            "support": 5,
+            "recall": 1,
+            "hits": 5
+          }
+        },
+        "confusion": [
+          [
+            3,
+            0,
+            1,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            3,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0
+          ],
+          [
+            0,
+            0,
+            5,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            4,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            4,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            1,
+            0,
+            0,
+            4,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            1,
+            1,
+            0,
+            0,
+            3,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            5,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            3,
+            1
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            5
+          ]
+        ]
+      },
+      "baseline": {
+        "cases": 49,
+        "correct": 37,
+        "accuracy": 0.755,
+        "macroF1": 0.749,
+        "perClass": {
+          "chat": {
+            "support": 5,
+            "recall": 1,
+            "hits": 5
+          },
+          "code": {
+            "support": 5,
+            "recall": 0.6,
+            "hits": 3
+          },
+          "documents": {
+            "support": 5,
+            "recall": 1,
+            "hits": 5
+          },
+          "files": {
+            "support": 5,
+            "recall": 1,
+            "hits": 5
+          },
+          "learning": {
+            "support": 4,
+            "recall": 0.75,
+            "hits": 3
+          },
+          "memory": {
+            "support": 5,
+            "recall": 0.6,
+            "hits": 3
+          },
+          "network": {
+            "support": 5,
+            "recall": 1,
+            "hits": 5
+          },
+          "planning": {
+            "support": 5,
+            "recall": 0.6,
+            "hits": 3
+          },
+          "security": {
+            "support": 5,
+            "recall": 0.2,
+            "hits": 1
+          },
+          "status": {
+            "support": 5,
+            "recall": 0.8,
+            "hits": 4
+          }
+        },
+        "confusion": [
+          [
+            5,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            1,
+            3,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            5,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            5,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            1,
+            0,
+            0,
+            0,
+            3,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            2,
+            0,
+            0,
+            0,
+            0,
+            3,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            5,
+            0,
+            0,
+            0
+          ],
+          [
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            3,
+            0,
+            1
+          ],
+          [
+            0,
+            0,
+            1,
+            3,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0
+          ],
+          [
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            4
+          ]
+        ]
+      },
+      "delta": 0.041,
+      "training": {
+        "epochsRun": 22,
+        "bestEpoch": 11,
+        "bestValidationLoss": 0.6599
+      },
+      "durationMs": 472,
+      "artifact": {
+        "bytes": 197681,
+        "checksum": "61f8bf8b33ded7c15da73b8c3ea70cde3472927df9dff176da3ee0b5a3209958",
+        "location": "SENTINEL_HOME/models (not committed)"
+      }
+    },
+    "sentiment": {
+      "architecture": "single-block transformer: embeddings, self-attention, LayerNorm, ReLU FFN, mean pool; reverse-mode autograd",
+      "dataset": {
+        "items": 672,
+        "labels": [
+          "negative",
+          "neutral",
+          "positive"
+        ],
+        "provenance": "authored synthetic bilingual templates, split by subject; no user data",
+        "split": {
+          "train": 448,
+          "validation": 84,
+          "test": 140,
+          "groups": {
+            "train": 16,
+            "validation": 3,
+            "test": 5
+          }
+        },
+        "hash": "2d7b536e0d6aadfa6c01ce7725bad543fd150f3022b54c985d51013b368daa1a"
+      },
+      "metrics": {
+        "cases": 140,
+        "correct": 140,
+        "accuracy": 1,
+        "macroF1": 1,
+        "perClass": {
+          "0": {
+            "support": 50,
+            "precision": 1,
+            "recall": 1
+          },
+          "1": {
+            "support": 40,
+            "precision": 1,
+            "recall": 1
+          },
+          "2": {
+            "support": 50,
+            "precision": 1,
+            "recall": 1
+          }
+        }
+      },
+      "baseline": {
+        "cases": 140,
+        "correct": 135,
+        "accuracy": 0.964,
+        "macroF1": 0.963,
+        "perClass": {
+          "negative": {
+            "support": 50,
+            "recall": 0.96,
+            "hits": 48
+          },
+          "neutral": {
+            "support": 40,
+            "recall": 1,
+            "hits": 40
+          },
+          "positive": {
+            "support": 50,
+            "recall": 0.94,
+            "hits": 47
+          }
+        },
+        "confusion": [
+          [
+            48,
+            2,
+            0
+          ],
+          [
+            0,
+            40,
+            0
+          ],
+          [
+            0,
+            3,
+            47
+          ]
+        ]
+      },
+      "delta": 0.036,
+      "gate": {
+        "passed": true,
+        "rule": "held-out accuracy must be at least the lexicon baseline"
+      },
+      "training": {
+        "epochsRun": 6,
+        "bestEpoch": 2,
+        "bestValidationLoss": 0.04278,
+        "history": [
+          {
+            "epoch": 0,
+            "trainLoss": 1.23288,
+            "validationLoss": 0.70461,
+            "validationAccuracy": 0.81,
+            "ms": 372
+          },
+          {
+            "epoch": 1,
+            "trainLoss": 0.67426,
+            "validationLoss": 0.57127,
+            "validationAccuracy": 0.762,
+            "ms": 332
+          },
+          {
+            "epoch": 2,
+            "trainLoss": 0.28227,
+            "validationLoss": 0.04278,
+            "validationAccuracy": 1,
+            "ms": 368
+          },
+          {
+            "epoch": 3,
+            "trainLoss": 0.20551,
+            "validationLoss": 0.62599,
+            "validationAccuracy": 0.762,
+            "ms": 378
+          },
+          {
+            "epoch": 4,
+            "trainLoss": 0.73051,
+            "validationLoss": 0.34483,
+            "validationAccuracy": 0.833,
+            "ms": 333
+          },
+          {
+            "epoch": 5,
+            "trainLoss": 0.68258,
+            "validationLoss": 0.33467,
+            "validationAccuracy": 0.881,
+            "ms": 329
+          }
+        ]
+      },
+      "durationMs": 2287,
+      "artifact": {
+        "bytes": 197874,
+        "checksum": "457d548e7c84782bde97fb57e5aee601e422a1f9256ac61ea566424fc28f6411",
+        "location": "SENTINEL_HOME/models (not committed)"
+      }
+    },
+    "reranker": {
+      "architecture": "3-class MLP over six relevance features",
+      "dataset": {
+        "cases": 48,
+        "gradedCandidates": 240,
+        "provenance": "authored synthetic query/passage groups",
+        "hash": "e06b0192e5ac76606423fe6bab484f305bd8682298c38dcd46c184d244d0b9fe"
+      },
+      "metrics": {
+        "ndcgAt3": 0.8443,
+        "mrr": 1,
+        "gradeAccuracy": 0.7667,
+        "testQueries": 6
+      },
+      "baseline": {
+        "ndcgAt3": 0.8273,
+        "mrr": 0.9167
+      },
+      "delta": 0.017,
+      "gate": {
+        "passed": true,
+        "rule": "held-out NDCG@3 must be >= the lexical baseline"
+      },
+      "training": {
+        "epochsRun": 37,
+        "bestEpoch": 16,
+        "bestValidationLoss": 0.6042905803002381
+      },
+      "durationMs": 45,
+      "artifact": {
+        "bytes": 3826,
+        "checksum": "8e3e6a2a7202675c0790290ce9a08bb51979e4e27f907d341585d192705ee034",
+        "location": "SENTINEL_HOME/models (not committed)"
+      }
+    }
+  },
+  "honest": "All metrics are measured on synthetic held-out data in this environment. They are not benchmarks of language understanding and are not comparable to frontier LLMs."
+}

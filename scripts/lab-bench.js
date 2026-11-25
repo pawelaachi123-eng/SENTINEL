@@ -5,7 +5,7 @@
  * Reproducible learning-lab measurement.
  *
  * Trains one small intent classifier with a fixed seed, on CPU, and writes the
- * measured metrics to docs/lab-6.0.json. Weights are written to a temporary
+ * measured metrics to docs/lab-<major>.0.json. Weights are written to a temporary
  * SENTINEL_HOME and removed; only the report is kept. No model, network or GPU
  * is involved.
  */
@@ -48,7 +48,8 @@ async function main() {
     status: experiment.status,
     honest: 'CPU-trained small MLP on synthetic data; not LoRA and not a language model. Weights are not committed.',
   };
-  const target = path.join(__dirname, '..', 'docs', 'lab-6.0.json');
+  const major = String(require('../package.json').version).split('.')[0];
+  const target = path.join(__dirname, '..', 'docs', `lab-${major}.0.json`);
   fs.writeFileSync(target, `${JSON.stringify(report, null, 2)}\n`);
   console.log(`written: ${target}`);
   console.log(`test accuracy ${report.metrics.accuracy} vs baseline ${report.baseline.accuracy}; macro-F1 ${report.metrics.macroF1}; ${report.training.epochsRun} epochs; ${report.artifact.bytes} B checkpoint; ${report.durationMs} ms total`);

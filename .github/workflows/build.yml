@@ -1,23 +1,25 @@
-name: build
+name: source-ci
+
+# 7.0 source-only CI. Binary packaging and publishing are deliberately disabled:
+# no EXE, MSI, APK, AAB, BIN, HEX or UF2 is produced. Android, desktop and ESP32
+# sources remain in the repository and are linted/syntax-checked, not packaged.
 
 on:
   push:
     branches: ['**']
-    tags: ['v*']
   pull_request:
   workflow_dispatch:
 
 concurrency:
-  group: build-${{ github.ref }}
+  group: source-ci-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  # ── fast feedback: does the agent boot, answer, and refuse bad input? ────
-  check:
-    name: Agent checks
+  linux:
+    name: Linux source checks
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -28,13 +30,13 @@ jobs:
         run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Behaviour tests (signatures, replay, policy, secrets)
         run: node test/run.js
-      - name: Syntax, assets and boot test
+      - name: Syntax, assets and boot checks (no packaging)
         run: node scripts/check.js
-      - name: UI test (real page, real agent, real WebCrypto)
+      - name: UI source test (real page, real agent, real WebCrypto)
         run: node test/ui.js
       - name: Assistant stack test (HTTP API, mocked model)
         run: node test/ai.js
-      - name: Deep checks (cognition, executor, graph, MCP, evaluation)
+      - name: Deep checks (cognition, neural, memory, executor, tools)
         run: node test/deep.js
       - name: Deterministic evaluation suite (providers disabled)
         run: node scripts/eval.js
@@ -44,26 +46,20 @@ jobs:
         continue-on-error: true
         run: node scripts/bench.js
 
-  # ── Windows executables: headless agent + desktop console ───────────────
   windows:
-    name: Windows executables
+    name: Windows source checks
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Install build tools
+      - name: Install dev dependencies
+        shell: pwsh
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Source test suites on Windows
         shell: pwsh
         run: |
-          npm install --no-audit --no-fund *>&1 | Tee-Object -FilePath install.log
-          if ($LASTEXITCODE -ne 0) { ./scripts/ci-fail.ps1 -LogFile install.log -Label windows-install }
-      - name: Behaviour tests on Windows
-        shell: pwsh
-        run: |
-          # Each suite is run separately and its failing assertions are emitted
-          # as workflow annotations, so a red Windows build is diagnosable
-          # without downloading logs.
           $failed = $false
           $suites = @(
             @{ name = 'run';  file = 'test/run.js' },
@@ -89,14 +85,6 @@ jobs:
             }
           }
           if ($failed) { exit 1 }
-      - name: Upload Windows test logs
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: windows-behaviour-logs
-          path: windows-*.log
-          if-no-files-found: ignore
-          retention-days: 7
       - name: Deterministic evaluation on Windows
         shell: pwsh
         run: |
@@ -121,208 +109,32 @@ jobs:
             Write-Host "::error title=Windows tool audit failed::$details"
             exit 1
           }
-
-      - name: Build SENTINEL-Agent.exe (single file, no installer)
-        shell: pwsh
-        run: |
-          npx @yao-pkg/pkg bin/sentinel-agent.js --targets node22-win-x64 --compress GZip --output dist/SENTINEL-Agent.exe *>&1 | Tee-Object -FilePath pkg.log
-          if ($LASTEXITCODE -ne 0) { ./scripts/ci-fail.ps1 -LogFile pkg.log -Label pkg }
-      - name: Build desktop app (installer + portable)
-        shell: pwsh
-        env:
-          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          npx electron-builder --win --x64 --publish never *>&1 | Tee-Object -FilePath eb.log
-          if ($LASTEXITCODE -ne 0) { ./scripts/ci-fail.ps1 -LogFile eb.log -Label electron-builder }
-      - name: Smoke-test the packaged agent
-        shell: pwsh
-        continue-on-error: false
-        run: |
-          $env:SENTINEL_HOME = "$env:RUNNER_TEMP\sentinel-smoke"
-          $p = Start-Process -FilePath "dist\SENTINEL-Agent.exe" -PassThru -WindowStyle Hidden
-          Start-Sleep -Seconds 8
-          try {
-            $health = Invoke-RestMethod -Uri "http://127.0.0.1:7878/api/health" -TimeoutSec 15
-            if (-not $health.ok) { throw "agent did not report healthy" }
-            Write-Host "health ok: $($health.name) $($health.version)"
-
-            # The packaged exe must actually ship the UI, not just the API.
-            $page = Invoke-WebRequest -Uri "http://127.0.0.1:7878/" -UseBasicParsing -TimeoutSec 15
-            if ($page.Content -notmatch 'SENTINEL') { throw "UI assets missing from the packaged exe" }
-            Write-Host "UI served: $($page.Content.Length) bytes"
-
-            # Authenticated call using the token the exe just generated.
-            $cfg = Get-Content "$env:SENTINEL_HOME\config.json" -Raw | ConvertFrom-Json
-            $status = Invoke-RestMethod -Uri "http://127.0.0.1:7878/api/status?t=$($cfg.uiToken)" -TimeoutSec 15
-            if (-not $status.data.hostname) { throw "authorised status call failed" }
-            Write-Host "status ok for $($status.data.hostname)"
-
-            # And a request without the token must be refused.
-            $refused = $false
-            try { Invoke-RestMethod -Uri "http://127.0.0.1:7878/api/status" -TimeoutSec 10 | Out-Null }
-            catch { $refused = $true }
-            if (-not $refused) { throw "unauthenticated request was not rejected" }
-            Write-Host "unauthenticated request correctly rejected"
-          } catch {
-            Write-Output "::error file=smoke::$_"
-            exit 1
-          } finally {
-            Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
-          }
-      - uses: actions/upload-artifact@v4
+      - name: Upload source-test logs
+        if: always()
+        uses: actions/upload-artifact@v4
         with:
-          name: sentinel-windows
-          path: |
-            dist/SENTINEL-Agent.exe
-            dist/SENTINEL-Setup-*.exe
-            dist/SENTINEL-Portable-*.exe
-          if-no-files-found: error
-          retention-days: 30
+          name: windows-source-logs
+          path: windows-*.log
+          if-no-files-found: ignore
+          retention-days: 7
 
-  # ── Android APK, signed with a keystore generated during the build ───────
-  android:
-    name: Android APK
+  # Simulated device/mobile integration is source-only. No APK or firmware is
+  # compiled or uploaded.
+  simulated-devices:
+    name: Simulated device and mobile sources
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          # Capacitor 6 ships Gradle 8.2 / AGP 8.2, which needs JDK 17.
-          java-version: '17'
-      - name: Install Capacitor
-        working-directory: mobile
+      - name: Install dev dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Mobile UI sync check (writes no binary)
+        run: node scripts/sync-mobile.js --check
+      - name: Source presence and syntax checks
         run: |
-          set -o pipefail
-          trap 'bash ../scripts/ci-fail.sh /tmp/npm.log "mobile-npm"' ERR
-          npm install --no-audit --no-fund 2>&1 | tee /tmp/npm.log
-      - name: Copy the shared UI into the Android project
-        run: |
-          set -o pipefail
-          trap 'bash scripts/ci-fail.sh /tmp/sync.log "cap-sync"' ERR
-          (node scripts/sync-mobile.js && cd mobile && npx cap sync android) 2>&1 | tee /tmp/sync.log
-      - name: Create signing key
-        working-directory: mobile/android
-        run: |
-          keytool -genkeypair -v \
-            -keystore sentinel-release.jks \
-            -storepass sentinel \
-            -keypass sentinel \
-            -alias sentinel \
-            -keyalg RSA -keysize 2048 -validity 10950 \
-            -dname "CN=SENTINEL, OU=Personal, O=SENTINEL, L=Wilamowice, C=PL"
-          printf 'storeFile=%s/sentinel-release.jks\nstorePassword=sentinel\nkeyAlias=sentinel\nkeyPassword=sentinel\n' "$(pwd)" > keystore.properties
-      - name: Build release APK
-        working-directory: mobile/android
-        run: |
-          set -o pipefail
-          trap 'bash ../../scripts/ci-fail.sh /tmp/gradle.log "gradle"' ERR
-          chmod +x gradlew
-          ./gradlew assembleRelease --no-daemon --stacktrace 2>&1 | tee /tmp/gradle.log
-          echo "── output tree ──" | tee -a /tmp/gradle.log
-          find app/build/outputs -maxdepth 4 -type f 2>&1 | tee -a /tmp/gradle.log
-          APK="$(find app/build/outputs -name '*.apk' | head -1)"
-          echo "picked: $APK" | tee -a /tmp/gradle.log
-          test -n "$APK"
-          cp "$APK" "$GITHUB_WORKSPACE/SENTINEL-android.apk"
-          ls -lh "$GITHUB_WORKSPACE/SENTINEL-android.apk"
-      - uses: actions/upload-artifact@v4
-        with:
-          name: sentinel-android
-          path: SENTINEL-android.apk
-          if-no-files-found: error
-          retention-days: 30
-
-  # ── ESP32 firmware ───────────────────────────────────────────────────────
-  firmware:
-    name: ESP32 firmware
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      - name: Install PlatformIO
-        run: |
-          python -m pip install --upgrade platformio
-          pio --version
-      - name: Build
-        working-directory: firmware
-        run: |
-          set -o pipefail
-          trap 'bash ../scripts/ci-fail.sh /tmp/pio.log "firmware"' ERR
-          pio run -e esp32dev 2>&1 | tee /tmp/pio.log
-      - name: Collect the binary
-        working-directory: firmware
-        run: |
-          set -o pipefail
-          trap 'bash ../scripts/ci-fail.sh /tmp/fw.log "firmware-collect"' ERR
-          {
-            echo "── build log tail ──"
-            tail -n 120 /tmp/pio.log 2>/dev/null || echo "(no build log found)"
-            echo "── .pio/build tree ──"
-            find .pio/build -maxdepth 2 -type f \( -name '*.bin' -o -name '*.elf' \) | sort
-            echo "── directories ──"
-            ls -la .pio/build || true
-          } 2>&1 | tee /tmp/fw.log
-          # .pio is a hidden directory that upload-artifact skips by default,
-          # so the artefacts are copied somewhere visible and asserted.
-          mkdir -p out
-          BIN="$(find .pio/build -type f -name 'firmware.bin' | head -1)"
-          echo "firmware: ${BIN:-<not found>}" | tee -a /tmp/fw.log
-          test -n "$BIN"
-          cp "$BIN" out/firmware.bin
-          ELF="$(find .pio/build -type f -name 'firmware.elf' | head -1)"
-          if [ -n "$ELF" ]; then cp "$ELF" out/firmware.elf; fi
-          ls -lh out | tee -a /tmp/fw.log
-      - uses: actions/upload-artifact@v4
-        with:
-          name: sentinel-firmware
-          path: firmware/out/*
-          if-no-files-found: error
-          retention-days: 30
-
-  # ── publish: rolling "latest" pre-release so the phone can download the APK ──
-  publish:
-    name: Publish latest builds
-    needs: [windows, android, firmware]
-    if: always() && needs.windows.result == 'success' && needs.android.result == 'success'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-      - name: Flatten and list
-        run: |
-          mkdir -p out
-          find artifacts -type f \( -name '*.exe' -o -name '*.apk' -o -name '*.bin' \) -exec cp {} out/ \;
-          ls -lh out
-      - name: Publish release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REF_TYPE: ${{ github.ref_type }}
-          REF_NAME: ${{ github.ref_name }}
-          SHA: ${{ github.sha }}
-        run: |
-          if [ "$REF_TYPE" = "tag" ]; then
-            TAG="$REF_NAME"
-            gh release view "$TAG" >/dev/null 2>&1 || \
-              gh release create "$TAG" --title "SENTINEL $TAG" \
-                --notes "Built from $SHA.
-
-          **Windows** — \`SENTINEL-Setup-*.exe\` (installer, starts with Windows), \`SENTINEL-Portable-*.exe\` (no install), \`SENTINEL-Agent.exe\` (headless, single file).
-          **Android** — \`SENTINEL-android.apk\` (sideload; signed with a build keystore).
-          **ESP32** — \`firmware.bin\` (esptool / PlatformIO)."
-          else
-            TAG="latest"
-            gh release view "$TAG" >/dev/null 2>&1 || \
-              gh release create "$TAG" --prerelease --title "SENTINEL latest build" \
-                --notes "Rolling build from $REF_NAME ($SHA). Download the installer, the portable exe, the APK or the ESP32 firmware below."
-          fi
-          gh release upload "$TAG" out/* --clobber
-          gh release view "$TAG" --json assets -q '.assets[] | "\(.name) \(.size)"'
+          node --check core/link.js
+          node --check core/tunnel.js
+          test -f firmware/src/main.cpp
+          test -f mobile/package.json

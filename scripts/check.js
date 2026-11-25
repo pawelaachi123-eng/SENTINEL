@@ -59,7 +59,24 @@ for (const ref of refs) {
 }
 console.log(`   checked ${refs.size} references`);
 
-console.log('3. Boot');
+console.log('3. Source-only delivery policy');
+const workflow = fs.readFileSync(path.join(root, '.github', 'workflows', 'build.yml'), 'utf8');
+const forbidden = [
+  ['pkg executable build', /@yao-pkg\/pkg|pkg bin\//],
+  ['electron-builder packaging', /electron-builder/],
+  ['Android APK build', /assembleRelease|SENTINEL-android\.apk/],
+  ['ESP32 firmware build', /pio run/],
+  ['binary release publishing', /gh release upload/],
+];
+for (const [label, pattern] of forbidden) if (pattern.test(workflow)) fail(`workflow still performs ${label}`);
+const packageJson = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
+for (const script of ['build:exe', 'build:desktop', 'build:all']) if (packageJson.scripts[script]) fail(`package.json still exposes binary build script ${script}`);
+if (!/^7\.0\.0$/.test(packageJson.version)) fail(`package.json version is ${packageJson.version}, expected 7.0.0`);
+const installers = fs.readdirSync(root).filter((file) => file.endsWith('.ps1'));
+if (installers.length !== 1) fail(`expected exactly one PowerShell installer, found ${installers.join(', ') || 'none'}`);
+console.log(`   workflow is source-only; installer ${installers[0]}`);
+
+console.log('4. Boot');
 process.env.SENTINEL_HOME = fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'sentinel-check-'));
 const { createAgent } = require('../core/agent');
 const agent = createAgent();

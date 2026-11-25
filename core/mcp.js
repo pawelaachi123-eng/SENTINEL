@@ -112,7 +112,7 @@ class McpServer {
     const init = await this.request('initialize', {
       protocolVersion: PREFERRED_VERSION,
       capabilities: { roots: { listChanged: false }, sampling: {} },
-      clientInfo: { name: 'sentinel', version: '6.0.0' },
+      clientInfo: { name: 'sentinel', version: '7.0.0' },
     });
     if (!init || !init.protocolVersion) throw new McpError('the server did not negotiate a protocol version', 'MCP_PROTOCOL');
     if (!SUPPORTED_VERSIONS.includes(init.protocolVersion)) {

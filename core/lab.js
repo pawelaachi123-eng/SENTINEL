@@ -26,6 +26,8 @@ const path = require('node:path');
 const dataset = require('./ml/data/intents');
 const { FEATURE_VERSION, vectorize, tokens } = require('./ml/features');
 const mlp = require('./ml/mlp');
+const transformer = require('./ml/transformer');
+const sentimentData = require('./ml/data/sentiment');
 
 const LABELS = [...new Set(dataset.items.map((item) => item.intent))].sort();
 const near = (a, b) => {
@@ -342,14 +344,123 @@ class LearningLab {
     };
   }
 
+  /* ── 7.0: compact transformer sentiment lab ─────────────────────────── */
+
+  sentimentExperiments({ limit = 20 } = {}) {
+    const rows = this.store ? this.store.list('lab_sentiment_experiments', { limit }) : [...this.experimentCache.values()].filter((entry) => entry.task === 'sentiment');
+    return rows.filter((entry) => entry.task === 'sentiment').sort((a, b) => b.createdAt - a.createdAt).slice(0, limit);
+  }
+
+  activeSentiment() {
+    return (this.store ? this.store.get('lab_sentiment_active', 'sentiment') : null) || this.activeSentimentRecord || null;
+  }
+
+  /**
+   * Trains the compact transformer on authored synthetic sentiment data.
+   * Subject groups are disjoint across train/validation/test, so the held-out
+   * subjects are unseen. The lexicon baseline is evaluated on the same test set.
+   */
+  trainSentiment({ approvedBy = null, epochs = 10, dim = 24, hidden = 48, maxLen = 16, seed = 7, batchSize = 8, learningRate = 0.01, patience = 3 } = {}) {
+    if (!approvedBy) {
+      this.counters.refused += 1;
+      return { ok: false, code: 'APPROVAL_REQUIRED', message: 'training needs an approving identity (approvedBy)' };
+    }
+    const started = this.now();
+    const items = sentimentData.items;
+    const labels = sentimentData.labels;
+    let training;
+    try {
+      training = transformer.train({ items, labels, epochs, dim, hidden, maxLen, seed, batchSize, learningRate, patience });
+    } catch (err) {
+      return { ok: false, code: err.code || 'TRAINING_FAILED', message: err.message };
+    }
+    const baselinePredicted = training.testExamples.map((example) => sentimentData.baseline(example.text));
+    const baselineTruth = training.testExamples.map((example) => example.label);
+    const baseline = metricsFor(baselineTruth, baselinePredicted, labels);
+    const delta = Number((training.metrics.accuracy - baseline.accuracy).toFixed(3));
+    const id = `sentiment_${new Date(this.now()).toISOString().replace(/[:.]/g, '-')}_${training.bestEpoch}`;
+    const checkpoint = transformer.toCheckpoint(training.model, {
+      vocab: training.vocab,
+      labels,
+      metrics: training.metrics,
+      trainedAt: new Date(this.now()).toISOString(),
+      dataset: { source: sentimentData.source, items: items.length, groups: 24 },
+    });
+    const artifactPath = path.join(this.modelsDir(), `${id}.json`);
+    fs.writeFileSync(artifactPath, `${JSON.stringify({ format: 'sentinel-transformer-artifact-v1', checkpoint, baseline })}\n`, { mode: 0o600 });
+    const record = {
+      task: 'sentiment',
+      id,
+      createdAt: this.now(),
+      approvedBy,
+      status: 'candidate',
+      dataset: { items: items.length, labels, provenance: sentimentData.source, hash: hash(JSON.stringify(items.map((item) => [item.text, item.label, item.group]))) },
+      split: training.parts,
+      hyperparameters: { dim, hidden, maxLen, epochs, batchSize, learningRate, patience, seed },
+      training: { bestEpoch: training.bestEpoch, bestValidationLoss: training.bestValidationLoss, history: training.history, durationMs: this.now() - started },
+      metrics: training.metrics,
+      baseline,
+      delta,
+      gate: { passed: training.metrics.accuracy >= baseline.accuracy, rule: 'held-out accuracy must be at least the lexicon baseline' },
+      artifact: { path: artifactPath, bytes: fs.statSync(artifactPath).size, checksum: checkpoint.checksum },
+      honest: 'compact single-block transformer trained on CPU on authored synthetic sentences; not a language model',
+    };
+    this.experimentCache.set(id, record);
+    if (this.store) this.store.put('lab_sentiment_experiments', id, record);
+    this.log && this.log.info('lab', `sentiment ${id}: test ${training.metrics.accuracy} vs lexicon ${baseline.accuracy}`);
+    return { ok: true, experiment: record };
+  }
+
+  promoteSentiment(id, { approvedBy = null } = {}) {
+    if (!approvedBy) return { ok: false, code: 'APPROVAL_REQUIRED', message: 'promotion needs an approving identity' };
+    const experiment = this.sentimentExperiments({ limit: 100 }).find((entry) => entry.id === id);
+    if (!experiment) return { ok: false, code: 'NOT_FOUND', message: `no sentiment experiment ${id}` };
+    if (!experiment.gate || !experiment.gate.passed) return { ok: false, code: 'GATE_FAILED', message: 'held-out accuracy did not reach the baseline; candidate cannot be promoted', gate: experiment.gate };
+    const current = this.activeSentiment();
+    const record = { ...experiment, status: 'active', promotedBy: approvedBy, promotedAt: this.now(), experimentId: id, previous: current ? { experimentId: current.experimentId, artifact: current.artifact, metrics: current.metrics } : null };
+    this.activeSentimentRecord = record;
+    this.cache.sentiment = null;
+    if (this.store) this.store.put('lab_sentiment_active', 'sentiment', record);
+    return { ok: true, active: record };
+  }
+
+  classifySentiment(text) {
+    const active = this.activeSentiment();
+    if (!active) return { ok: false, code: 'NO_MODEL', message: 'no promoted sentiment model; train and promote one first' };
+    if (!this.cache.sentiment || this.cache.sentiment.experimentId !== active.experimentId) {
+      const artifact = JSON.parse(fs.readFileSync(active.artifact.path, 'utf8'));
+      if (artifact.format !== 'sentinel-transformer-artifact-v1') throw Object.assign(new Error('not a sentiment artifact'), { code: 'BAD_CHECKPOINT' });
+      const loaded = transformer.fromCheckpoint(artifact.checkpoint);
+      this.cache.sentiment = { ...loaded, experimentId: active.experimentId, artifact: active };
+    }
+    const loaded = this.cache.sentiment;
+    const prediction = transformer.predict(loaded.model, transformer.encode(text, loaded.vocab, loaded.model.maxLen));
+    this.counters.predictions += 1;
+    return { ok: true, text: String(text).slice(0, 1000), label: loaded.labels[prediction.label], probabilities: loaded.labels.map((label, index) => ({ label, probability: Number(prediction.probabilities[index].toFixed(4)) })).sort((a, b) => b.probability - a.probability), model: { experimentId: active.experimentId, checksum: active.artifact.checksum, accuracy: active.metrics.accuracy, baseline: active.baseline.accuracy } };
+  }
+
+  sentimentStatus() {
+    const active = this.activeSentiment();
+    const experiments = this.sentimentExperiments({ limit: 10 });
+    return {
+      task: 'sentiment',
+      dataset: { items: sentimentData.items.length, labels: sentimentData.labels, provenance: sentimentData.source },
+      active: active ? { experimentId: active.experimentId, metrics: active.metrics, baseline: active.baseline, promotedBy: active.promotedBy, checksum: active.artifact.checksum } : null,
+      experiments: experiments.map((entry) => ({ id: entry.id, status: entry.status, accuracy: entry.metrics.accuracy, baseline: entry.baseline.accuracy, delta: entry.delta, gate: entry.gate, approvedBy: entry.approvedBy })),
+      counters: { ...this.counters },
+      honest: 'compact CPU transformer; held-out subjects are unseen; not a language model',
+    };
+  }
+
   status() {
     const active = this.active();
     return {
       dataset: { version: this.data.version, items: this.items().length, labels: LABELS, provenance: this.data.provenance, license: this.data.license, hash: this.datasetHash() },
       experiments: this.experiments({ limit: 20 }).map((entry) => ({ id: entry.id, status: entry.status, accuracy: entry.metrics.accuracy, baseline: entry.baseline.accuracy, delta: entry.delta, createdAt: entry.createdAt, artifact: { bytes: entry.artifact.bytes, checksum: entry.artifact.checksum }, approvedBy: entry.approvedBy })),
       active: active ? { experimentId: active.experimentId, metrics: active.metrics, promotedBy: active.promotedBy, promotedAt: active.promotedAt, checksum: active.artifact.checksum } : null,
+      sentiment: this.sentimentStatus(),
       counters: { ...this.counters },
-      honest: 'CPU-trained small MLP on synthetic bilingual data. Not LoRA, not a language model, and not deployed without approval.',
+      honest: 'CPU-trained small MLP and compact transformer on synthetic bilingual data. Not LoRA, not a language model, and not deployed without approval.',
     };
   }
 }

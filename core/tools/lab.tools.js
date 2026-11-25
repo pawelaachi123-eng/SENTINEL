@@ -110,3 +110,37 @@ module.exports = [
     format: (data) => (data.ok ? `przywrocono ${data.active.experimentId}` : `odmowa: ${data.code}`),
   },
 ];
+
+module.exports.push(
+  {
+    name: 'lab.train_sentiment',
+    title: 'Train the compact transformer (CPU)',
+    description: 'Trains a real single-block transformer on authored synthetic sentiment data, with disjoint subject groups, a lexicon baseline on the same held-out set, a checksummed checkpoint and an explicit approval. It is not a language model.',
+    category: 'learning', permission: 'system', tags: ['lab', 'transformer', 'training', 'sentiment', 'approval'],
+    parameters: { type: 'object', properties: { epochs: { type: 'number', minimum: 1, maximum: 30 }, seed: { type: 'number', minimum: 1, maximum: 100000 } }, additionalProperties: false },
+    async run(args, ctx) {
+      const approvedBy = operator(ctx);
+      if (!approvedBy) return { ok: false, code: 'APPROVAL_REQUIRED', message: 'training needs a consumed approval from a human' };
+      return lab(ctx).trainSentiment({ approvedBy, epochs: args.epochs || 8, seed: args.seed || 7 });
+    },
+    format: (data) => (data.ok ? `transformer: test ${data.experiment.metrics.accuracy} vs baseline ${data.experiment.baseline.accuracy}` : data.code),
+  },
+  {
+    name: 'lab.sentiment',
+    title: 'Classify sentiment with the promoted transformer',
+    description: 'Runs the promoted compact transformer and returns label probabilities. Refuses with NO_MODEL when no sentiment model has been promoted.',
+    category: 'learning', permission: 'read', tags: ['lab', 'transformer', 'inference', 'sentiment'],
+    parameters: { type: 'object', properties: { text: { type: 'string', minLength: 1, maxLength: 1000 } }, required: ['text'], additionalProperties: false },
+    async run(args, ctx) { return lab(ctx).classifySentiment(args.text); },
+    format: (data) => (data.ok ? `${data.label} (${data.probabilities[0].probability})` : data.code),
+  },
+  {
+    name: 'lab.sentiment_status',
+    title: 'Transformer lab status',
+    description: 'Dataset provenance, held-out metrics against the lexicon baseline, experiment gate and active sentiment model. Reports measured values only.',
+    category: 'learning', permission: 'read', tags: ['lab', 'transformer', 'metrics', 'sentiment'],
+    parameters: { type: 'object', properties: {}, additionalProperties: false },
+    async run(args, ctx) { return { ok: true, ...lab(ctx).sentimentStatus() }; },
+    format: (data) => (data.active ? `test ${data.active.metrics.accuracy} vs baseline ${data.active.baseline.accuracy}` : 'brak aktywnego modelu'),
+  },
+);

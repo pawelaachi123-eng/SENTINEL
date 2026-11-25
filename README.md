@@ -1,4 +1,4 @@
-# SENTINEL 6.0
+# SENTINEL 7.0
 
 **Your own assistant for your own machine — it runs on the PC, answers with measurements instead of guesses, and can still be driven from your phone over a direct encrypted channel. No account, no cloud.**
 
@@ -24,7 +24,7 @@ Three situations, one app:
 
 ## The assistant
 
-SENTINEL 6.0 is a cognitive assistant that can *operate this computer*, not
+SENTINEL 7.0 is a cognitive assistant that can *operate this computer*, not
 just talk about it — with a real brief, bounded plans, verified answers and a
 memory that admits when two facts contradict each other. Ask in the UI, on the phone, or in a terminal:
 
@@ -35,12 +35,27 @@ sentinel doctor --fix
 ```
 
 * **It measures before it speaks.** Hardware, processes, files, documents, logs
-  and the ESP32 are read through 270 audited tools; every answer carries its
+  and the ESP32 are read through 342 audited tools; every answer carries its
   tool calls, citations and a verification report.
 * **It knows what its models can do.** `sentinel neural` reads architecture,
   quantisation, context length and capabilities from the provider itself, routes
   each task to a capable model, and refuses with exit code 4 when none is
   installed — no invented context windows or neuron counts.
+* **It trains real small networks and measures them.** A CPU MLP, a compact
+  single-block transformer and a retrieval reranker are trained on authored
+  synthetic data with group-disjoint splits, compared with baselines, gated on
+  held-out results and saved outside the source tree. `npm run bench:neural`
+  reproduces the measurements; none of these is a language model.
+* **It keeps a typed cognitive state.** Goals, beliefs, evidence, hypotheses,
+  constraints and contradictions have provenance, confidence, attention weights
+  and explicit budgets. Contradictions stay visible; nothing is auto-resolved.
+* **It can call only with consent.** A provider-independent communication manager
+  requires a human-granted, use-once consent token bound to the destination,
+  discloses that it is AI, blocks emergency/premium numbers, and uses a mock
+  adapter by default. Unconfigured means `NOT_CONFIGURED`, never a fake success.
+* **It plans the day without inventing it.** `sentinel brief` composes due
+  reminders, tasks, goals, contradictions and pending approvals with citations,
+  no model call and no fabricated appointment.
 * **It trains a small model and measures it.** `sentinel train --approve <name>`
   trains a CPU MLP on synthetic PL/EN intents, reports held-out accuracy against
   a keyword baseline, macro-F1 and confusion, writes a checksummed checkpoint
@@ -104,38 +119,36 @@ code blocks, and approvals appear at the top of the screen wherever you are.
 
 ---
 
-### What 6.0 verifies, and what it does not
+### What 7.0 verifies, and what it does not
 
-`npm test` runs four suites: **23** protocol/CLI checks, **35** UI checks,
-**25** assistant-stack checks and **131** deep checks (semantics, executor,
+`npm test` runs four suites: **23** protocol/CLI checks, **48** UI checks,
+**25** assistant-stack checks and **153** deep checks (semantics, executor,
 isolated verification, graph, MCP, runtime profiles, held-out evaluation,
 organisation, conversation state, plus the 3.0 checks). Two gates run on top:
-`node scripts/eval.js` (**76/76** deterministic cases, every provider disabled)
-and `node scripts/audit-tools.js` (**270** tools, **0** structural problems,
-**59** executed successfully, **211** explicitly unexecuted).
+`node scripts/eval.js` (**90/90** deterministic cases, every provider disabled)
+and `node scripts/audit-tools.js` (**342** tools, **0** structural problems,
+**83** executed successfully, **259** explicitly unexecuted).
 
 Counts, measurements and the full delivery report are in
-[`docs/REPORT-6.0.md`](docs/REPORT-6.0.md), [`docs/REPORT-5.0.md`](docs/REPORT-5.0.md), [`docs/REPORT-4.0.md`](docs/REPORT-4.0.md) and
+[`docs/REPORT-7.0.md`](docs/REPORT-7.0.md), [`docs/REPORT-6.0.md`](docs/REPORT-6.0.md), [`docs/REPORT-5.0.md`](docs/REPORT-5.0.md), [`docs/REPORT-4.0.md`](docs/REPORT-4.0.md) and
 [`docs/PROGRESS.md`](docs/PROGRESS.md); research and licences in
-[`docs/research.md`](docs/research.md). Windows CI is green for 6.0 at `1720262`; no GPU was available, no live model
-evaluation was run, and 211 tools remain unexecuted. Those limits are stated
+[`docs/research.md`](docs/research.md). Windows CI is green for 7.0 at the revision on the PR; no GPU was available, no
+live model evaluation was run, no real call was placed, and 259 tools remain
+unexecuted. Those limits are stated
 there rather than glossed over.
 
-## Download
+## Source-only build
 
-Built by CI on every push and on every tag:
+**SENTINEL 7.0 does not publish EXE, MSI, APK, AAB, BIN, HEX or UF2 artefacts.**
+CI is source-only by design: it runs Linux and Windows checks, the UI test, the
+deterministic evaluation, the tool audit and simulated device/mobile source
+checks. Binary packaging and release publishing jobs are disabled in
+`.github/workflows/build.yml`, and `scripts/check.js` fails if they reappear.
 
-| File | Size | What it is |
-| --- | --- | --- |
-| [`SENTINEL-Setup-2.1.0-x64.exe`](../../releases/download/v2.1.0/SENTINEL-Setup-2.1.0-x64.exe) | ~82 MB | Windows installer: agent + desktop console + tray, optional autostart |
-| [`SENTINEL-Portable-2.1.0-x64.exe`](../../releases/download/v2.1.0/SENTINEL-Portable-2.1.0-x64.exe) | ~82 MB | same app, nothing installed |
-| [`SENTINEL-Agent.exe`](../../releases/download/latest/SENTINEL-Agent.exe) | ~58 MB | headless single-file agent (run at logon / as a service) |
-| [`SENTINEL-android.apk`](../../releases/download/v2.1.0/SENTINEL-android.apk) | ~3 MB | phone app (sideload; the CI build signs it) |
-| [`firmware.bin`](../../releases/download/v2.1.0/firmware.bin) | ~1 MB | ESP32 bridge firmware (esptool or PlatformIO) |
-
-Everything is listed on the [releases page](../../releases).
-
----
+Android, desktop and ESP32 sources remain in the repository for future work and
+can be built manually by their own toolchains. The only installer is
+`INSTALL_SENTINEL_FULL.ps1`; it stages, backs up, health-checks and rolls back,
+and performs read-only 7.0 subsystem checks.
 
 ## Pair a phone (the part that used to fail)
 
@@ -217,7 +230,7 @@ and tested against itself:
 - **Settings** — how the link is protected (mode, key fingerprint, session,
   latency), the PC's policy, and honest answers about the app.
 - **Installable** — the console is a PWA with a service worker, so it can live on
-  the home screen next to the APK.
+  the home screen on the phone.
 - **A brain that explains itself** — the agent samples CPU, memory, the ESP32
   link, failed commands and the policy clock every 15 seconds and turns them
   into plain statements with the numbers attached ("CPU 91% for five samples",
@@ -228,8 +241,8 @@ and tested against itself:
 
 ## Install (Windows)
 
-1. **PC** — either run `SENTINEL-Setup-4.0.0-x64.exe` (agent + tray + console),
-   or take the whole thing in one go:
+1. **PC** — run the single PowerShell source installer (no prebuilt EXE is
+   published):
 
    ```powershell
    powershell -ExecutionPolicy Bypass -File .\INSTALL_SENTINEL_FULL.ps1
@@ -240,11 +253,12 @@ and tested against itself:
    `sentinel doctor` and prints the truth about what worked. Anything optional
    that fails becomes a warning, not a broken install (`-SkipModels`,
    `-SkipSpeech`, `-SkipOcr`, `-NoAutostart` to opt out).
-2. **ESP32** — flash `firmware.bin` (or `pio run -t upload`). On first boot it
-   opens `SENTINEL-Setup-esp32-xxxx`; join it, open <http://192.168.4.1>, paste
-   the agent address and the pairing key, save. It reboots onto your Wi-Fi as
-   `192.168.1.1` unless your network hands out something else.
-3. **Phone** — install `SENTINEL-android.apk`, then pair as described above.
+2. **ESP32 (optional, manual)** — the firmware source remains in `firmware/`.
+   Build and flash it yourself with PlatformIO; 7.0 does not ship a `.bin`.
+   On first boot it opens `SENTINEL-Setup-esp32-xxxx`; join it, open
+   <http://192.168.4.1>, paste the agent address and the pairing key, save.
+3. **Phone** — open the PC's UI as a PWA in the browser and pair as described
+   above. The Android source remains in `mobile/`; 7.0 does not ship an APK.
 
 Both devices must be on the same Wi-Fi. A phone on mobile data cannot reach
 either of them.
@@ -300,27 +314,29 @@ confirmation → quiet hours → rate limit → audit entry.
 
 ## Build
 
-CI (`.github/workflows/build.yml`) produces all deliverables:
+CI (`.github/workflows/build.yml`) is **source-only** and produces **no binary
+artefacts**:
 
-| Job | Runner | Artifact |
+| Job | Runner | Checks |
 | --- | --- | --- |
-| `check` | ubuntu | syntax, assets, boot, crypto unit tests, UI test |
-| `windows` | windows-latest | agent `.exe`, NSIS installer, portable `.exe` |
-| `android` | ubuntu-latest | signed release `.apk` |
-| `firmware` | ubuntu-latest | `firmware.bin` for ESP32 |
+| `linux` | ubuntu | behaviour, syntax/assets/boot, UI, assistant, deep, eval, tool audit, benchmark |
+| `windows` | windows-latest | behaviour, syntax/boot, assistant and deep suites, eval, tool audit |
+| `simulated-devices` | ubuntu | mobile source sync check and device/ESP32 source presence |
 
 Locally:
 
 ```bash
 npm install                   # dev dependencies (jsdom is used by the UI test)
-npm test                      # 18 core assertions + 17 UI checks
-npm run check                 # syntax, assets, boot, reference check
+npm test                      # all four source suites
+npm run check                 # syntax, assets, source-only policy, boot
+npm run eval                  # deterministic evaluations (mock mode)
+npm run bench:neural          # train and measure the three CPU networks
 npm run agent                 # run the agent from source
-npm run build:exe             # needs windows or wine for cross-packaging
-npm run build:desktop         # electron-builder
-npm run mobile:sync && (cd mobile/android && ./gradlew assembleRelease)
-cd firmware && pio run -e esp32dev
 ```
+
+Binary build scripts (`build:exe`, `build:desktop`) are deliberately absent.
+The Android and ESP32 source trees are preserved; building them is a manual,
+opt-in action outside CI and outside the 7.0 deliverables.
 
 Icons are generated from code: `python3 scripts/make-icons.py` (Pillow).
 

@@ -16,6 +16,18 @@
 
 const { parseJsonLoose } = require('./prompt');
 
+/** Functional routing domains served by the specialist model → agent names. */
+const SPECIALIST_AGENTS = {
+  windows: 'windows',
+  hardware: 'hardware',
+  code: 'coding',
+  knowledge: 'knowledge',
+  security: 'security',
+  devices: 'mobile',
+  communication: 'conversation',
+  operations: 'network',
+};
+
 class Dispatcher {
   constructor({ agents, tools, llm, config, log, memory, knowledge, tasks, approvals, services = {}, brain = null }) {
     this.agents = agents;
@@ -72,6 +84,28 @@ class Dispatcher {
     };
   }
 
+  /** Optional routing-model hint. It never overrides a strong keyword match. */
+  specialistHint(text) {
+    const specialists = this.services && this.services.specialists;
+    if (!specialists || typeof specialists.route !== 'function') return null;
+    try {
+      const prediction = specialists.route(String(text || ''));
+      if (!prediction || !prediction.ok) return null;
+      return {
+        domain: prediction.label,
+        agent: SPECIALIST_AGENTS[prediction.label] || null,
+        confidence: prediction.confidence,
+        neural: prediction.neural || null,
+        baseline: prediction.baseline || null,
+        usedFallback: Boolean(prediction.usedFallback),
+        model: prediction.model || null,
+      };
+    } catch (err) {
+      if (this.log) this.log.debug('ai', `specialist routing unavailable: ${err.message}`);
+      return null;
+    }
+  }
+
   route(text, { limit = 2 } = {}) {
     // Arithmetic is decided by the parser, not by keyword scoring: a bare
     // expression ("2+2*2") belongs to the mathematics agent even when the
@@ -81,14 +115,19 @@ class Dispatcher {
     if (expression && mathAgent) {
       return { primary: mathAgent, helpers: [], candidates: [{ name: mathAgent.name, score: 1 }], reason: `arithmetic expression: ${expression[1].trim()}` };
     }
+    const specialist = this.specialistHint(text);
     const candidates = this.agents.candidates(text, limit);
     if (!candidates.length) {
+      const hintAgent = specialist && specialist.agent ? this.agents.get(specialist.agent) : null;
+      if (hintAgent) {
+        return { primary: hintAgent, helpers: [], candidates: [], specialist, reason: `specialist model: ${specialist.domain} (${specialist.confidence})` };
+      }
       const conversation = this.agents.get('conversation');
-      return { primary: conversation, helpers: [], candidates: [], reason: 'no specialist matched' };
+      return { primary: conversation, helpers: [], candidates: [], specialist, reason: 'no specialist matched' };
     }
     const primary = candidates[0].agent;
     const helpers = candidates.slice(1).filter((entry) => entry.score >= candidates[0].score * 0.8).map((entry) => entry.agent);
-    return { primary, helpers, candidates: candidates.map((entry) => ({ name: entry.agent.name, score: entry.score })), reason: 'keyword match' };
+    return { primary, helpers, candidates: candidates.map((entry) => ({ name: entry.agent.name, score: entry.score })), specialist, reason: 'keyword match' };
   }
 
   /**

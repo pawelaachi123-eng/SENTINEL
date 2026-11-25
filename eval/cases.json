@@ -1277,6 +1277,275 @@
           "Preview only"
         ]
       }
+    },
+    {
+      "id": "tool-science-length",
+      "input": "science.length_convert",
+      "adapter": "tool",
+      "tool": "science.length_convert",
+      "args": {
+        "value": 1,
+        "from": "km",
+        "to": "m"
+      },
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "1000"
+        ]
+      }
+    },
+    {
+      "id": "tool-science-prime",
+      "input": "science.prime_factors",
+      "adapter": "tool",
+      "tool": "science.prime_factors",
+      "args": {
+        "n": 360
+      },
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "2^3 × 3^2 × 5"
+        ]
+      }
+    },
+    {
+      "id": "tool-science-temperature",
+      "input": "science.temperature_convert",
+      "adapter": "tool",
+      "tool": "science.temperature_convert",
+      "args": {
+        "value": 0,
+        "from": "C",
+        "to": "K"
+      },
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "273.15"
+        ]
+      }
+    },
+    {
+      "id": "tool-planning-critical-path",
+      "input": "planning.critical_path",
+      "adapter": "tool",
+      "tool": "planning.critical_path",
+      "args": {
+        "tasks": [
+          {
+            "id": "a",
+            "duration": 3
+          },
+          {
+            "id": "b",
+            "duration": 2,
+            "dependsOn": [
+              "a"
+            ]
+          },
+          {
+            "id": "c",
+            "duration": 5,
+            "dependsOn": [
+              "a"
+            ]
+          },
+          {
+            "id": "d",
+            "duration": 1,
+            "dependsOn": [
+              "b",
+              "c"
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "projectDuration",
+          "9"
+        ]
+      }
+    },
+    {
+      "id": "tool-planning-working-days",
+      "input": "planning.working_days",
+      "adapter": "tool",
+      "tool": "planning.working_days",
+      "args": {
+        "date": "2026-03-02",
+        "days": 5
+      },
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "2026-03-09"
+        ]
+      }
+    },
+    {
+      "id": "tool-finance-budget-split",
+      "input": "finance.budget_split",
+      "adapter": "tool",
+      "tool": "finance.budget_split",
+      "args": {
+        "amount": 100,
+        "weights": [
+          1,
+          1,
+          1
+        ]
+      },
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "shares",
+          "total"
+        ]
+      }
+    },
+    {
+      "id": "tool-decision-matrix",
+      "input": "decision.matrix",
+      "adapter": "tool",
+      "tool": "decision.matrix",
+      "args": {
+        "criteria": [
+          {
+            "name": "cost",
+            "weight": 1
+          }
+        ],
+        "options": [
+          {
+            "name": "a",
+            "scores": [
+              8
+            ]
+          },
+          {
+            "name": "b",
+            "scores": [
+              6
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "ranked",
+          "a"
+        ]
+      }
+    },
+    {
+      "id": "tool-hypercore-status",
+      "input": "hypercore.status",
+      "adapter": "tool",
+      "tool": "hypercore.status",
+      "args": {},
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "openConflicts",
+          "honest"
+        ]
+      }
+    },
+    {
+      "id": "tool-reranker-status",
+      "input": "reranker.status",
+      "adapter": "tool",
+      "tool": "reranker.status",
+      "args": {},
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "features",
+          "honest"
+        ]
+      }
+    },
+    {
+      "id": "tool-communication-status",
+      "input": "communication.status",
+      "adapter": "tool",
+      "tool": "communication.status",
+      "args": {},
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "liveCalls",
+          "provider"
+        ]
+      }
+    },
+    {
+      "id": "tool-assistant-briefing",
+      "input": "assistant.briefing",
+      "adapter": "tool",
+      "tool": "assistant.briefing",
+      "args": {
+        "horizonHours": 24
+      },
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "generatedAt",
+          "source"
+        ]
+      }
+    },
+    {
+      "id": "tool-proactive-status",
+      "input": "proactive.status",
+      "adapter": "tool",
+      "tool": "proactive.status",
+      "args": {},
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "honesty",
+          "deliveryConfigured"
+        ]
+      }
+    },
+    {
+      "id": "tool-lab-sentiment-status",
+      "input": "lab.sentiment_status",
+      "adapter": "tool",
+      "tool": "lab.sentiment_status",
+      "args": {},
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "honest",
+          "task"
+        ]
+      }
+    },
+    {
+      "id": "tool-science-ideal-gas",
+      "input": "science.ideal_gas",
+      "adapter": "tool",
+      "tool": "science.ideal_gas",
+      "args": {
+        "p": 101325,
+        "v": 0.024,
+        "n": 1,
+        "solve": "t"
+      },
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "value",
+          "ideal-gas"
+        ]
+      }
     }
   ]
 }

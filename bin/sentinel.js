@@ -48,6 +48,8 @@ const HELP = `SENTINEL ${require('../package.json').version} — your own assist
   sentinel models [--benchmark]           providers, installed models, speed
   sentinel agents [--json]                the specialist roster
   sentinel tools [query] [--json]         every tool the assistant may call
+  sentinel brief [--json]                 dzienny briefing: terminy, zadania, cele, zgody
+  sentinel proactive [status]             reguły proaktywne (opt-in, bez podsłuchu)
   sentinel tasks [--json]                 recent tasks and their steps
   sentinel automations [list|run <id>|remove <id>]
   sentinel voice transcribe <file> [--lang pl]
@@ -57,7 +59,15 @@ const HELP = `SENTINEL ${require('../package.json').version} — your own assist
     neural [status|discover|route <zadanie>]  modele: metadane, możliwości, routing
     lab [status|classify <tekst>]              laboratorium: metryki, aktywny model
     train --approve <imię>                     trening małego klasyfikatora na CPU
+    sentiment [status|train|promote <id>|classify <tekst>] [--approve <imię>]
+                                             kompaktowy transformer: trening/ewaluacja
     research [list|start <pytanie>|add <id> <plik>|report <id>]  sesje badawcze z cytatami
+    hypercore [status|goals|conflicts|focus]  typowany stan poznawczy i uwaga
+    reranker [status|train|promote <id>|rerank <q> <kandydaci...>]  reranker z NDCG
+    specialists [status|train <zadanie>|promote <zadanie> <id>|predict <zadanie> <tekst>]
+                                             cztery małe modele: narzędzia, routing, pamięć, złożoność
+    comm [status|consent <dest>|grant <token>|call <dest> <tekst>|sms <dest> <tekst>]
+                                             połączenia/SMS tylko za zgodą; mock domyślnie
   sentinel graph [zapytanie]              knowledge graph stats or a multi-hop query
   sentinel org [zdolność]                 organisation chart or a delegation preview
   sentinel mcp [status|connect|disconnect] [serwer]   opt-in MCP servers
@@ -92,6 +102,8 @@ function parse(argv) {
     else if (arg === '--tags') out.tags = String(argv[++index] || '').split(',').map((tag) => tag.trim()).filter(Boolean);
     else if (arg === '--max') out.max = Number(argv[++index]);
     else if (arg === '--approve') out.approve = argv[++index] || 'cli-operator';
+    else if (arg === '--consent') out.consent = argv[++index];
+    else if (arg === '--budget') out.budget = Number(argv[++index]);
     else out._.push(arg);
   }
   return out;
@@ -379,6 +391,25 @@ async function main() {
         else for (const tool of tools) console.log(`  ${blue(tool.name.padEnd(24))} ${dim(tool.permission.padEnd(10))} ${tool.description}`);
         if (!args.json) console.log(dim(`\n  ${tools.length} z ${agent.tools.list().length} narzędzi`));
         return done(tools.length ? 0 : 5);
+      }
+
+      case 'brief': {
+        const briefing = agent.briefing.generate({ horizonHours: args.max || 24 });
+        if (args.json) console.log(JSON.stringify(briefing, null, 2));
+        else process.stdout.write(`${briefing.text}\n`);
+        return done(0);
+      }
+
+      case 'proactive': {
+        const status = agent.proactive.status();
+        if (args.json) console.log(JSON.stringify(status, null, 2));
+        else {
+          console.log(`reguły: ${status.counts.enabled}/${status.counts.rules} aktywnych · dostarczono dzisiaj ${status.counts.deliveredToday}`);
+          console.log(`  limity: ${status.limits.maxPerHour}/h, ${status.limits.maxPerDay}/dzień · ciche godziny: ${status.quietHours ? status.quietHours.join('-') : 'brak'}`);
+          for (const rule of status.rules) console.log(`  ${rule.id} · ${rule.event} · ${rule.name} · kanały ${rule.channels.join(',')}`);
+          console.log(dim(`  ${status.honesty}`));
+        }
+        return done(0);
       }
 
       case 'tasks': {
@@ -732,6 +763,318 @@ async function main() {
           return done(0);
         }
         console.error(red(`nieznana akcja research: ${action}`));
+        return done(4);
+      }
+
+      case 'hypercore': {
+        const action = rest[0] || 'status';
+        if (action === 'status') {
+          const status = agent.hypercore.status();
+          if (args.json) console.log(JSON.stringify(status, null, 2));
+          else {
+            console.log(bold('cognitive hypercore'));
+            console.log(`  cele ${status.counts.goals} (aktywne ${status.counts.activeGoals}) · przekonania ${status.counts.beliefs} · hipotezy ${status.counts.hypotheses} · sprzeczności ${status.counts.openConflicts}`);
+            console.log(`  budżet: ${status.budgets.contextTokens} tokenów, ${status.budgets.toolCalls} narzędzi, głębokość ${status.budgets.reasoningDepth}`);
+            for (const item of status.nextAttention) console.log(`  uwaga ${item.weight}: ${item.kind} — ${item.label}`);
+            console.log(dim(`  ${status.honest}`));
+          }
+          return done(0);
+        }
+        if (action === 'goals') {
+          const goals = agent.hypercore.inspect('goal').items;
+          if (args.json) console.log(JSON.stringify(goals, null, 2));
+          else for (const goal of goals) console.log(`${goal.id} · ${goal.status} · p${goal.priority} · ${goal.description}`);
+          return done(0);
+        }
+        if (action === 'conflicts') {
+          const conflicts = agent.hypercore.inspect('conflict').items.filter((conflict) => conflict.status === 'open');
+          if (args.json) console.log(JSON.stringify(conflicts, null, 2));
+          else {
+            if (!conflicts.length) console.log('brak otwartych sprzeczności');
+            for (const conflict of conflicts) console.log(`${conflict.id} · ${conflict.key}: ${JSON.stringify(conflict.left.value)} vs ${JSON.stringify(conflict.right.value)} (nie rozwiązano)`);
+          }
+          return done(0);
+        }
+        if (action === 'focus') {
+          const result = agent.hypercore.focus({ tokenBudget: args.budget || 1024, reason: 'cli' });
+          if (args.json) console.log(JSON.stringify(result, null, 2));
+          else {
+            for (const item of result.items) console.log(`${item.kind} ${item.weight} · ${item.label}`);
+            console.log(dim(`  ~${result.trace.estimatedTokens} tokenów (szacunek), pominięto ${result.trace.dropped}`));
+          }
+          return done(0);
+        }
+        console.error(red(`nieznana akcja hypercore: ${action}`));
+        return done(4);
+      }
+
+      case 'sentiment': {
+        const action = rest[0] || 'status';
+        if (action === 'status') {
+          const status = agent.lab.sentimentStatus();
+          if (args.json) console.log(JSON.stringify(status, null, 2));
+          else {
+            console.log(bold('kompaktowy transformer — sentyment'));
+            console.log(`  dataset: ${status.dataset.items} zdań, ${status.dataset.labels.length} klas (${status.dataset.provenance})`);
+            console.log(`  aktywne: ${status.active ? `test ${status.active.metrics.accuracy} vs baseline ${status.active.baseline.accuracy}, N=${status.active.metrics.cases}` : 'brak'}`);
+            for (const experiment of status.experiments.slice(0, 5)) console.log(`  ${experiment.id} · ${experiment.status} · test ${experiment.accuracy} vs ${experiment.baseline} · gate ${experiment.gate.passed}`);
+            console.log(dim(`  ${status.honest}`));
+          }
+          return done(0);
+        }
+        if (action === 'train') {
+          if (!args.approve) {
+            console.error(red('trening wymaga: sentinel sentiment train --approve <imię>'));
+            return done(4);
+          }
+          console.log(dim('  trenuję jednoblokowy transformer na CPU; to nie jest model językowy'));
+          const result = agent.lab.trainSentiment({ approvedBy: args.approve, epochs: args.max || 8 });
+          if (!result.ok) {
+            console.error(red(`✗ ${result.code}: ${result.message}`));
+            return done(4);
+          }
+          if (args.json) console.log(JSON.stringify(result.experiment, null, 2));
+          else {
+            console.log(green(`✓ ${result.experiment.id} · test ${result.experiment.metrics.accuracy} vs baseline ${result.experiment.baseline.accuracy}`));
+            console.log(`  ${result.experiment.metrics.cases} przypadków testowych, macro-F1 ${result.experiment.metrics.macroF1}, epoki ${result.experiment.training.history.length}`);
+            console.log(dim(`  checkpoint: ${result.experiment.artifact.path}; promocja: sentinel sentiment promote <id> --approve <imię>`));
+          }
+          return done(0);
+        }
+        if (action === 'promote') {
+          if (!args.approve) {
+            console.error(red('promocja wymaga --approve <imię>'));
+            return done(4);
+          }
+          const result = agent.lab.promoteSentiment(rest[1], { approvedBy: args.approve });
+          if (!result.ok) {
+            console.error(red(`✗ ${result.code}: ${result.message}`));
+            return done(4);
+          }
+          console.log(green(`✓ aktywny transformer: ${result.active.experimentId}`));
+          return done(0);
+        }
+        if (action === 'classify') {
+          const text = rest.slice(1).join(' ');
+          if (!text) {
+            console.error(red('użycie: sentinel sentiment classify <tekst>'));
+            return done(4);
+          }
+          const result = agent.lab.classifySentiment(text);
+          if (!result.ok) {
+            console.error(red(`✗ ${result.code}: ${result.message}`));
+            return done(4);
+          }
+          if (args.json) console.log(JSON.stringify(result, null, 2));
+          else console.log(`${result.label} ${dim(`(pewność ${result.probabilities[0].probability})`)}`);
+          return done(0);
+        }
+        console.error(red(`nieznana akcja sentiment: ${action}`));
+        return done(4);
+      }
+
+      case 'specialists': {
+        const action = rest[0] || 'status';
+        const tasks = ['tools', 'routing', 'relevance', 'complexity'];
+        if (action === 'status') {
+          const status = agent.specialists.status();
+          if (args.json) console.log(JSON.stringify(status, null, 2));
+          else {
+            console.log(bold('specjaliści 7.0'));
+            for (const entry of status.specialists) {
+              const active = entry.active ? `${entry.active.metrics.accuracy} vs baseline ${entry.active.baseline.accuracy}` : 'brak aktywnego modelu';
+              console.log(`  ${entry.task.padEnd(16)} ${String(entry.dataset.items).padStart(4)} przykładów · ${entry.labels.length} klas · ${active}`);
+            }
+            console.log(dim(`  ${status.honest}`));
+          }
+          return done(0);
+        }
+        if (action === 'train') {
+          if (!args.approve) {
+            console.error(red('trening wymaga: sentinel specialists train <tools|routing|relevance|complexity> --approve <imię>'));
+            return done(4);
+          }
+          const task = rest[1] || 'tools';
+          if (!tasks.includes(task)) {
+            console.error(red(`nieznany specjalista: ${task}`));
+            return done(4);
+          }
+          const result = agent.specialists.train(task, { approvedBy: args.approve });
+          if (!result.ok) {
+            console.error(red(`✗ ${result.code}: ${result.message}`));
+            return done(4);
+          }
+          if (args.json) console.log(JSON.stringify(result.experiment, null, 2));
+          else {
+            console.log(green(`✓ ${result.experiment.id} · dokładność ${result.experiment.metrics.accuracy} vs baseline ${result.experiment.baseline.accuracy}`));
+            console.log(dim(`  bramka: ${result.experiment.gate.passed ? 'zaliczona' : 'odrzucona'}; promocja: sentinel specialists promote ${task} ${result.experiment.id} --approve <imię>`));
+          }
+          return done(0);
+        }
+        if (action === 'promote') {
+          if (!args.approve) {
+            console.error(red('promocja wymaga --approve <imię>'));
+            return done(4);
+          }
+          const task = rest[1];
+          const id = rest[2];
+          if (!task || !id) {
+            console.error(red('użycie: sentinel specialists promote <zadanie> <id> --approve <imię>'));
+            return done(4);
+          }
+          const result = agent.specialists.promote(task, id, { approvedBy: args.approve });
+          if (!result.ok) {
+            console.error(red(`✗ ${result.code}: ${result.message}`));
+            return done(4);
+          }
+          console.log(green(`✓ aktywny model ${task}: ${result.active.experimentId}`));
+          return done(0);
+        }
+        if (action === 'predict') {
+          const task = rest[1] || 'tools';
+          const text = rest.slice(2).join(' ');
+          if (!text) {
+            console.error(red('użycie: sentinel specialists predict <tools|routing|complexity> <tekst>'));
+            return done(4);
+          }
+          const result = task === 'complexity' ? agent.specialists.complexity(text) : task === 'relevance' ? { ok: false, code: 'BAD_INPUT', message: 'użyj narzędzia specialists.predict z polem memory' } : agent.specialists.predict(task, text);
+          if (!result.ok) {
+            console.error(red(`✗ ${result.code}: ${result.message}`));
+            return done(4);
+          }
+          if (args.json) console.log(JSON.stringify(result, null, 2));
+          else console.log(`${blue(result.label)} ${dim(`pewność ${result.confidence}${result.usedFallback ? ' · baseline' : ''}`)}`);
+          return done(0);
+        }
+        console.error(red(`nieznana akcja specialists: ${action}`));
+        return done(4);
+      }
+
+      case 'reranker': {
+        const action = rest[0] || 'status';
+        if (action === 'status') {
+          const status = agent.reranker.status();
+          if (args.json) console.log(JSON.stringify(status, null, 2));
+          else {
+            console.log(bold('reranker retrieval'));
+            console.log(`  dataset: ${status.dataset.candidates} par z ${status.dataset.cases} pytań (${status.dataset.provenance})`);
+            console.log(`  aktywne: ${status.active ? `NDCG@3 ${status.active.metrics.ndcgAt3} vs baseline ${status.active.baseline.ndcgAt3}` : 'brak'}`);
+            for (const experiment of status.experiments.slice(0, 5)) console.log(`  ${experiment.id} · ${experiment.status} · NDCG ${experiment.ndcgAt3} vs ${experiment.baseline} · gate ${experiment.gate.passed}`);
+            console.log(dim(`  ${status.honest}`));
+          }
+          return done(0);
+        }
+        if (action === 'train') {
+          if (!args.approve) {
+            console.error(red('trening wymaga: sentinel reranker train --approve <imię>'));
+            return done(4);
+          }
+          const result = agent.reranker.train({ approvedBy: args.approve });
+          if (!result.ok) {
+            console.error(red(`✗ ${result.code}: ${result.message}`));
+            return done(4);
+          }
+          if (args.json) console.log(JSON.stringify(result.experiment, null, 2));
+          else {
+            console.log(green(`✓ ${result.experiment.id} · NDCG@3 ${result.experiment.metrics.ndcgAt3} vs baseline ${result.experiment.baseline.ndcgAt3}`));
+            console.log(dim(`  bramka: ${result.experiment.gate.passed ? 'zaliczona' : 'odrzucona'}; promocja: sentinel reranker promote <id> --approve <imię>`));
+          }
+          return done(0);
+        }
+        if (action === 'promote') {
+          if (!args.approve) {
+            console.error(red('promocja wymaga --approve <imię>'));
+            return done(4);
+          }
+          const result = agent.reranker.promote(rest[1], { approvedBy: args.approve });
+          if (!result.ok) {
+            console.error(red(`✗ ${result.code}: ${result.message}`));
+            return done(4);
+          }
+          console.log(green(`✓ aktywny reranker: ${result.active.experimentId}`));
+          return done(0);
+        }
+        if (action === 'rerank') {
+          const query = rest[1];
+          const candidates = rest.slice(2);
+          if (!query || !candidates.length) {
+            console.error(red('użycie: sentinel reranker rerank "<pytanie>" "<kandydat1>" "<kandydat2>"'));
+            return done(4);
+          }
+          const result = agent.reranker.rerank({ query, candidates });
+          if (!result.ok) {
+            console.error(red(`✗ ${result.code}: ${result.message}`));
+            return done(4);
+          }
+          if (args.json) console.log(JSON.stringify(result, null, 2));
+          else for (const [index, entry] of result.ranked.entries()) console.log(`${index + 1}. ${entry.score} · ${entry.doc}`);
+          return done(0);
+        }
+        console.error(red(`nieznana akcja reranker: ${action}`));
+        return done(4);
+      }
+
+      case 'comm':
+      case 'communication': {
+        const action = rest[0] || 'status';
+        if (action === 'status') {
+          const status = agent.communication.status();
+          if (args.json) console.log(JSON.stringify(status, null, 2));
+          else {
+            console.log(`provider: ${status.provider.name} · live: ${status.liveCalls} · enabled: ${status.enabled}`);
+            console.log(`  dzisiaj: ${status.today.calls} połączeń, ${status.today.messages} wiadomości, ~${status.today.estimatedCost} USD`);
+            for (const entry of agent.communication.history.slice(-10)) console.log(`  ${entry.id} · ${entry.channel} · ${entry.status}${entry.simulated ? ' (symulacja)' : ''}`);
+            console.log(dim(`  ${status.honest}`));
+          }
+          return done(0);
+        }
+        if (action === 'consent') {
+          const destination = rest[1];
+          if (!destination) {
+            console.error(red('użycie: sentinel comm consent <+48...>'));
+            return done(4);
+          }
+          const result = agent.communication.requestConsent({ destination, reason: rest.slice(2).join(' ') || 'cli' });
+          if (!result.ok) {
+            console.error(red(`✗ ${result.code}: ${result.message}`));
+            return done(4);
+          }
+          console.log(green(`✓ zgoda wymagana: ${result.consent.token}`));
+          console.log(dim(`  zatwierdź: sentinel comm grant ${result.consent.token} --approve <twoje-imie>`));
+          return done(0);
+        }
+        if (action === 'grant') {
+          if (!args.approve) {
+            console.error(red('zgoda wymaga --approve <twoje-imie>'));
+            return done(4);
+          }
+          const result = agent.communication.grantConsent(rest[1], { approvedBy: args.approve });
+          if (!result.ok) {
+            console.error(red(`✗ ${result.code}: ${result.message}`));
+            return done(4);
+          }
+          console.log(green(`✓ zgoda dla ${result.consent.destination} do ${new Date(result.consent.expiresAt).toISOString()}`));
+          return done(0);
+        }
+        if (action === 'call' || action === 'sms') {
+          const destination = rest[1];
+          const text = rest.slice(2).join(' ');
+          if (!destination || !text || !args.consent) {
+            console.error(red(`użycie: sentinel comm ${action} <+48...> "<tekst>" --consent <token>`));
+            return done(4);
+          }
+          const result = action === 'call'
+            ? await agent.communication.call({ to: destination, message: text, consentToken: args.consent })
+            : await agent.communication.sendSms({ to: destination, text, consentToken: args.consent });
+          if (!result.ok) {
+            console.error(red(`✗ ${result.code}: ${result.message}`));
+            return done(4);
+          }
+          if (args.json) console.log(JSON.stringify(result, null, 2));
+          else console.log(green(`✓ ${result.communication.status}${result.communication.simulated ? ' (symulacja)' : ''}`));
+          return done(0);
+        }
+        console.error(red(`nieznana akcja comm: ${action}`));
         return done(4);
       }
 

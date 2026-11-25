@@ -78,6 +78,30 @@ const SAFE_CALLS = [
   { name: 'text.stats', args: { text: 'Zdanie. Drugie zdanie.' } },
   { name: 'time.parse', args: { value: '2026-03-01T10:00:00Z' } },
   { name: 'time.diff', args: { from: '2026-03-01T00:00:00Z', to: '2026-03-02T00:00:00Z' } },
+  { name: 'hypercore.status', args: {} },
+  { name: 'hypercore.goals', args: {} },
+  { name: 'hypercore.conflicts', args: {} },
+  { name: 'hypercore.attention', args: { limit: 5 } },
+  { name: 'hypercore.focus', args: { tokenBudget: 512 } },
+  { name: 'reranker.status', args: {} },
+  { name: 'communication.status', args: {} },
+  { name: 'communication.history', args: { limit: 5 } },
+  { name: 'science.length_convert', args: { value: 1, from: 'km', to: 'm' } },
+  { name: 'science.temperature_convert', args: { value: 0, from: 'C', to: 'K' } },
+  { name: 'science.prime_factors', args: { n: 360 } },
+  { name: 'science.quadratic', args: { a: 1, b: -3, c: 2 } },
+  { name: 'science.gcd_lcm', args: { values: [12, 18] } },
+  { name: 'science.mod_pow', args: { base: 2, exponent: 10, modulus: 1000 } },
+  { name: 'planning.critical_path', args: { tasks: [{ id: 'a', duration: 2 }, { id: 'b', duration: 3, dependsOn: ['a'] }] } },
+  { name: 'planning.pert', args: { optimistic: 2, likely: 4, pessimistic: 9 } },
+  { name: 'planning.working_days', args: { date: '2026-03-02', days: 5 } },
+  { name: 'calendar.week_number', args: { date: '2026-01-01' } },
+  { name: 'finance.budget_split', args: { amount: 100, weights: [1, 1, 1] } },
+  { name: 'decision.matrix', args: { criteria: [{ name: 'cost', weight: 1 }], options: [{ name: 'a', scores: [8] }, { name: 'b', scores: [6] }] } },
+  { name: 'assistant.briefing', args: { horizonHours: 24 } },
+  { name: 'proactive.status', args: {} },
+  { name: 'lab.sentiment_status', args: {} },
+  { name: 'specialists.status', args: {} },
   { name: 'time.add', args: { value: '2026-03-01T00:00:00Z', days: 1 } },
   { name: 'encode.base64', args: { text: 'abc' } },
   { name: 'encode.hex', args: { text: 'abc' } },
@@ -148,7 +172,7 @@ async function main() {
     console.log(`structural problems: ${structural.problems.length}`);
     console.log(`executed successfully: ${report.execution.verified}/${report.execution.attempted} (verified), unexecuted: ${report.unexecuted}`);
     console.log(noWrite ? 'report not written (--no-write)' : `written: ${target}`);
-    return structural.problems.length ? 1 : 0;
+    return structural.problems.length || executed.some((entry) => !entry.ok) ? 1 : 0;
   } finally {
     agent.stop();
     await removeHome(home, { agent });

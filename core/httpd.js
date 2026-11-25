@@ -447,6 +447,19 @@ class HttpApi {
       return this.json(res, 200, { ok: true, data: this.ai.lab.status() });
     }
 
+    if (route === '/api/lab/sentiment' && req.method === 'GET') {
+      if (!this.ai) return this.json(res, 503, { ok: false, error: 'AI not ready' });
+      return this.json(res, 200, { ok: true, data: this.ai.lab.sentimentStatus() });
+    }
+
+    if (route === '/api/lab/sentiment' && req.method === 'POST') {
+      if (!this.ai) return this.json(res, 503, { ok: false, error: 'AI not ready' });
+      const body = await this.body(req).catch(() => ({}));
+      const text = String(body.text || '').slice(0, 1000);
+      if (!text) return this.json(res, 400, { ok: false, error: 'text is required' });
+      return this.json(res, 200, { ok: true, data: this.ai.lab.classifySentiment(text) });
+    }
+
     if (route === '/api/lab/classify' && req.method === 'POST') {
       if (!this.ai) return this.json(res, 503, { ok: false, error: 'AI not ready' });
       const body = await this.body(req).catch(() => ({}));
@@ -464,6 +477,64 @@ class HttpApi {
     if (route === '/api/research' && req.method === 'GET') {
       if (!this.ai) return this.json(res, 503, { ok: false, error: 'AI not ready' });
       return this.json(res, 200, { ok: true, data: { sessions: this.ai.research.list({ limit: 50 }), status: this.ai.research.status() } });
+    }
+
+    if (route === '/api/hypercore' && req.method === 'GET') {
+      if (!this.ai) return this.json(res, 503, { ok: false, error: 'AI not ready' });
+      return this.json(res, 200, { ok: true, data: this.ai.hypercore ? this.ai.hypercore.status() : { available: false, honest: 'hypercore is not running' } });
+    }
+
+    if (route === '/api/hypercore/focus' && req.method === 'POST') {
+      if (!this.ai || !this.ai.hypercore) return this.json(res, 503, { ok: false, error: 'Hypercore not ready' });
+      const body = await this.body(req).catch(() => ({}));
+      const tokenBudget = Math.max(64, Math.min(8192, Number(body.tokenBudget) || 1024));
+      return this.json(res, 200, { ok: true, data: this.ai.hypercore.focus({ tokenBudget, reason: 'api' }) });
+    }
+
+    if (route === '/api/reranker' && req.method === 'GET') {
+      if (!this.ai || !this.ai.reranker) return this.json(res, 503, { ok: false, error: 'Reranker not ready' });
+      return this.json(res, 200, { ok: true, data: this.ai.reranker.status() });
+    }
+
+    if (route === '/api/reranker/rerank' && req.method === 'POST') {
+      if (!this.ai || !this.ai.reranker) return this.json(res, 503, { ok: false, error: 'Reranker not ready' });
+      const body = await this.body(req).catch(() => ({}));
+      const candidates = Array.isArray(body.candidates) ? body.candidates.slice(0, 50).map((entry) => String(entry).slice(0, 2000)) : [];
+      const result = this.ai.reranker.rerank({ query: String(body.query || '').slice(0, 1000), candidates, limit: Math.max(1, Math.min(20, Number(body.limit) || 10)) });
+      return this.json(res, result.ok ? 200 : 400, result.ok ? { ok: true, data: result } : { ok: false, code: result.code, error: result.message });
+    }
+
+    if (route === '/api/briefing' && req.method === 'GET') {
+      if (!this.ai || !this.ai.briefing) return this.json(res, 503, { ok: false, error: 'Briefing not ready' });
+      return this.json(res, 200, { ok: true, data: this.ai.briefing.generate({ horizonHours: 24 }) });
+    }
+
+    if (route === '/api/proactive' && req.method === 'GET') {
+      if (!this.ai || !this.ai.proactive) return this.json(res, 503, { ok: false, error: 'Proactive engine not ready' });
+      return this.json(res, 200, { ok: true, data: this.ai.proactive.status() });
+    }
+
+    if (route === '/api/specialists' && req.method === 'GET') {
+      if (!this.ai || !this.ai.specialists) return this.json(res, 503, { ok: false, error: 'Specialist models not ready' });
+      return this.json(res, 200, { ok: true, data: this.ai.specialists.status() });
+    }
+
+    if (route === '/api/specialists/predict' && req.method === 'POST') {
+      if (!this.ai || !this.ai.specialists) return this.json(res, 503, { ok: false, error: 'Specialist models not ready' });
+      const body = await this.body(req).catch(() => ({}));
+      const task = String(body.task || 'tools');
+      const text = String(body.text || '').slice(0, 2000);
+      if (!text) return this.json(res, 400, { ok: false, error: 'text is required' });
+      let result;
+      if (task === 'relevance') result = this.ai.specialists.memoryRelevance({ query: text, memory: String(body.memory || '').slice(0, 4000), recency: body.recency, importance: body.importance });
+      else if (task === 'complexity') result = this.ai.specialists.complexity(text);
+      else result = this.ai.specialists.predict(task, text);
+      return this.json(res, result.ok ? 200 : 400, { ok: Boolean(result.ok), data: result, code: result.code || null, error: result.message || null });
+    }
+
+    if (route === '/api/communication' && req.method === 'GET') {
+      if (!this.ai || !this.ai.communication) return this.json(res, 503, { ok: false, error: 'Communication manager not ready' });
+      return this.json(res, 200, { ok: true, data: { status: this.ai.communication.status(), history: this.ai.communication.history.slice(-50).map((entry) => ({ id: entry.id, channel: entry.channel, status: entry.status, simulated: entry.simulated, at: entry.at, attempts: entry.attempts })) } });
     }
 
     if (route === '/api/models/benchmark' && req.method === 'POST') {

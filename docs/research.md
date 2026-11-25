@@ -328,3 +328,68 @@ names the models the user is expected to pull themselves.
 | Retrieved content | Research sources are hostile until proven otherwise | sources are marked `untrusted: true`, never executed and cannot grant permissions |
 | Agent/eval literature | Benchmarks overstate capability when mocks are mixed with live runs | deterministic tool cases are labelled mock; live model evaluation remains a separate gate |
 | Windows CI | Logs were unreachable in this sandbox; annotations were the only reliable signal | per-suite workflow annotations and uploaded logs (5.0), retained for 6.0 |
+
+---
+
+## 16. 7.0 research notes and implementation decisions
+
+| Topic | Finding that mattered | Implementation decision |
+| --- | --- | --- |
+| Reverse-mode differentiation | Hand-derived gradients for a composed attention block are error-prone; numeric checks only catch what is tested | small 2-D autodiff engine with explicit backward rules and a numeric gradient check for every parameter group |
+| Transformer size | A one-block encoder is enough to test whether attention learns on a synthetic classification task; it is not a language model | single-head self-attention, LayerNorm, residual and ReLU FFN, labelled as a compact encoder |
+| Group splits | Random sentence splits leak near-duplicate templates and inflate accuracy | split by subject for sentiment and by topic for reranking; the split unit is reported |
+| Baselines | A learned model that is not compared with a simple baseline proves nothing | intent vs keyword match, sentiment vs lexicon, reranker vs fixed lexical score, all on the same held-out items |
+| Promotion gates | A candidate that loses to the baseline should not become active | promotion blocked with `GATE_FAILED`; independent human approval still required |
+| Attention bookkeeping | "Attention" becomes an unfalsifiable metaphor unless the weights are inspectable | deterministic softmax over explicit scores, weights/provenance returned, characters/4 token estimate labelled |
+| Contradictions | Silent overwrite loses the evidence that a conflict existed | both beliefs retained, `contested` status, conflict record; resolution needs approval and preserves the loser as superseded |
+| Phone/SMS consent | A general approval does not bind destination, channel or time | separate use-once consent token bound to channel + E.164 destination + expiry, plus consumed system approval |
+| Webhook replay | Status callbacks can be replayed | HMAC verification plus short-lived hash replay cache, tested without network |
+| Provider absence | A disabled integration must not look successful | `NOT_CONFIGURED`; mock results carry `simulated:true` and `delivered:false` |
+| Proactive notifications | Event rules can become surveillance or notification storms | caller-supplied events only, no microphone/camera, cooldowns, quiet hours, rate limits, explicit suppression reasons |
+| Binary delivery | Packaging consumes time and produces untested artefacts | packaging/publishing jobs removed; CI is source-only; installer remains the single PowerShell path |
+
+## 17. Specialist classifiers (7.0, second slice)
+
+Four new tasks were added without changing the MLP or inventing a new training
+story:
+
+| Task | Labels | Feature representation | Baseline |
+| --- | --- | --- | --- |
+| Tool selection | 15 registered tool names | 384 hashed char n-grams + 15 keyword hits | ordered keyword rules |
+| Agent routing | 8 functional domains | 384 hashed char n-grams + 8 keyword hits | ordered domain regexes |
+| Memory relevance | relevant / irrelevant | 6 pair features (Jaccard, containment, trigram cosine, recency, importance, length ratio) | summed threshold |
+| Task complexity | simple / medium / complex | 6 surface features | weighted score |
+
+Decisions and their reasons:
+
+1. **Stratify by label before splitting.** With 4–14 authored examples per class,
+   a random split can leave a class out of the test set entirely. The split is
+   deterministic (SHA-256 of seed + text) and keeps at least one validation and
+   one test item per label.
+2. **Author training-only paraphrases, never test paraphrases.** Keyword
+   lexicons plus six sentence frames expand tool/routing training data from 47
+   to 719 and from 31 to 421 items. Held-out authored requests are never
+   augmented, never hashed, and never used to fit weights. This is disclosed as
+   synthetic augmentation, not presented as natural corpus data.
+3. **Keep lexical features visible.** FastText-style hashed n-grams are useful
+   for morphologically rich Polish, but on a few dozen examples they memorise
+   surface forms. An explicit keyword-hit block gives the linear layer a stable
+   signal and keeps the model comparable to the deterministic baseline
+   (Joulin et al., *Bag of Tricks for Efficient Text Classification*, 2016,
+   <https://arxiv.org/abs/1607.01759>). This is feature engineering, not hidden
+   intelligence.
+4. **The gate is the baseline, not a vanity threshold.** Promotion requires
+   held-out accuracy at least equal to the named baseline. A tie is allowed and
+   reported as a zero delta: the complexity model tied at 0.8333. A model below
+   its baseline stays a candidate forever.
+5. **Low-confidence predictions may fall back, and say so.** Tool selection and
+   routing report both the neural label and the baseline label; below 0.50/0.55
+   confidence the deterministic label is used. The response includes
+   `usedFallback`, `neural` and `baseline`, so a caller never has to guess which
+   policy decided.
+6. **Tiny test sets are labelled tiny.** Routing scored 8/8, tool selection
+   13/16, relevance 17/18 and complexity 5/6. These are smoke-scale measurements;
+   no claim of general routing or tool-selection quality is made.
+7. **The tool labels are real.** A deep test walks every tool-selection dataset
+   item and asserts that the label exists in the live registry, so a renamed or
+   removed tool cannot silently rot the dataset.

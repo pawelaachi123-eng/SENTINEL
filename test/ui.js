@@ -237,6 +237,17 @@ function makePage(url) {
     check('the lab panel says nothing is active before promotion', /Brak aktywnego modelu/.test(labText), labText.slice(0, 140));
     check('the neural and research boxes are fed by real APIs', /Neural runtime/.test(labText) && /Sesje badawcze/.test(labText), labText.slice(0, 160));
 
+    check('the models tab shows hypercore, reranker and communication state', /Hypercore poznawczy/.test(labText) && /Reranker/.test(labText) && /Komunikacja/.test(labText), labText.slice(0, 200));
+    check('the models tab shows briefing and proactive state', /Briefing/.test(labText) && /Proaktywność/.test(labText), labText.slice(0, 240));
+    check('the models tab shows specialist model state', /Specjaliści/.test(labText) && /aktywnych modeli/.test(labText), labText.slice(0, 280));
+    check('the communication panel states that live calls are off by default', /live: false/.test(labText) && /mock/.test(labText), labText.slice(0, 220));
+    const hyperUnauth = await globalThis.fetch(`http://127.0.0.1:${port}/api/hypercore`);
+    check('the hypercore API rejects requests without the token', hyperUnauth.status === 401, `HTTP ${hyperUnauth.status}`);
+    const commUnauth = await globalThis.fetch(`http://127.0.0.1:${port}/api/communication`);
+    check('the communication API rejects requests without the token', commUnauth.status === 401, `HTTP ${commUnauth.status}`);
+    const sentimentUnauth = await globalThis.fetch(`http://127.0.0.1:${port}/api/lab/sentiment`);
+    check('the sentiment API rejects requests without the token', sentimentUnauth.status === 401, `HTTP ${sentimentUnauth.status}`);
+
     const unauth = await globalThis.fetch(`http://127.0.0.1:${port}/api/lab`);
     check('the lab API rejects requests without the token', unauth.status === 401, `HTTP ${unauth.status}`);
     const emptyClassify = await globalThis.fetch(`http://127.0.0.1:${port}/api/lab/classify?t=${token}`, {

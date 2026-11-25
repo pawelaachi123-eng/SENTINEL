@@ -57,6 +57,23 @@ function defaults() {
     serial: { enabled: false, port: null, baud: 115200 },
     ui: { theme: 'sentinel', reducedMotion: false },
     /**
+     * Communications are off by default and use the in-process mock. Real
+     * delivery requires a user-owned provider account, explicit consent tokens
+     * and a consumed system approval. Secrets are never seeded or generated.
+     */
+    communication: {
+      enabled: false,
+      provider: 'mock',
+      maxCallsPerDay: 5,
+      maxSmsPerDay: 20,
+      maxEstimatedCostPerDay: 3,
+      callCostEstimate: 0.05,
+      smsCostEstimate: 0.02,
+      quietHours: null,
+      publicBaseUrl: '',
+      twilio: { accountSid: '', authToken: '', from: '' },
+    },
+    /**
      * The assistant. Offline by default: local engines only, no keys, no
      * telemetry. `allowExternal` exists for people who explicitly want to add a
      * hosted model, and even then it is off until they turn it on.

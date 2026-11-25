@@ -1160,7 +1160,7 @@
     if (!host) return;
     host.textContent = 'Czytam laboratorium…';
     try {
-      const [lab, neural, research] = await Promise.all([api('/api/lab'), api('/api/neural'), api('/api/research')]);
+      const [lab, neural, research, hypercore, reranker, comm, briefing, proactive, specialists] = await Promise.all([api('/api/lab'), api('/api/neural'), api('/api/research'), api('/api/hypercore'), api('/api/reranker'), api('/api/communication'), api('/api/briefing'), api('/api/proactive'), api('/api/specialists')]);
       const data = lab.data || {};
       host.textContent = '';
       const active = data.active;
@@ -1192,7 +1192,37 @@
         el('p', { class: 'mini-card-desc', text: `${(research.data && research.data.status ? research.data.status.sessions : 0)} sesji · ${(research.data && research.data.status ? research.data.status.sources : 0)} źródeł · online tylko za zgodą` }),
         el('div', { class: 'mini-card-tags' }, ((research.data && research.data.sessions) || []).slice(0, 5).map((session) => el('span', { class: 'tag', text: `${session.status}: ${session.question.slice(0, 40)}` }))),
       ]);
-      host.append(el('div', { class: 'grid-cards' }, [neuralBox, researchBox]));
+      const hyperBox = el('article', { class: 'card mini-card' }, [
+        el('h3', { text: 'Hypercore poznawczy' }),
+        el('p', { class: 'mini-card-desc', text: hypercore.data && hypercore.data.counts ? `${hypercore.data.counts.goals} celów · ${hypercore.data.counts.beliefs} przekonań · ${hypercore.data.counts.hypotheses} hipotez · ${hypercore.data.counts.openConflicts} sprzeczności` : 'stan niedostępny' }),
+        el('p', { class: 'mini-card-desc', text: hypercore.data && hypercore.data.honest ? hypercore.data.honest : 'brak danych' }),
+      ]);
+      const rerankBox = el('article', { class: 'card mini-card' }, [
+        el('h3', { text: 'Reranker' }),
+        el('p', { class: 'mini-card-desc', text: reranker.data && reranker.data.active ? `NDCG@3 ${reranker.data.active.metrics.ndcgAt3} vs baseline ${reranker.data.active.baseline.ndcgAt3}` : 'brak aktywnego modelu' }),
+        el('p', { class: 'mini-card-desc', text: reranker.data ? reranker.data.honest : 'brak danych' }),
+      ]);
+      const commBox = el('article', { class: 'card mini-card' }, [
+        el('h3', { text: 'Komunikacja' }),
+        el('p', { class: 'mini-card-desc', text: comm.data && comm.data.status ? `${comm.data.status.provider.name} · live: ${comm.data.status.liveCalls} · ${comm.data.status.today.calls} połączeń dzisiaj` : 'brak danych' }),
+        el('p', { class: 'mini-card-desc', text: comm.data && comm.data.status ? comm.data.status.honest : 'brak danych' }),
+      ]);
+      const briefBox = el('article', { class: 'card mini-card' }, [
+        el('h3', { text: 'Briefing' }),
+        el('p', { class: 'mini-card-desc', text: briefing.data && briefing.data.counts ? `${briefing.data.items.length} pozycji · ${briefing.data.counts.overdue} po terminie · ${briefing.data.counts.conflicts} sprzeczności` : 'brak danych' }),
+      ]);
+      const proactiveBox = el('article', { class: 'card mini-card' }, [
+        el('h3', { text: 'Proaktywność' }),
+        el('p', { class: 'mini-card-desc', text: proactive.data && proactive.data.counts ? `${proactive.data.counts.enabled}/${proactive.data.counts.rules} reguł · kanał: ${proactive.data.deliveryConfigured ? 'skonfigurowany' : 'brak'}` : 'brak danych' }),
+      ]);
+      const specActive = specialists.data && specialists.data.specialists ? specialists.data.specialists.filter((entry) => entry.active) : [];
+      const specBox = el('article', { class: 'card mini-card' }, [
+        el('h3', { text: 'Specjaliści' }),
+        el('p', { class: 'mini-card-desc', text: `${specActive.length}/4 aktywnych modeli` }),
+        el('div', { class: 'mini-card-tags' }, specActive.slice(0, 4).map((entry) => el('span', { class: 'tag', text: `${entry.task}: ${entry.active.metrics.accuracy} vs ${entry.active.baseline.accuracy}` }))),
+        el('p', { class: 'mini-card-desc', text: specialists.data ? specialists.data.honest : 'brak danych' }),
+      ]);
+      host.append(el('div', { class: 'grid-cards' }, [neuralBox, researchBox, hyperBox, rerankBox, commBox, briefBox, proactiveBox, specBox]));
     } catch (err) {
       host.textContent = `Nie mogę wczytać laboratorium: ${err.message}`;
     }
