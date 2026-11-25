@@ -281,8 +281,23 @@ async function runFlows(agent, record, workspace) {
     if (!tool) { record({ tool: name, ok: false, code: 'MISSING', message: 'not registered' }); return null; }
     // eslint-disable-next-line no-await-in-loop
     const result = await agent.tools.execute(name, args, { source: 'audit-flow' });
-    record({ tool: name, ok: Boolean(result.ok), code: result.code || null, ms: result.ms || null, message: result.message ? String(result.message).slice(0, 200) : null });
-    return result.ok ? result : null;
+    // A tool can return transport success while its own result says ok:false
+    // with an error code (for example a lookup that reports NOT_FOUND). That is
+    // not verification. Diagnostics such as healing.diagnose legitimately use
+    // ok:false without a code to mean "checks found a problem", so only coded
+    // failures count as tool failures.
+    const dataFailure = result.data && typeof result.data === 'object' && result.data.ok === false && Boolean(result.data.code);
+    const ok = Boolean(result.ok) && !dataFailure;
+    record({
+      tool: name,
+      ok,
+      code: (dataFailure && result.data.code) || result.code || null,
+      ms: result.ms || null,
+      message: dataFailure
+        ? String(result.data.message || result.data.code || 'data.ok was false').slice(0, 200)
+        : result.message ? String(result.message).slice(0, 200) : null,
+    });
+    return ok ? result : null;
   };
   const fsPath = (name) => `audit-flow/${name}`;
 

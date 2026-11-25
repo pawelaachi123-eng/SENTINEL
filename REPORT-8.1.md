@@ -25,7 +25,7 @@ NOT_STARTED, 2 BLOCKED of 34 tracked requirements**. Only VERIFIED counts.
 - **689 tools in 35 categories** (targets 1,000 and 2,000 — not met).
 - **123 specialist agents** (target 250 — not met).
 - **2,058 checks** in 13 suites, all passing (2,000 target met; 10,000 stretch target not met).
-- Tool audit: **615 of 619 executing fixture calls verified**; **74 tool names remain unexecuted**.
+- Tool audit: **615 of 619 executing fixture calls verified**; **74 tool names remain unexecuted**. A call whose payload reports `ok:false` with an error code is counted as a failure, not as verification.
 - Self-index: **222 files / 3,113 symbols / 0 parse errors**.
 - Acceptance gate `node scripts/acceptance-8.1.js` exits 0 and writes `docs/ledger-8.1.json`.
 
