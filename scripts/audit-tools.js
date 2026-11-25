@@ -259,6 +259,108 @@ const SAFE_CALLS = [
   { name: 'macro.list', args: {} },
 ];
 
+function findId(value, depth = 0) {
+  if (!value || typeof value !== 'object' || depth > 3) return null;
+  for (const key of ['id', 'trashId', 'taskId']) if (typeof value[key] === 'string') return value[key];
+  for (const child of Object.values(value)) {
+    const found = findId(child, depth + 1);
+    if (found) return found;
+  }
+  return null;
+}
+
+/**
+ * Reversible fixture flows. Each call runs the real tool against the temporary
+ * SENTINEL_HOME workspace; no call reaches outside it or performs an external
+ * action. Results feed the same executed list as the static calls.
+ */
+async function runFlows(agent, record, workspace) {
+  const exec = async (name, args = {}) => {
+    const tool = agent.tools.get(name);
+    if (!tool) { record({ tool: name, ok: false, code: 'MISSING', message: 'not registered' }); return null; }
+    // eslint-disable-next-line no-await-in-loop
+    const result = await agent.tools.execute(name, args, { source: 'audit-flow' });
+    record({ tool: name, ok: Boolean(result.ok), code: result.code || null, ms: result.ms || null, message: result.message ? String(result.message).slice(0, 200) : null });
+    return result.ok ? result : null;
+  };
+  const fsPath = (name) => `audit-flow/${name}`;
+
+  await exec('fs.mkdir', { path: 'audit-flow' });
+  await exec('fs.write', { path: fsPath('one.txt'), content: 'alpha beta\n', overwrite: true });
+  await exec('fs.append', { path: fsPath('one.txt'), content: 'gamma\n' });
+  await exec('fs.read', { path: fsPath('one.txt') });
+  await exec('fs.replace', { path: fsPath('one.txt'), find: 'alpha', replace: 'ALPHA', all: true });
+  await exec('fs.copy', { from: fsPath('one.txt'), to: fsPath('copy.txt'), overwrite: true });
+  await exec('fs.move', { from: fsPath('copy.txt'), to: fsPath('moved.txt') });
+  const deleted = await exec('fs.delete', { path: fsPath('moved.txt') });
+  await exec('fs.trash.list');
+  const trashId = deleted ? findId(deleted.data) : null;
+  if (trashId) await exec('fs.restore', { trashId, to: fsPath('moved.txt') });
+
+  const task = await exec('task.create', { title: 'Audit fixture task', goal: 'Exercise task lifecycle', steps: [{ title: 'step one' }] });
+  const taskId = task ? findId(task.data) : null;
+  if (taskId) {
+    await exec('task.get', { id: taskId });
+    await exec('task.cancel', { id: taskId });
+    await exec('task.verify', { id: taskId });
+  }
+
+  const memory = await exec('memory.remember', { text: 'Audit fixture memory alpha beta', kind: 'semantic', tags: ['audit'] });
+  const memoryId = memory ? findId(memory.data) : null;
+  if (memoryId) {
+    await exec('memory.history', { id: memoryId });
+    await exec('memory.export', { path: fsPath('memory.json') });
+    await exec('memory.forget', { id: memoryId });
+    await exec('memory.import', { path: fsPath('memory.json') });
+  }
+
+  await exec('calendar.add', { summary: 'Audit fixture event', start: '2026-01-02T10:00:00Z', durationMinutes: 15 });
+  await exec('calendar.import_ics', { ics: 'BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VEVENT\nUID:audit-1\nDTSTART:20260103T100000Z\nSUMMARY:Audit ICS\nEND:VEVENT\nEND:VCALENDAR\n' });
+
+  const automation = await exec('automation.create', { name: 'audit-noop', type: 'interval', action: 'prompt', everyMinutes: 1440, prompt: 'audit fixture', enabled: false });
+  const automationId = automation ? findId(automation.data) : null;
+  if (automationId) {
+    await exec('automation.toggle', { id: automationId, enabled: false });
+    await exec('automation.delete', { id: automationId });
+  }
+
+  await exec('graph.add', { type: 'project', label: 'Audit Project', props: { source: 'fixture' } });
+  await exec('graph.add', { type: 'file', label: 'audit-flow/one.txt' });
+  await exec('graph.link', { from: 'Audit Project', to: 'audit-flow/one.txt', relation: 'contains' });
+  await exec('graph.neighbours', { node: 'Audit Project', depth: 1 });
+  await exec('graph.path', { from: 'Audit Project', to: 'audit-flow/one.txt' });
+  await exec('graph.sync', {});
+
+  const patch = await exec('patch.propose', { path: 'audit-sample.js', text: "'use strict';\n// AUDIT FLOW MARKER\nfunction add(a, b) { return a + b; }\nmodule.exports = { add };\n", reason: 'audit fixture' });
+  const patchId = patch ? findId(patch.data) : null;
+  if (patchId) {
+    await exec('patch.diff', { id: patchId });
+    await exec('patch.verify', { id: patchId });
+    await exec('patch.list', {});
+    await exec('patch.discard', { id: patchId });
+  }
+
+  await exec('coding.verify', { symbol: 'add', to: 'sum' });
+  await exec('healing.diagnose', { quick: true });
+  await exec('healing.backups', {});
+  await exec('healing.propose', { problem: 'audit fixture: no real problem' });
+  await exec('perf.gaming', { enabled: false });
+  await exec('perf.maintenance', { pruneDays: 30, compact: false });
+  await exec('reason.diagnose', { question: 'Is the audit fixture healthy?', signals: [{ name: 'audit', value: true, source: 'audit' }] });
+  await exec('hypercore.add_goal', { description: 'Audit fixture goal', priority: 0.5 });
+  await exec('hypercore.observe', { statement: 'audit fixture observation', source: 'audit' });
+  await exec('hypercore.deduce', { maxIterations: 2 });
+  await exec('hypercore.hypothesize', { statement: 'audit fixture hypothesis', predicts: ['audit observation'] });
+  await exec('proactive.add_rule', { name: 'audit rule', event: 'task.completed', channels: ['desktop'] });
+  await exec('proactive.evaluate', { event: { type: 'task.completed', payload: {} } });
+  await exec('security.stop', {});
+  await exec('training.dataset_create', { name: 'audit-set', rows: [{ text: 'alpha sample', label: 'alpha' }, { text: 'beta sample', label: 'beta' }] });
+  await exec('training.dataset_split', { name: 'audit-set', seed: 7 });
+  // Deliberately not executed: fs.zip.*, provider calls, long training, process
+  // control, desktop input, installer and anything with external side effects.
+  return workspace;
+}
+
 async function main() {
   const noWrite = process.argv.includes('--no-write');
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'sentinel-audit-'));
@@ -302,16 +404,19 @@ async function main() {
       if (problems.length) structural.problems.push({ tool: tool.name, problems });
     }
     const executed = [];
+    const record = (entry) => executed.push(entry);
     for (const call of SAFE_CALLS) {
       const tool = agent.tools.get(call.name);
       if (!tool) {
-        executed.push({ tool: call.name, ok: false, code: 'MISSING', message: 'not registered' });
+        record({ tool: call.name, ok: false, code: 'MISSING', message: 'not registered' });
         continue;
       }
       // eslint-disable-next-line no-await-in-loop
       const result = await agent.tools.execute(call.name, call.args, { source: 'audit' });
-      executed.push({ tool: call.name, ok: Boolean(result.ok), code: result.code || null, ms: result.ms || null, message: result.message ? String(result.message).slice(0, 200) : null });
+      record({ tool: call.name, ok: Boolean(result.ok), code: result.code || null, ms: result.ms || null, message: result.message ? String(result.message).slice(0, 200) : null });
     }
+    await runFlows(agent, record, workspace);
+    const verifiedTools = new Set(executed.filter((entry) => entry.ok).map((entry) => entry.tool));
     const report = {
       version: require('../package.json').version,
       at: new Date().toISOString(),
@@ -323,12 +428,12 @@ async function main() {
       structural: { checked: structural.total, problems: structural.problems, ok: structural.problems.length === 0 },
       execution: {
         attempted: executed.length,
-        verified: executed.filter((entry) => entry.ok).length,
+        verified: verifiedTools.size,
         failed: executed.filter((entry) => !entry.ok).length,
         results: executed,
-        note: 'Only these tools were executed. Every other tool is unverified, not "verified".',
+        note: 'Only these tools were executed. Every other tool is unverified, not "verified". A tool with several successful fixture calls is counted once.',
       },
-      unexecuted: structural.total - executed.filter((entry) => entry.ok).length,
+      unexecuted: structural.total - verifiedTools.size,
     };
     const major = String(require('../package.json').version).split('.')[0];
     const target = path.join(__dirname, '..', 'docs', `tool-audit-${major}.0.json`);

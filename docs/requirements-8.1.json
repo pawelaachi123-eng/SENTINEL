@@ -1,0 +1,642 @@
+{
+  "version": "8.1.0",
+  "updated": "2026-11-22",
+  "statusVocabulary": [
+    "NOT_STARTED",
+    "IMPLEMENTED_UNTESTED",
+    "PARTIAL",
+    "VERIFIED",
+    "BLOCKED"
+  ],
+  "rule": "Only VERIFIED counts as done. BLOCKED is not a pass. Every VERIFIED row must name an implementation path and a test path that both exist.",
+  "targets": {
+    "sourceLines": 1000000,
+    "tools": 2000,
+    "toolCategories": 100,
+    "agents": 250,
+    "checks": 10000
+  },
+  "measured": {
+    "sourceLines": 82326,
+    "tools": 689,
+    "toolCategories": 35,
+    "agents": 123,
+    "checks": 2056,
+    "sourceFiles": 289,
+    "note": "sourceLines/tools/agents measured by the 8.1 acceptance gate on this checkout; checks = 1830 behavioural + 210 conformance + 10 integration + 6 graph-integrity checks."
+  },
+  "requirements": [
+    {
+      "id": "M1-BASELINE",
+      "milestone": "M1",
+      "title": "Re-run the full 8.0 baseline before changing code",
+      "status": "VERIFIED",
+      "implementation": [
+        "test/training.js",
+        "scripts/check.js"
+      ],
+      "tests": [
+        "test/training.js"
+      ],
+      "evidence": [
+        "23/23 training checks",
+        "audit-tools --no-write reported 530/530 executed before 8.1 edits"
+      ],
+      "blockers": []
+    },
+    {
+      "id": "M1-DEFECT-SCHEMA",
+      "milestone": "M1",
+      "title": "Fix JSON-Schema type unions in the tool validator",
+      "status": "VERIFIED",
+      "implementation": [
+        "core/tools/schema.js"
+      ],
+      "tests": [
+        "test/integration.js",
+        "test/conformance.js"
+      ],
+      "evidence": [
+        "string|number accepted, boolean refused",
+        "calendar.add accepts an ISO string through the registry"
+      ],
+      "blockers": []
+    },
+    {
+      "id": "M1-DEFECT-SERVICES",
+      "milestone": "M1",
+      "title": "Expose patches, cognitive, context, semantics, executor, skills and reasoning to tools",
+      "status": "VERIFIED",
+      "implementation": [
+        "core/agent.js"
+      ],
+      "tests": [
+        "test/integration.js"
+      ],
+      "evidence": [
+        "patch.propose now returns a patch id and a readable diff",
+        "51 services exposed; every declared tool dependency satisfied"
+      ],
+      "blockers": []
+    },
+    {
+      "id": "M2-AUDIT-EXECUTION",
+      "milestone": "M2",
+      "title": "Execute reversible tool fixtures instead of only validating shape",
+      "status": "PARTIAL",
+      "implementation": [
+        "scripts/audit-tools.js"
+      ],
+      "tests": [
+        "test/integration.js"
+      ],
+      "evidence": [
+        "579 of 581 fixture calls verified; 110 tool names still unexecuted"
+      ],
+      "blockers": [
+        "provider, device, training, process-control, MCP and installer tools need external hardware or credentials",
+        "some tools are intentionally destructive or require approvals"
+      ]
+    },
+    {
+      "id": "M2-CONFORMANCE",
+      "milestone": "M2",
+      "title": "Cross-check numeric, unit, date, geometry, physics, finance, statistics and text tools on independent inputs",
+      "status": "VERIFIED",
+      "implementation": [
+        "test/conformance.js"
+      ],
+      "tests": [
+        "test/conformance.js"
+      ],
+      "evidence": [
+        "210 of 210 conformance checks pass"
+      ],
+      "blockers": []
+    },
+    {
+      "id": "M2-CHECKS-2000",
+      "milestone": "M2",
+      "title": "Pass 2,000 distinct functional checks",
+      "status": "VERIFIED",
+      "implementation": [
+        "test/conformance.js",
+        "test/integration.js",
+        "test/requirements.js"
+      ],
+      "tests": [
+        "test/run.js",
+        "test/ui.js",
+        "test/ai.js",
+        "test/deep.js",
+        "test/properties.js",
+        "test/toolpacks.js",
+        "test/agents.js",
+        "test/training.js",
+        "test/executive.js",
+        "test/coding.js",
+        "test/conformance.js",
+        "test/integration.js",
+        "test/requirements.js"
+      ],
+      "evidence": [
+        "2,056 checks across 13 suites"
+      ],
+      "blockers": []
+    },
+    {
+      "id": "M2-REQUIREMENTS-GRAPH",
+      "milestone": "M2",
+      "title": "Machine-readable requirements graph with honest status vocabulary",
+      "status": "VERIFIED",
+      "implementation": [
+        "docs/requirements-8.1.json",
+        "scripts/requirements-graph.js"
+      ],
+      "tests": [
+        "test/requirements.js"
+      ],
+      "evidence": [
+        "graph integrity validated; VERIFIED rows require existing implementation and test paths"
+      ],
+      "blockers": []
+    },
+    {
+      "id": "M2-TOOLS-1000",
+      "milestone": "M7",
+      "title": "Reach 1,000 genuine tools",
+      "status": "PARTIAL",
+      "implementation": [
+        "core/tools/index.js",
+        "core/tools"
+      ],
+      "tests": [
+        "test/toolpacks.js",
+        "scripts/audit-tools.js"
+      ],
+      "evidence": [
+        "689 tools in 35 categories"
+      ],
+      "blockers": [
+        "311 further tools need real distinct behaviour, not aliases"
+      ]
+    },
+    {
+      "id": "M2-TOOLS-2000",
+      "milestone": "M7",
+      "title": "Reach 2,000 genuine tools across 100+ categories",
+      "status": "NOT_STARTED",
+      "implementation": [
+        "core/tools/index.js"
+      ],
+      "tests": [
+        "scripts/audit-tools.js"
+      ],
+      "evidence": [
+        "689 measured"
+      ],
+      "blockers": [
+        "depends on tools-1000"
+      ]
+    },
+    {
+      "id": "M3-BLACKBOARD",
+      "milestone": "M3",
+      "title": "Typed cognitive blackboard with provenance, ownership, scopes and persistence",
+      "status": "PARTIAL",
+      "implementation": [
+        "core/cognition.js",
+        "core/cognition/hypercore.js"
+      ],
+      "tests": [
+        "test/deep.js",
+        "test/ai.js"
+      ],
+      "evidence": [
+        "deterministic briefs, budgets and goal state exist; they are not yet one unified blackboard with scope history and persistence"
+      ],
+      "blockers": []
+    },
+    {
+      "id": "M3-NEUROSYMBOLIC",
+      "milestone": "M3",
+      "title": "Deductive, inductive, abductive, causal, temporal, spatial, probabilistic, CSP and counterfactual engines",
+      "status": "PARTIAL",
+      "implementation": [
+        "core/reasoning.js",
+        "core/tools/reason.tools.js"
+      ],
+      "tests": [
+        "test/deep.js",
+        "test/toolpacks.js"
+      ],
+      "evidence": [
+        "diagnosis and hypothesis tools execute; not all listed engines have first-class solvers"
+      ],
+      "blockers": []
+    },
+    {
+      "id": "M4-NEURAL",
+      "milestone": "M4",
+      "title": "Neural library with tensors, autograd, optimisers and finite-difference gradient checks",
+      "status": "PARTIAL",
+      "implementation": [
+        "core/ml/autograd.js",
+        "core/ml/gpt.js"
+      ],
+      "tests": [
+        "test/training.js"
+      ],
+      "evidence": [
+        "CPU-scale GPT, checkpoints, sampling controls and gradient checks exist; no production PyTorch/PEFT/quantization workflow"
+      ],
+      "blockers": [
+        "no GPU measurement in this environment"
+      ]
+    },
+    {
+      "id": "M4-SPECIALISTS",
+      "milestone": "M4",
+      "title": "Specialist models with dataset, split, baseline, metric and deployment gate",
+      "status": "NOT_STARTED",
+      "implementation": [],
+      "tests": [],
+      "evidence": [],
+      "blockers": [
+        "needs approved datasets and GPU training"
+      ]
+    },
+    {
+      "id": "M5-ROUTER",
+      "milestone": "M5",
+      "title": "Provider-independent router with verified capabilities, health, failover and offline mode",
+      "status": "PARTIAL",
+      "implementation": [
+        "core/ai/providers.js",
+        "core/ai/dispatcher.js",
+        "core/ai/routing-data.js"
+      ],
+      "tests": [
+        "test/ai.js"
+      ],
+      "evidence": [
+        "provider registry and routing data exist; live-provider failover is mock-verified only"
+      ],
+      "blockers": [
+        "real provider smoke tests need separate approval"
+      ]
+    },
+    {
+      "id": "M5-PERF",
+      "milestone": "M5",
+      "title": "Admission control, caching, token budgets and measured p50/p95/p99 latency",
+      "status": "PARTIAL",
+      "implementation": [
+        "core/metrics.js",
+        "core/ai/llm.js"
+      ],
+      "tests": [
+        "test/deep.js"
+      ],
+      "evidence": [
+        "cache and perf tools exist; no measured latency table on this hardware"
+      ],
+      "blockers": [
+        "no live model benchmark in CI"
+      ]
+    },
+    {
+      "id": "M5-PROFILES",
+      "milestone": "M5",
+      "title": "Fast, Balanced, Deep, Research, Offline and Gaming profiles with behavioural differences",
+      "status": "PARTIAL",
+      "implementation": [
+        "core/cognition.js"
+      ],
+      "tests": [
+        "test/deep.js"
+      ],
+      "evidence": [
+        "Fast/Balanced/Deep/Research budgets differ; Offline and Gaming profiles are not complete"
+      ],
+      "blockers": []
+    },
+    {
+      "id": "M6-GRAPHRAG",
+      "milestone": "M6",
+      "title": "Hybrid lexical, vector, graph and rerank retrieval with citations",
+      "status": "PARTIAL",
+      "implementation": [
+        "core/knowledge/graphrag.js",
+        "core/tools/graph.tools.js"
+      ],
+      "tests": [
+        "test/deep.js",
+        "test/integration.js"
+      ],
+      "evidence": [
+        "graph ingest/query/traversal works on fixtures; production embedding index and learned reranker are not complete"
+      ],
+      "blockers": [
+        "embedding model quality not benchmarked"
+      ]
+    },
+    {
+      "id": "M6-RESEARCH",
+      "milestone": "M6",
+      "title": "Research superengine with decomposition, source discovery, evidence and grounded reports",
+      "status": "PARTIAL",
+      "implementation": [
+        "core/research.js",
+        "core/tools/research.tools.js"
+      ],
+      "tests": [
+        "test/deep.js"
+      ],
+      "evidence": [
+        "local document research works; live web source discovery is not enabled in CI"
+      ],
+      "blockers": [
+        "network policy",
+        "citation correctness benchmark missing"
+      ]
+    },
+    {
+      "id": "M7-EXECUTIVE",
+      "milestone": "M7",
+      "title": "Durable executive with pause/resume/restart recovery, idempotency and global STOP",
+      "status": "PARTIAL",
+      "implementation": [
+        "core/executive.js",
+        "core/tools/executive.tools.js"
+      ],
+      "tests": [
+        "test/executive.js"
+      ],
+      "evidence": [
+        "resumable queue, journal and STOP path tested; full restart reconciliation not benchmarked"
+      ],
+      "blockers": []
+    },
+    {
+      "id": "M7-AGENTS-250",
+      "milestone": "M7",
+      "title": "Reach 250 real specialist agents with typed contracts",
+      "status": "PARTIAL",
+      "implementation": [
+        "core/ai/agents.js",
+        "core/ai/agent-packs.js"
+      ],
+      "tests": [
+        "test/agents.js"
+      ],
+      "evidence": [
+        "123 agents"
+      ],
+      "blockers": [
+        "127 further specialists must have non-overlapping contracts"
+      ]
+    },
+    {
+      "id": "M7-MCP",
+      "milestone": "M7",
+      "title": "MCP client/server plus versioned plugin SDK with fixture providers",
+      "status": "PARTIAL",
+      "implementation": [
+        "core/mcp.js"
+      ],
+      "tests": [
+        "test/deep.js"
+      ],
+      "evidence": [
+        "fixture-level transport exists; no external MCP server conformance run"
+      ],
+      "blockers": [
+        "external MCP fixtures not installed"
+      ]
+    },
+    {
+      "id": "M8-PRODUCTIVITY",
+      "milestone": "M8",
+      "title": "Timezone-safe recurring calendar, tasks, projects and PL/EN briefings",
+      "status": "PARTIAL",
+      "implementation": [
+        "core/tools/calendar.tools.js",
+        "core/tools/tasks.tools.js",
+        "core/calendar.js",
+        "core/tasks.js"
+      ],
+      "tests": [
+        "test/deep.js",
+        "test/integration.js"
+      ],
+      "evidence": [
+        "calendar and task flows execute; recurring timezone matrix is incomplete"
+      ],
+      "blockers": []
+    },
+    {
+      "id": "M8-PROACTIVE",
+      "milestone": "M8",
+      "title": "Opt-in proactive event engine with a rule editor",
+      "status": "PARTIAL",
+      "implementation": [
+        "core/tools/assistant.tools.js",
+        "core/proactive.js"
+      ],
+      "tests": [
+        "test/deep.js"
+      ],
+      "evidence": [
+        "rules can be created and evaluated; no rule editor UI"
+      ],
+      "blockers": []
+    },
+    {
+      "id": "M9-TELEPHONY",
+      "milestone": "M9",
+      "title": "Real bidirectional telephone conversations with VAD, barge-in and signed webhooks",
+      "status": "BLOCKED",
+      "implementation": [
+        "core/communication.js"
+      ],
+      "tests": [],
+      "evidence": [
+        "simulator scaffolding only"
+      ],
+      "blockers": [
+        "verified destination numbers",
+        "telephony provider credentials",
+        "explicit approval for live calls"
+      ]
+    },
+    {
+      "id": "M10-CODING",
+      "milestone": "M10",
+      "title": "Incremental code index, call graphs, multi-file patches and hash-bound approvals",
+      "status": "PARTIAL",
+      "implementation": [
+        "core/coding",
+        "core/tools/coding.tools.js"
+      ],
+      "tests": [
+        "test/coding.js"
+      ],
+      "evidence": [
+        "index, patches and rollback tested; multi-file transaction UI incomplete"
+      ],
+      "blockers": []
+    },
+    {
+      "id": "M10-WINDOWS-UIA",
+      "milestone": "M10",
+      "title": "Windows UI Automation desktop assistance",
+      "status": "BLOCKED",
+      "implementation": [],
+      "tests": [],
+      "evidence": [],
+      "blockers": [
+        "no Windows desktop in this environment"
+      ]
+    },
+    {
+      "id": "M10-MOBILE",
+      "milestone": "M10",
+      "title": "Android/ESP32 pairing and local mobile web UI",
+      "status": "PARTIAL",
+      "implementation": [
+        "mobile",
+        "firmware"
+      ],
+      "tests": [
+        "test/ui.js"
+      ],
+      "evidence": [
+        "sources preserved; only simulated devices"
+      ],
+      "blockers": [
+        "no physical Android or ESP32 hardware"
+      ]
+    },
+    {
+      "id": "M11-UI",
+      "milestone": "M11",
+      "title": "JARVIS UI with orb bound to real states and all workspaces",
+      "status": "PARTIAL",
+      "implementation": [
+        "ui",
+        "core/httpd.js"
+      ],
+      "tests": [
+        "test/ui.js"
+      ],
+      "evidence": [
+        "local HTTP UI and state endpoints exist; not all eleven workspaces are complete"
+      ],
+      "blockers": []
+    },
+    {
+      "id": "M11-SECURITY",
+      "milestone": "M11",
+      "title": "Default-deny capabilities, single-use bound approvals and no self-permission changes",
+      "status": "PARTIAL",
+      "implementation": [
+        "core/security",
+        "core/security/approvals.js"
+      ],
+      "tests": [
+        "test/run.js",
+        "test/deep.js"
+      ],
+      "evidence": [
+        "approval binding and sandbox denial are tested; whole-entry-point audit is ongoing"
+      ],
+      "blockers": []
+    },
+    {
+      "id": "M11-RELIABILITY",
+      "milestone": "M11",
+      "title": "Self-healing limited to reversible internal operations",
+      "status": "PARTIAL",
+      "implementation": [
+        "core/reliability.js",
+        "core/selfheal.js"
+      ],
+      "tests": [
+        "test/deep.js"
+      ],
+      "evidence": [
+        "diagnosis and backup restore tested; no fault-injection campaign"
+      ],
+      "blockers": []
+    },
+    {
+      "id": "M12-ACCEPTANCE",
+      "milestone": "M12",
+      "title": "One acceptance gate with fault injection, observability and an installer",
+      "status": "PARTIAL",
+      "implementation": [
+        "scripts/acceptance-8.1.js",
+        "INSTALL_SENTINEL_FULL.ps1"
+      ],
+      "tests": [
+        "scripts/acceptance-8.1.js"
+      ],
+      "evidence": [
+        "acceptance gate exists; installer has not been run on Windows"
+      ],
+      "blockers": [
+        "no Windows host"
+      ]
+    },
+    {
+      "id": "M12-SOURCE-ONLY",
+      "milestone": "M12",
+      "title": "Source-only repository with exactly one PowerShell installer and no binary artifacts",
+      "status": "VERIFIED",
+      "implementation": [
+        "INSTALL_SENTINEL_FULL.ps1",
+        ".github/workflows/build.yml"
+      ],
+      "tests": [
+        "scripts/check.js"
+      ],
+      "evidence": [
+        "CI packs no binaries; one installer present"
+      ],
+      "blockers": []
+    },
+    {
+      "id": "M12-LINES",
+      "milestone": "M12",
+      "title": "One million meaningful first-party source lines",
+      "status": "NOT_STARTED",
+      "implementation": [],
+      "tests": [],
+      "evidence": [
+        "78,446 measured in 8.0.0"
+      ],
+      "blockers": [
+        "cannot be reached honestly by filler; requires real subsystem growth"
+      ]
+    },
+    {
+      "id": "M12-TESTS-10000",
+      "milestone": "M12",
+      "title": "Ten thousand meaningful checks",
+      "status": "PARTIAL",
+      "implementation": [
+        "test"
+      ],
+      "tests": [
+        "test/run.js"
+      ],
+      "evidence": [
+        "2,056 measured"
+      ],
+      "blockers": [
+        "7,944 further behavioural assertions required"
+      ]
+    }
+  ]
+}

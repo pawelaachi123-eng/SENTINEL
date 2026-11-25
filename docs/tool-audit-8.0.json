@@ -1,6 +1,6 @@
 {
   "version": "8.0.0",
-  "at": "2026-11-25T21:21:48.716Z",
+  "at": "2026-11-25T21:59:30.957Z",
   "platform": "linux/x64",
   "tools": 689,
   "categories": {
@@ -54,22 +54,22 @@
     "ok": true
   },
   "execution": {
-    "attempted": 530,
-    "verified": 530,
+    "attempted": 581,
+    "verified": 579,
     "failed": 0,
     "results": [
       {
         "tool": "system.info",
         "ok": true,
         "code": null,
-        "ms": 61,
+        "ms": 39,
         "message": null
       },
       {
         "tool": "math.eval",
         "ok": true,
         "code": null,
-        "ms": 16,
+        "ms": 8,
         "message": null
       },
       {
@@ -90,7 +90,7 @@
         "tool": "runtime.status",
         "ok": true,
         "code": null,
-        "ms": 40,
+        "ms": 23,
         "message": null
       },
       {
@@ -118,14 +118,14 @@
         "tool": "kb.stats",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
         "tool": "kb.list",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -139,7 +139,7 @@
         "tool": "system.snapshot",
         "ok": true,
         "code": null,
-        "ms": 2,
+        "ms": 1,
         "message": null
       },
       {
@@ -160,7 +160,7 @@
         "tool": "lab.status",
         "ok": true,
         "code": null,
-        "ms": 2,
+        "ms": 1,
         "message": null
       },
       {
@@ -174,14 +174,14 @@
         "tool": "reason.contradictions",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
         "tool": "skill.list",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
@@ -209,21 +209,21 @@
         "tool": "repo.map",
         "ok": true,
         "code": null,
-        "ms": 2,
+        "ms": 1,
         "message": null
       },
       {
         "tool": "data.csv_parse",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
         "tool": "data.csv_generate",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -244,7 +244,7 @@
         "tool": "data.json_diff",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -314,14 +314,14 @@
         "tool": "stats.correlation",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
         "tool": "stats.linear_regression",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
@@ -335,7 +335,7 @@
         "tool": "stats.zscores",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -349,14 +349,14 @@
         "tool": "stats.mean_ci",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
         "tool": "stats.two_proportion",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -377,21 +377,21 @@
         "tool": "text.slugify",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
         "tool": "text.levenshtein",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
         "tool": "text.similarity",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -468,14 +468,14 @@
         "tool": "reranker.status",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
         "tool": "communication.status",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -496,7 +496,7 @@
         "tool": "science.temperature_convert",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
@@ -510,7 +510,7 @@
         "tool": "science.quadratic",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -601,21 +601,21 @@
         "tool": "proactive.status",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
         "tool": "lab.sentiment_status",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
         "tool": "specialists.status",
         "ok": true,
         "code": null,
-        "ms": 3,
+        "ms": 2,
         "message": null
       },
       {
@@ -629,14 +629,14 @@
         "tool": "encode.base64",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
         "tool": "encode.hex",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -664,28 +664,28 @@
         "tool": "ai.agents",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
         "tool": "ai.models",
         "ok": true,
         "code": null,
-        "ms": 9,
+        "ms": 7,
         "message": null
       },
       {
         "tool": "ai.status",
         "ok": true,
         "code": null,
-        "ms": 2,
+        "ms": 1,
         "message": null
       },
       {
         "tool": "ai.tools",
         "ok": true,
         "code": null,
-        "ms": 12,
+        "ms": 9,
         "message": null
       },
       {
@@ -706,7 +706,7 @@
         "tool": "automation.stats",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -720,35 +720,35 @@
         "tool": "code.duplicates",
         "ok": true,
         "code": null,
-        "ms": 3,
+        "ms": 1,
         "message": null
       },
       {
         "tool": "code.file.summary",
         "ok": true,
         "code": null,
-        "ms": 4,
+        "ms": 2,
         "message": null
       },
       {
         "tool": "code.function",
         "ok": true,
         "code": null,
-        "ms": 2,
+        "ms": 1,
         "message": null
       },
       {
         "tool": "code.project.map",
         "ok": true,
         "code": null,
-        "ms": 2,
+        "ms": 1,
         "message": null
       },
       {
         "tool": "code.stats",
         "ok": true,
         "code": null,
-        "ms": 3,
+        "ms": 1,
         "message": null
       },
       {
@@ -762,28 +762,28 @@
         "tool": "code.todo",
         "ok": true,
         "code": null,
-        "ms": 3,
+        "ms": 2,
         "message": null
       },
       {
         "tool": "repo.impact",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
         "tool": "repo.search",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
         "tool": "dev.lint.syntax",
         "ok": true,
         "code": null,
-        "ms": 29,
+        "ms": 26,
         "message": null
       },
       {
@@ -797,7 +797,7 @@
         "tool": "dev.versions",
         "ok": true,
         "code": null,
-        "ms": 140,
+        "ms": 109,
         "message": null
       },
       {
@@ -832,14 +832,14 @@
         "tool": "doc.log.analyze",
         "ok": true,
         "code": null,
-        "ms": 2,
+        "ms": 1,
         "message": null
       },
       {
         "tool": "doc.log.tail",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -853,14 +853,14 @@
         "tool": "doc.read",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
         "tool": "fs.diff",
         "ok": true,
         "code": null,
-        "ms": 2,
+        "ms": 1,
         "message": null
       },
       {
@@ -874,7 +874,7 @@
         "tool": "fs.read",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -888,14 +888,14 @@
         "tool": "fs.search",
         "ok": true,
         "code": null,
-        "ms": 3,
+        "ms": 2,
         "message": null
       },
       {
         "tool": "fs.stat",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -916,14 +916,14 @@
         "tool": "finance.compound",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
         "tool": "finance.loan_payment",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -951,7 +951,7 @@
         "tool": "kb.search",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -965,14 +965,14 @@
         "tool": "kb.symbols",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
         "tool": "reranker.rerank",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -986,7 +986,7 @@
         "tool": "lab.sentiment",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
@@ -1000,14 +1000,14 @@
         "tool": "specialists.predict",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
         "tool": "training.status",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
@@ -1035,14 +1035,14 @@
         "tool": "math.base",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
         "tool": "math.convert",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -1063,14 +1063,14 @@
         "tool": "math.matrix",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
         "tool": "math.sequence",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -1091,14 +1091,14 @@
         "tool": "memory.conflicts",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
         "tool": "memory.integrity",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -1140,7 +1140,7 @@
         "tool": "net.ports",
         "ok": true,
         "code": null,
-        "ms": 7,
+        "ms": 5,
         "message": null
       },
       {
@@ -1154,7 +1154,7 @@
         "tool": "executive.status",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -1168,14 +1168,14 @@
         "tool": "perf.metrics",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": 2,
         "message": null
       },
       {
         "tool": "calendar.countdown",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -1189,21 +1189,21 @@
         "tool": "meeting.agenda",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
         "tool": "notes.checklist",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
         "tool": "notes.outline",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
@@ -1217,7 +1217,7 @@
         "tool": "planning.pomodoro",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -1231,7 +1231,7 @@
         "tool": "planning.progress",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
@@ -1245,21 +1245,21 @@
         "tool": "coding.search",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
         "tool": "coding.bugs",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": 2,
         "message": null
       },
       {
         "tool": "coding.callgraph",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -1301,14 +1301,14 @@
         "tool": "science.data_convert",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
         "tool": "science.density",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
@@ -1336,14 +1336,14 @@
         "tool": "science.ideal_gas",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
         "tool": "science.mass_convert",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
@@ -1364,7 +1364,7 @@
         "tool": "science.ohms_law",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -1378,7 +1378,7 @@
         "tool": "science.ph",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
@@ -1392,7 +1392,7 @@
         "tool": "science.projectile_range",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -1420,14 +1420,14 @@
         "tool": "science.vector_dot",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
         "tool": "security.audit",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -1448,7 +1448,7 @@
         "tool": "security.status",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -1462,70 +1462,70 @@
         "tool": "disk.usage",
         "ok": true,
         "code": null,
-        "ms": 5,
+        "ms": 4,
         "message": null
       },
       {
         "tool": "disk.volumes",
         "ok": true,
         "code": null,
-        "ms": 4,
+        "ms": 3,
         "message": null
       },
       {
         "tool": "memory.status",
         "ok": true,
         "code": null,
-        "ms": 8,
+        "ms": 6,
         "message": null
       },
       {
         "tool": "process.list",
         "ok": true,
         "code": null,
-        "ms": 8,
+        "ms": 6,
         "message": null
       },
       {
         "tool": "screen.info",
         "ok": true,
         "code": null,
-        "ms": 2,
+        "ms": 1,
         "message": null
       },
       {
         "tool": "time.now",
         "ok": true,
         "code": null,
-        "ms": 6,
+        "ms": 5,
         "message": null
       },
       {
         "tool": "vision.status",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
         "tool": "voice.status",
         "ok": true,
         "code": null,
-        "ms": 19,
+        "ms": 14,
         "message": null
       },
       {
         "tool": "voice.voices",
         "ok": true,
         "code": null,
-        "ms": 2,
+        "ms": 1,
         "message": null
       },
       {
         "tool": "battery.status",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -1539,91 +1539,91 @@
         "tool": "eventlog.read",
         "ok": true,
         "code": null,
-        "ms": 7,
+        "ms": 6,
         "message": null
       },
       {
         "tool": "gpu.info",
         "ok": true,
         "code": null,
-        "ms": 4,
+        "ms": 1,
         "message": null
       },
       {
         "tool": "hotfix.list",
         "ok": true,
         "code": null,
-        "ms": 10,
+        "ms": 7,
         "message": null
       },
       {
         "tool": "installed.apps",
         "ok": true,
         "code": null,
-        "ms": 6,
+        "ms": 1,
         "message": null
       },
       {
         "tool": "process.find",
         "ok": true,
         "code": null,
-        "ms": 9,
+        "ms": 7,
         "message": null
       },
       {
         "tool": "process.top",
         "ok": true,
         "code": null,
-        "ms": 16,
+        "ms": 11,
         "message": null
       },
       {
         "tool": "service.list",
         "ok": true,
         "code": null,
-        "ms": 7,
+        "ms": 4,
         "message": null
       },
       {
         "tool": "startup.list",
         "ok": true,
         "code": null,
-        "ms": 2,
+        "ms": null,
         "message": null
       },
       {
         "tool": "sensors.temps",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
         "tool": "windows.list",
         "ok": true,
         "code": null,
-        "ms": 4,
+        "ms": 1,
         "message": null
       },
       {
         "tool": "net.connections",
         "ok": true,
         "code": null,
-        "ms": 9,
+        "ms": 3,
         "message": null
       },
       {
         "tool": "net.wifi",
         "ok": true,
         "code": null,
-        "ms": 4,
+        "ms": 2,
         "message": null
       },
       {
         "tool": "tunnel.status",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -1644,14 +1644,14 @@
         "tool": "app.list",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
         "tool": "macro.list",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -1686,14 +1686,14 @@
         "tool": "finx.compound_interest",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
         "tool": "finx.discount",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
@@ -1728,7 +1728,7 @@
         "tool": "finx.margin",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -1742,7 +1742,7 @@
         "tool": "finx.npv",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
@@ -1798,7 +1798,7 @@
         "tool": "finx.vat_extract",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
@@ -1826,7 +1826,7 @@
         "tool": "geom.cone_volume",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -1847,7 +1847,7 @@
         "tool": "geom.distance_2d",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
@@ -1868,7 +1868,7 @@
         "tool": "geom.point_line_distance",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -1903,7 +1903,7 @@
         "tool": "geom.slope",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
@@ -1924,7 +1924,7 @@
         "tool": "geom.square_area",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -1952,7 +1952,7 @@
         "tool": "basex.from_decimal",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
@@ -1973,7 +1973,7 @@
         "tool": "basex.hex_string",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -2001,7 +2001,7 @@
         "tool": "bits.next_power_of_two",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
@@ -2022,7 +2022,7 @@
         "tool": "bits.parity",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -2057,14 +2057,14 @@
         "tool": "matrix.add",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
         "tool": "matrix.determinant",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -2085,14 +2085,14 @@
         "tool": "matrix.multiply",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
         "tool": "matrix.rank",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -2113,14 +2113,14 @@
         "tool": "matrix.trace",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
         "tool": "matrix.transpose",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
@@ -2148,7 +2148,7 @@
         "tool": "numext.add",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -2169,7 +2169,7 @@
         "tool": "numext.atan",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
@@ -2197,7 +2197,7 @@
         "tool": "numext.cbrt",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -2225,7 +2225,7 @@
         "tool": "numext.cos",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
@@ -2253,7 +2253,7 @@
         "tool": "numext.divisors",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -2281,14 +2281,14 @@
         "tool": "numext.floor",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
         "tool": "numext.gcd",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -2337,7 +2337,7 @@
         "tool": "numext.ln",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
@@ -2351,7 +2351,7 @@
         "tool": "numext.log10",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -2414,14 +2414,14 @@
         "tool": "numext.power",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
         "tool": "numext.prime_factors",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -2491,14 +2491,14 @@
         "tool": "numext.subtract",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
         "tool": "numext.sum",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
@@ -2554,7 +2554,7 @@
         "tool": "seqx.consecutive_differences",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -2568,7 +2568,7 @@
         "tool": "seqx.geometric_nth",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
@@ -2610,14 +2610,14 @@
         "tool": "setx.cartesian_product",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
         "tool": "setx.difference",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
@@ -2659,7 +2659,7 @@
         "tool": "setx.union",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -2673,7 +2673,7 @@
         "tool": "phys.centripetal_acceleration",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
@@ -2708,7 +2708,7 @@
         "tool": "phys.gravitational_force",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -2743,7 +2743,7 @@
         "tool": "phys.ohms_law_current",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
@@ -2778,7 +2778,7 @@
         "tool": "phys.power",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -2827,7 +2827,7 @@
         "tool": "unitsx.angle",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
@@ -2848,7 +2848,7 @@
         "tool": "unitsx.dms_to_decimal",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -2883,7 +2883,7 @@
         "tool": "unitsx.power",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
@@ -2918,7 +2918,7 @@
         "tool": "unitsx.time",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -2974,7 +2974,7 @@
         "tool": "checksumx.sha256",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -2995,7 +2995,7 @@
         "tool": "checksumx.timing_safe_equal",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
@@ -3009,7 +3009,7 @@
         "tool": "statx.correlation_pearson",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -3037,7 +3037,7 @@
         "tool": "statx.cumulative_sum",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
@@ -3051,7 +3051,7 @@
         "tool": "statx.entropy_shannon",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -3149,7 +3149,7 @@
         "tool": "statx.outlier_indices",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -3170,7 +3170,7 @@
         "tool": "statx.range",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
@@ -3191,7 +3191,7 @@
         "tool": "statx.stddev_sample",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -3219,7 +3219,7 @@
         "tool": "statx.weighted_mean",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
@@ -3233,7 +3233,7 @@
         "tool": "statx.zscores",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -3261,14 +3261,14 @@
         "tool": "fmtx.csv_quote",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
         "tool": "fmtx.duration",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
@@ -3289,7 +3289,7 @@
         "tool": "fmtx.ordinal_en",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -3324,14 +3324,14 @@
         "tool": "fmtx.table_markdown",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
         "tool": "txtx.base64_decode",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -3436,7 +3436,7 @@
         "tool": "txtx.is_palindrome",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
@@ -3450,7 +3450,7 @@
         "tool": "txtx.longest_word",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -3485,14 +3485,14 @@
         "tool": "txtx.pascal_case",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
         "tool": "txtx.remove_diacritics",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -3513,7 +3513,7 @@
         "tool": "txtx.rot13",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
@@ -3527,7 +3527,7 @@
         "tool": "txtx.snake_case",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -3548,14 +3548,14 @@
         "tool": "txtx.top_words",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": 2,
         "message": null
       },
       {
         "tool": "txtx.truncate",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -3590,14 +3590,14 @@
         "tool": "txtx.wrap",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
         "tool": "datex.add_business_days",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
@@ -3625,7 +3625,7 @@
         "tool": "datex.age",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -3639,7 +3639,7 @@
         "tool": "datex.day_of_week",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
@@ -3667,7 +3667,7 @@
         "tool": "datex.diff_ms",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -3681,7 +3681,7 @@
         "tool": "datex.end_of_day",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
@@ -3709,7 +3709,7 @@
         "tool": "datex.iso_week",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -3730,7 +3730,7 @@
         "tool": "datex.range_overlaps",
         "ok": true,
         "code": null,
-        "ms": null,
+        "ms": 1,
         "message": null
       },
       {
@@ -3751,7 +3751,7 @@
         "tool": "datex.start_of_week",
         "ok": true,
         "code": null,
-        "ms": 1,
+        "ms": null,
         "message": null
       },
       {
@@ -3767,9 +3767,366 @@
         "code": null,
         "ms": null,
         "message": null
+      },
+      {
+        "tool": "fs.mkdir",
+        "ok": true,
+        "code": null,
+        "ms": 5,
+        "message": null
+      },
+      {
+        "tool": "fs.write",
+        "ok": true,
+        "code": null,
+        "ms": 22,
+        "message": null
+      },
+      {
+        "tool": "fs.append",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "fs.read",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "fs.replace",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "fs.copy",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "fs.move",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "fs.delete",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "fs.trash.list",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "fs.restore",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "task.create",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "task.get",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "task.cancel",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "task.verify",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "memory.remember",
+        "ok": true,
+        "code": null,
+        "ms": 3,
+        "message": null
+      },
+      {
+        "tool": "memory.history",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "memory.export",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "memory.forget",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "memory.import",
+        "ok": true,
+        "code": null,
+        "ms": 2,
+        "message": null
+      },
+      {
+        "tool": "calendar.add",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "calendar.import_ics",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "automation.create",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "automation.toggle",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "automation.delete",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "graph.add",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "graph.add",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "graph.link",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "graph.neighbours",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "graph.path",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "graph.sync",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "patch.propose",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "patch.diff",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "patch.verify",
+        "ok": true,
+        "code": null,
+        "ms": 25,
+        "message": null
+      },
+      {
+        "tool": "patch.list",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "patch.discard",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "coding.verify",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "healing.diagnose",
+        "ok": true,
+        "code": null,
+        "ms": 6,
+        "message": null
+      },
+      {
+        "tool": "healing.backups",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "healing.propose",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "perf.gaming",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "perf.maintenance",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "reason.diagnose",
+        "ok": true,
+        "code": null,
+        "ms": 6,
+        "message": null
+      },
+      {
+        "tool": "hypercore.add_goal",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "hypercore.observe",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "hypercore.deduce",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "hypercore.hypothesize",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "proactive.add_rule",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "proactive.evaluate",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "security.stop",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "training.dataset_create",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "training.dataset_split",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
       }
     ],
-    "note": "Only these tools were executed. Every other tool is unverified, not \"verified\"."
+    "note": "Only these tools were executed. Every other tool is unverified, not \"verified\". A tool with several successful fixture calls is counted once."
   },
-  "unexecuted": 159
+  "unexecuted": 110
 }

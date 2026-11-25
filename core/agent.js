@@ -263,6 +263,17 @@ class Agent extends EventEmitter {
         events: this.events,
         metrics: this.metrics,
         experience: this.experience,
+        // These used to be reachable only from jobs and HTTP handlers. Tools
+        // such as patch.propose, context inspection and cognitive queries read
+        // them from the service bag, so omitting them silently disabled tools.
+        cognitive: this.cognitive,
+        context: this.context,
+        semantics: this.semantics,
+        patches: this.patches,
+        executor: this.executor,
+        skills: this.skills,
+        reasoner: this.reasoning,
+        reasoning: this.reasoning,
       });
       this.commander.brain = this.brain;
       // Reliability: a watchdog for the store and one for provider health.

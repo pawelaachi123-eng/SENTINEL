@@ -50,6 +50,12 @@ jobs:
         run: node test/executive.js
       - name: Code intelligence checks
         run: node test/coding.js
+      - name: Numeric/date/text conformance matrix
+        run: node test/conformance.js
+      - name: Cross-subsystem integration checks
+        run: node test/integration.js
+      - name: Requirements graph integrity
+        run: node test/requirements.js
       - name: Deterministic evaluation suite (providers disabled)
         run: node scripts/eval.js
       - name: Tool inventory audit (structure + real executions)

@@ -21,6 +21,7 @@ function typeOf(value) {
 
 function checkType(value, expected) {
   const actual = typeOf(value);
+  if (Array.isArray(expected)) return expected.some((type) => checkType(value, type));
   if (expected === 'number') return actual === 'number' || actual === 'integer';
   return actual === expected;
 }
@@ -62,15 +63,23 @@ function validate(input, schema, { coerce = true } = {}) {
       continue;
     }
 
+    // JSON Schema permits a union of types (`["string", "number"]`). Treat the
+    // first numeric member as the coercion target so a real ISO string is still
+    // accepted alongside epoch milliseconds.
+    const types = Array.isArray(property.type) ? property.type : [property.type];
+    const numeric = types.includes('number') || types.includes('integer');
     // Model output is stringly-typed surprisingly often: "30" for a number.
-    if (coerce) {
-      if (property.type === 'number' || property.type === 'integer') {
+    // Never coerce a value that already satisfies one member of a union; a
+    // string|array field must keep "a,b" as text, not split it just because an
+    // array is also legal.
+    if (coerce && !checkType(current, property.type)) {
+      if (numeric) {
         if (typeof current === 'string' && current.trim() !== '' && Number.isFinite(Number(current))) current = Number(current);
-        if (property.type === 'integer' && typeof current === 'number') current = Math.trunc(current);
-      } else if (property.type === 'boolean' && typeof current === 'string') {
+        if (types.includes('integer') && !types.includes('number') && typeof current === 'number') current = Math.trunc(current);
+      } else if (types.includes('boolean') && typeof current === 'string') {
         if (/^(true|yes|1)$/i.test(current)) current = true;
         else if (/^(false|no|0)$/i.test(current)) current = false;
-      } else if (property.type === 'array' && typeof current === 'string' && property.items) {
+      } else if (types.includes('array') && typeof current === 'string' && property.items) {
         current = current
           .split(',')
           .map((item) => item.trim())
@@ -80,7 +89,7 @@ function validate(input, schema, { coerce = true } = {}) {
     }
 
     if (property.type && !checkType(current, property.type)) {
-      errors.push(`${name} must be ${property.type} (got ${typeOf(current)})`);
+      errors.push(`${name} must be ${types.join(' or ')} (got ${typeOf(current)})`);
       continue;
     }
     if (property.enum && !property.enum.includes(current)) {
