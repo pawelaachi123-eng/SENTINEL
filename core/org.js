@@ -85,6 +85,19 @@ class Organisation {
     };
   }
 
+  /** Token-aware capability match; arbitrary substrings such as "port" in "teleportacja" are not a match. */
+  matchesCapability(entry, wanted) {
+    const target = String(wanted || '').toLowerCase();
+    const value = String(entry || '').toLowerCase();
+    if (!target || !value) return false;
+    if (value === target) return 'exact';
+    const tokens = (text) => text.split(/[^a-z0-9ąćęłńóśźż]+/u).filter((token) => token.length > 2);
+    const left = tokens(target);
+    const right = tokens(value);
+    if (!left.length || !right.length) return false;
+    return left.some((token) => right.includes(token)) ? 'token' : false;
+  }
+
   /** Picks a lead by capability overlap, deterministically. */
   leadFor(capability) {
     const wanted = String(capability || '').toLowerCase().trim();
@@ -94,7 +107,7 @@ class Organisation {
       .map((agent) => {
         const capabilities = this.capabilitiesOf(agent);
         const exact = capabilities.filter((entry) => entry === wanted).length;
-        const partial = capabilities.filter((entry) => entry.includes(wanted) || wanted.includes(entry)).length;
+        const partial = capabilities.filter((entry) => this.matchesCapability(entry, wanted)).length;
         return { agent, score: exact * 3 + partial };
       })
       .filter((entry) => entry.score > 0)
@@ -123,7 +136,7 @@ class Organisation {
         agent,
         overlap: domainMembers.includes(agent.name)
           ? 2
-          : this.capabilitiesOf(agent).filter((entry) => String(capability).toLowerCase().split(/[^a-z0-9]+/).filter(Boolean).some((part) => entry.includes(part) || part.includes(entry))).length,
+          : this.capabilitiesOf(agent).filter((entry) => this.matchesCapability(entry, capability)).length,
       }))
       .filter((entry) => entry.overlap > 0)
       .sort((a, b) => b.overlap - a.overlap || a.agent.name.localeCompare(b.agent.name));

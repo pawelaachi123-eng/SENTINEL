@@ -1,6 +1,7 @@
 'use strict';
 
 const os = require('node:os');
+const path = require('node:path');
 const { EventEmitter } = require('node:events');
 const { Config } = require('./config');
 const { ActivityLog } = require('./log');
@@ -17,6 +18,7 @@ const { openStore } = require('./memory/store');
 const { HashingEmbedder, ModelEmbedder } = require('./memory/embeddings');
 const { Memory } = require('./memory/memory');
 const { Knowledge } = require('./knowledge');
+const { GraphRAG } = require('./knowledge/graphrag');
 const { TaskManager } = require('./tasks');
 const { AutomationEngine } = require('./automation');
 const { ApprovalQueue } = require('./security/approvals');
@@ -41,6 +43,7 @@ const { Reasoner } = require('./reasoning');
 const { SkillLibrary } = require('./skills');
 const { RepoMap } = require('./repomap');
 const { LearningLab } = require('./lab');
+const { TrainingLab } = require('./lab/index.js');
 const { ResearchService } = require('./research');
 const { RerankerLab } = require('./reranker');
 const { HyperCore } = require('./cognition/hypercore');
@@ -105,7 +108,8 @@ class Agent extends EventEmitter {
         ? new ModelEmbedder({ llm: null, model: this.config.get('ai.models.embed'), log: this.log })
         : new HashingEmbedder();
       this.memory = new Memory({ store: this.store, embedder: this.embedder, log: this.log, config: this.config });
-      this.knowledge = new Knowledge({ store: this.store, embedder: this.embedder, log: this.log, config: this.config });
+      this.graphRag = new GraphRAG({ dataDir: pathsModule.dataDir(), log: this.log });
+      this.knowledge = new Knowledge({ store: this.store, embedder: this.embedder, log: this.log, config: this.config, graph: this.graphRag });
       this.tasks = new TaskManager({ store: this.store, log: this.log });
       this.calendar = new CalendarStore({ store: this.store });
       this.approvals = new ApprovalQueue({ log: this.log });
@@ -137,6 +141,7 @@ class Agent extends EventEmitter {
         vision: this.vision,
         store: this.store,
       };
+      this.services.graphRag = this.graphRag;
       this.tools = buildTools({ config: this.config, log: this.log, sandbox: this.sandbox, approvals: this.approvals, services: this.services });
       this.mcp = new McpHub({ config: this.config, log: this.log, registry: this.tools, store: this.store });
       this.services.mcp = this.mcp;
@@ -158,6 +163,8 @@ class Agent extends EventEmitter {
       this.services.repoMap = this.repoMap;
       this.lab = new LearningLab({ paths: pathsModule, store: this.store, log: this.log });
       this.services.lab = this.lab;
+      this.trainingLab = new TrainingLab({ dataDir: path.join(pathsModule.dataDir(), 'training'), sourceRoot: path.resolve(__dirname, '..'), log: this.log });
+      this.services.trainingLab = this.trainingLab;
       this.research = new ResearchService({ store: this.store, log: this.log, workspaceDir: pathsModule.workspaceDir() });
       this.services.research = this.research;
       this.reranker = new RerankerLab({ paths: pathsModule, store: this.store, log: this.log });
@@ -209,15 +216,15 @@ class Agent extends EventEmitter {
         context: this.context,
         semantics: this.semantics,
         patches: this.patches,
-        executor: this.executor,
+        executor: null,
         graph: this.graph,
+        retrievalGraph: this.graphRag || null,
+        reranker: this.reranker || null,
         mcp: this.mcp,
         runtime: this.runtime,
         experience: this.experience,
         events: this.events,
         metrics: this.metrics,
-        executor: null,
-        graph: this.graph,
       });
       this.executor = new Executor({
         tasks: this.tasks,
@@ -522,6 +529,7 @@ class Agent extends EventEmitter {
   }
 
   stop() {
+    try { if (this.trainingLab) this.trainingLab.queue.stop({ cancelRunning: true }); } catch { /* queue is optional */ }
     clearInterval(this.brainTimer);
     if (this.automation) this.automation.stop();
     for (const watchdog of this.watchdogs || []) watchdog.stop();

@@ -23,6 +23,7 @@ const { Agent } = require('../core/agent');
 
 const FILLER = /\b(lorem ipsum|placeholder text|not implemented yet|coming soon)\b/i;
 const PERMISSIONS = ['read', 'write', 'system', 'network', 'privileged'];
+const EXTENDED_PURE = new Set(['numext', 'statx', 'txtx', 'datex', 'geom', 'phys', 'unitsx', 'seqx', 'matrix', 'setx', 'bits', 'basex', 'fmtx', 'finx', 'checksumx']);
 
 const SAFE_CALLS = [
   { name: 'system.info', args: {} },
@@ -119,6 +120,15 @@ async function main() {
   process.env.SENTINEL_HOME = home;
   fs.mkdirSync(path.join(home, 'workspace'), { recursive: true });
   const agent = new Agent();
+  // Extended deterministic packs ship an executable example. Running that
+  // example is a real call, not a structural check, and keeps the audit honest
+  // about the difference between registered and verified.
+  for (const tool of agent.tools.list()) {
+    if (!EXTENDED_PURE.has(tool.name.split('.')[0])) continue;
+    const full = agent.tools.get(tool.name);
+    const example = full && (full.examples || [])[0];
+    if (example && example.args) SAFE_CALLS.push({ name: tool.name, args: example.args });
+  }
   const structural = { total: 0, categories: {}, permissions: {}, problems: [] };
   try {
     for (const tool of agent.tools.list()) {

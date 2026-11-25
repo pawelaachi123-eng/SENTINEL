@@ -56,7 +56,7 @@ const isMathQuestion = (text) => /^(ile|oblicz|policz|calculate|compute|what is|
 
 /* ── specs ─────────────────────────────────────────────────────────────── */
 
-const SPECS = [
+const BASE_SPECS = [
   {
     name: 'dispatcher',
     title: 'Dispatcher',
@@ -589,6 +589,8 @@ Retry only if a specific different approach is available; never retry the same c
 
 /* ── agent ─────────────────────────────────────────────────────────────── */
 
+const SPECS = [...BASE_SPECS, ...require('./agent-packs')];
+
 class Agent {
   constructor(spec) {
     this.spec = spec;
@@ -599,6 +601,7 @@ class Agent {
     this.triggers = spec.triggers || [];
     this.modelClass = spec.modelClass || 'balanced';
     this.categories = spec.categories || [];
+    this.maxToolCalls = Math.max(1, Math.min(MAX_TOOL_CALLS, Number(spec.maxToolCalls) || MAX_TOOL_CALLS));
   }
 
   toolsFor(registry) {
@@ -656,7 +659,7 @@ class Agent {
   async runLlm(runtime) {
     const tools = this.toolsFor(runtime.registry);
     const callable = new Set(tools.map((tool) => tool.name));
-    const budget = Math.min(MAX_TOOL_CALLS, Number(runtime.limits.maxToolCalls) || MAX_TOOL_CALLS);
+    const budget = Math.min(MAX_TOOL_CALLS, Number(runtime.limits.maxToolCalls) || MAX_TOOL_CALLS, this.maxToolCalls);
     const messages = [{ role: 'system', content: this.systemPrompt(runtime, [...callable]) }];
     if (runtime.history && runtime.history.length) {
       messages.push(...runtime.history.slice(-6).map((turn) => ({ role: turn.role === 'assistant' ? 'assistant' : 'user', content: turn.text })));
@@ -745,6 +748,7 @@ class AgentRegistry {
       modelClass: agent.modelClass,
       tools: agent.categories,
       triggers: agent.triggers.length,
+      maxToolCalls: agent.maxToolCalls,
     }));
   }
 
@@ -756,6 +760,18 @@ class AgentRegistry {
       .filter((entry) => entry.score > 0)
       .sort((a, b) => b.score - a.score)
       .slice(0, limit);
+  }
+
+  /** Measures top-1 routing on labelled examples, returning errors as data. */
+  routingEvaluation(cases = []) {
+    const results = [];
+    for (const item of cases) {
+      const ranked = this.candidates(item.text, 3);
+      const predicted = ranked.length ? ranked[0].agent.name : null;
+      results.push({ text: item.text, expected: item.expected, predicted, ok: predicted === item.expected, alternatives: ranked.map((entry) => entry.agent.name) });
+    }
+    const correct = results.filter((entry) => entry.ok).length;
+    return { ok: true, cases: results.length, correct, accuracy: results.length ? correct / results.length : 0, results };
   }
 
   stats() {

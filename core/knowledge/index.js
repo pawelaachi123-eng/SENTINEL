@@ -71,11 +71,12 @@ function hashText(text) {
 }
 
 class Knowledge {
-  constructor({ store, embedder, log, config, now = () => Date.now() }) {
+  constructor({ store, embedder, log, config, graph = null, now = () => Date.now() }) {
     this.store = store;
     this.embedder = embedder || new HashingEmbedder();
     this.log = log;
     this.config = config;
+    this.graph = graph;
     this.now = now;
     this.docCollection = 'knowledge_docs';
     this.chunkCollection = 'knowledge_chunks';
@@ -211,6 +212,12 @@ class Knowledge {
       this.chunkIndex.add(chunk.id, `${chunk.text} ${chunk.title}`);
       this.store.put(this.chunkCollection, chunk.id, chunk);
     });
+    if (this.graph) {
+      for (const chunk of pieces.map((_, index) => this.chunks.get(`${docId}:${String(index).padStart(4, '0')}`)).filter(Boolean)) {
+        try { this.graph.ingest({ docId, chunkId: chunk.id, text: chunk.text, title: chunk.title }); } catch (err) { if (this.log) this.log.warn('knowledge', `graph extraction failed: ${err.message}`); }
+      }
+      this.graph.persist && this.graph.persist();
+    }
 
     this.counters.indexed += 1;
     this.counters.chunks += pieces.length;
@@ -266,6 +273,12 @@ class Knowledge {
       this.chunkIndex.add(chunk.id, `${chunk.text} ${chunk.title}`);
       this.store.put(this.chunkCollection, chunk.id, chunk);
     });
+    if (this.graph) {
+      for (const chunk of pieces.map((_, index) => this.chunks.get(`${docId}:${String(index).padStart(4, '0')}`)).filter(Boolean)) {
+        try { this.graph.ingest({ docId, chunkId: chunk.id, text: chunk.text, title: chunk.title }); } catch (err) { if (this.log) this.log.warn('knowledge', `graph extraction failed: ${err.message}`); }
+      }
+      this.graph.persist && this.graph.persist();
+    }
     this.counters.indexed += 1;
     this.counters.chunks += pieces.length;
     return { doc, chunks: pieces.length };
@@ -314,7 +327,7 @@ class Knowledge {
 
   /* ── reading ────────────────────────────────────────────────────────── */
 
-  async search(query, { limit = 6, docId = null, tags = null, minScore = 0.001 } = {}) {
+  async search(query, { limit = 6, docId = null, tags = null, minScore = 0.001, useGraph = true, asOf = null, since = null } = {}) {
     this.load();
     this.counters.searches += 1;
     const text = String(query || '').trim();
@@ -324,6 +337,13 @@ class Knowledge {
       if (tags && tags.length) {
         const doc = this.docs.get(chunk.docId);
         if (!doc || !tags.some((tag) => (doc.tags || []).includes(tag))) return false;
+      }
+      if (asOf || since) {
+        const doc = this.docs.get(chunk.docId);
+        const stamp = doc && doc.mtime ? Date.parse(doc.mtime) : null;
+        if (!stamp || Number.isNaN(stamp)) return false;
+        if (asOf && stamp > Date.parse(asOf)) return false;
+        if (since && stamp < Date.parse(since)) return false;
       }
       return true;
     });
@@ -355,7 +375,17 @@ class Knowledge {
         const chunk = this.chunks.get(hit.record.id);
         const body = String(chunk.text).toLowerCase();
         const overlap = queryTerms.length ? queryTerms.filter((term) => body.includes(term)).length / queryTerms.length : 0;
-        return { hit, chunk, overlap, finalScore: hit.score * (0.75 + 0.5 * overlap) };
+        let graphBoost = 0;
+        if (useGraph && this.graph) {
+          try {
+            if (!this.graphBoostCache || this.graphBoostCache.query !== text) {
+              const expanded = this.graph.expand(text, { hops: 2, limit: 40 });
+              this.graphBoostCache = { query: text, ids: new Set(expanded.results.map((row) => `k:${row.documentId}`)) };
+            }
+            if (this.graphBoostCache.ids.has(`k:${chunk.docId}`)) graphBoost = 0.08;
+          } catch { graphBoost = 0; }
+        }
+        return { hit, chunk, overlap, graphBoost, finalScore: hit.score * (0.75 + 0.5 * overlap) + graphBoost };
       })
       .sort((a, b) => b.finalScore - a.finalScore);
 
@@ -370,7 +400,7 @@ class Knowledge {
       selected.push(entry);
       if (selected.length >= limit) break;
     }
-    return selected.map(({ chunk, overlap, finalScore }) => ({
+    return selected.map(({ chunk, overlap, graphBoost, finalScore }) => ({
       id: chunk.id,
       docId: chunk.docId,
       title: chunk.title,
@@ -379,11 +409,26 @@ class Knowledge {
       chunk: chunk.index + 1,
       score: Number(finalScore.toFixed(4)),
       lexicalOverlap: Number(overlap.toFixed(2)),
+      graphBoost: Number((graphBoost || 0).toFixed(2)),
       untrusted: true,
       excerpt: chunk.text.length > 400 ? `${chunk.text.slice(0, 400)}…` : chunk.text,
       text: chunk.text,
       start: chunk.start,
     }));
+  }
+
+  /** Verifies cited chunks exist and optionally match quoted terms. */
+  validateCitations(citations) {
+    this.load();
+    const rows = Array.isArray(citations) ? citations : [];
+    return rows.map((citation) => {
+      const chunk = this.chunks.get(citation.chunkId || citation.id);
+      if (!chunk) return { ok: false, code: 'UNKNOWN_CHUNK', citation };
+      const terms = (citation.terms || []).map((term) => String(term).toLowerCase()).filter(Boolean);
+      const body = `${chunk.title || ''} ${chunk.text}`.toLowerCase();
+      const matched = terms.filter((term) => body.includes(term));
+      return { ok: terms.length ? matched.length === terms.length : true, chunkId: chunk.id, docId: chunk.docId, title: chunk.title, matched, missing: terms.filter((term) => !body.includes(term)) };
+    });
   }
 
   list({ limit = 100 } = {}) {
@@ -413,6 +458,7 @@ class Knowledge {
       if (chunk.docId !== docId) continue;
       this.chunks.delete(chunk.id);
       this.chunkIndex.remove(chunk.id);
+      if (this.graph) this.graph.removeChunk(chunk.id);
       this.store.delete(this.chunkCollection, chunk.id);
     }
   }
@@ -422,6 +468,7 @@ class Knowledge {
     if (!this.docs.has(docId)) return false;
     this.dropChunks(docId);
     this.docs.delete(docId);
+    if (this.graph) { this.graph.removeDoc(docId); this.graph.persist && this.graph.persist(); }
     this.store.delete(this.docCollection, docId);
     this.counters.removed += 1;
     return true;

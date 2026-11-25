@@ -1160,7 +1160,7 @@
     if (!host) return;
     host.textContent = 'Czytam laboratorium…';
     try {
-      const [lab, neural, research, hypercore, reranker, comm, briefing, proactive, specialists, calendar] = await Promise.all([api('/api/lab'), api('/api/neural'), api('/api/research'), api('/api/hypercore'), api('/api/reranker'), api('/api/communication'), api('/api/briefing'), api('/api/proactive'), api('/api/specialists'), api('/api/calendar?days=7')]);
+      const [lab, neural, research, hypercore, reranker, comm, briefing, proactive, specialists, calendar, training, graphrag] = await Promise.all([api('/api/lab'), api('/api/neural'), api('/api/research'), api('/api/hypercore'), api('/api/reranker'), api('/api/communication'), api('/api/briefing'), api('/api/proactive'), api('/api/specialists'), api('/api/calendar?days=7'), api('/api/training'), api('/api/graphrag')]);
       const data = lab.data || {};
       host.textContent = '';
       const active = data.active;
@@ -1228,7 +1228,72 @@
         el('div', { class: 'mini-card-tags' }, specActive.slice(0, 4).map((entry) => el('span', { class: 'tag', text: `${entry.task}: ${entry.active.metrics.accuracy} vs ${entry.active.baseline.accuracy}` }))),
         el('p', { class: 'mini-card-desc', text: specialists.data ? specialists.data.honest : 'brak danych' }),
       ]);
-      host.append(el('div', { class: 'grid-cards' }, [neuralBox, researchBox, hyperBox, rerankBox, commBox, briefBox, proactiveBox, specBox, calendarBox]));
+      const trainingData = training.data || {};
+      const adapters = trainingData.adapters || [];
+      const datasets = trainingData.datasets || [];
+      const trainStatus = el('p', { class: 'mini-card-desc', text: trainingData.status || `${datasets.length} wersji zbiorów · ${adapters.length} adapterów · kolejka: ${trainingData.queue ? `${trainingData.queue.counts.running} działa, ${trainingData.queue.counts.queued} czeka` : 'brak'}` });
+      const curveHost = el('div', { class: 'training-curves' });
+      const runBox = el('div', { class: 'training-actions' });
+      const drawCurve = (history) => {
+        curveHost.textContent = '';
+        if (!Array.isArray(history) || !history.length) return;
+        const values = history.map((row) => Number(row.loss)).filter((value) => Number.isFinite(value));
+        if (!values.length) return;
+        const width = 260;
+        const height = 72;
+        const min = Math.min(...values);
+        const max = Math.max(...values);
+        const span = max - min || 1;
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+        svg.setAttribute('class', 'training-curve');
+        svg.setAttribute('role', 'img');
+        svg.setAttribute('aria-label', `Krzywa straty: ${values.length} epok, od ${values[0].toFixed(3)} do ${values[values.length - 1].toFixed(3)}`);
+        const path = values.map((value, index) => `${index ? 'L' : 'M'}${(index / Math.max(1, values.length - 1)) * width},${height - ((value - min) / span) * (height - 8) - 4}`).join(' ');
+        const line = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        line.setAttribute('d', path);
+        line.setAttribute('fill', 'none');
+        line.setAttribute('stroke', '#4ea1ff');
+        line.setAttribute('stroke-width', '2');
+        svg.append(line);
+        curveHost.append(svg, el('span', { class: 'tag', text: `loss ${values[0].toFixed(3)} → ${values[values.length - 1].toFixed(3)} (${values.length} epok)` }));
+      };
+      const runTraining = async (kind) => {
+        const dataset = datasets[0] ? datasets[0].name : null;
+        if (!dataset) {
+          runBox.append(el('p', { class: 'panel-note', text: 'Najpierw utwórz zbiór danych (training.dataset_create).' }));
+          return;
+        }
+        runBox.textContent = `Trening ${kind}…`;
+        try {
+          const response = await api('/api/training/train', { method: 'POST', body: { kind, payload: { dataset, epochs: 60, dim: 24 } } });
+          runBox.textContent = '';
+          runBox.append(el('p', { class: 'panel-note', text: `${kind}: ${response.data.evaluation ? (response.data.evaluation.adapted ? `LoRA ${response.data.evaluation.adapted.accuracy} vs ${response.data.evaluation.frozen.accuracy}` : `${response.data.test ? response.data.test.accuracy : ''}`) : (response.data.report ? `loss ${response.data.report.final.trainLoss.toFixed(3)}` : 'gotowe')}` }));
+          drawCurve(response.data.history ? (response.data.history.plain ? response.data.history.plain : response.data.history) : response.data.report ? response.data.report.history : []);
+          loadLab();
+        } catch (err) {
+          runBox.textContent = `Trening nie powiódł się: ${err.message}`;
+        }
+      };
+      for (const [kind, label] of [['lora', 'LoRA'], ['qlora', 'QLoRA 4-bit'], ['distill', 'Destylacja'], ['preference', 'Preferencje'], ['gpt', 'GPT (ostatni zbiór)']]) {
+        runBox.append(el('button', { class: 'btn btn-small', type: 'button', text: label, onclick: () => runTraining(kind) }));
+      }
+      const trainingBox = el('article', { class: 'card mini-card' }, [
+        el('h3', { text: 'Laboratorium treningu' }),
+        trainStatus,
+        el('div', { class: 'mini-card-tags' }, adapters.slice(0, 5).map((adapter) => el('span', { class: 'tag', text: `${adapter.kind}: ${adapter.id.split('_').slice(-1)[0]}${adapter.active ? ' ✓' : ''}` }))),
+        el('div', { class: 'mini-card-tags' }, datasets.slice(0, 5).map((dataset) => el('span', { class: 'tag', text: `${dataset.name} v${dataset.version} · ${dataset.rows} w.` }))),
+        curveHost,
+        runBox,
+        el('p', { class: 'panel-note', text: trainingData.scope || 'CPU-sized genuine workflows; measured metrics only' }),
+      ]);
+      const graphData = graphrag.data || {};
+      const graphBox = el('article', { class: 'card mini-card' }, [
+        el('h3', { text: 'Graf wiedzy (GraphRAG)' }),
+        el('p', { class: 'mini-card-desc', text: graphData.stats ? `${graphData.stats.entities} encji · ${graphData.stats.edges} relacji · ${graphData.stats.documents} dokumentów · ${graphData.stats.contradictions} sprzeczności` : 'brak grafu' }),
+        el('div', { class: 'mini-card-tags' }, (graphData.relations || []).slice(0, 5).map((relation) => el('span', { class: 'tag', text: `${relation.subject} —${relation.predicate}→ ${relation.object}` }))),
+      ]);
+      host.append(el('div', { class: 'grid-cards' }, [neuralBox, researchBox, hyperBox, rerankBox, commBox, briefBox, proactiveBox, specBox, calendarBox, trainingBox, graphBox]));
     } catch (err) {
       host.textContent = `Nie mogę wczytać laboratorium: ${err.message}`;
     }

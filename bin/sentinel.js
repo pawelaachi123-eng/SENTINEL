@@ -760,6 +760,117 @@ async function main() {
         return done(4);
       }
 
+      case 'training': {
+        const tl = agent.trainingLab;
+        const action = rest[0] || 'status';
+        if (action === 'status') {
+          const status = tl.status();
+          if (args.json) console.log(JSON.stringify(status, null, 2));
+          else {
+            console.log(bold('laboratorium treningu (CPU)'));
+            console.log(`  datasety: ${status.datasets.length} · adaptery: ${status.adapters.length} · aktywny: ${status.activeAdapter ? status.activeAdapter.id : 'brak'}`);
+            console.log(`  kolejka: ${status.queue.counts.queued} czeka, ${status.queue.counts.running} działa, ${status.queue.counts.failed} błędów`);
+            for (const adapter of status.adapters.slice(0, 8)) console.log(`  ${adapter.kind.padEnd(10)} ${adapter.id} ${adapter.metrics ? JSON.stringify(adapter.metrics) : 'bez metryk'}`);
+            console.log(dim(`  ${status.scope}`));
+          }
+          return done(0);
+        }
+        if (action === 'dataset') {
+          const name = rest[1];
+          const file = rest[2];
+          if (!name || !file) { console.error(red('użycie: sentinel training dataset <nazwa> <plik.jsonl>')); return done(4); }
+          if (!require('node:fs').existsSync(file)) { console.error(red(`nie ma pliku ${file}`)); return done(4); }
+          const rows = require('node:fs').readFileSync(file, 'utf8').split('\n').filter(Boolean).map((line) => JSON.parse(line));
+          const created = tl.createDataset({ name, rows, source: file, personalData: Boolean(args.personal), approvedBy: args.approve || null });
+          console.log(green(`✓ ${created.name} v${created.version}: ${created.rows} wierszy, sha256 ${created.sha256.slice(0, 16)}…`));
+          return done(0);
+        }
+        if (action === 'datasets') {
+          const rows = tl.listDatasets();
+          if (args.json) console.log(JSON.stringify(rows, null, 2));
+          else for (const row of rows) console.log(`  ${row.name} v${row.version} · ${row.rows} wierszy · ${row.sha256.slice(0, 12)}…${row.personalData ? ' · dane osobowe' : ''}`);
+          return done(0);
+        }
+        if (action === 'lora' || action === 'qlora') {
+          if (!rest[1]) { console.error(red(`użycie: sentinel training ${action} <dataset> [--rank 2] [--max 120]`)); return done(4); }
+          const result = action === 'lora'
+            ? tl.trainLora({ dataset: rest[1], rank: args.rank || 2, epochs: args.max || 120, sourceDataset: args.source || null })
+            : tl.trainQlora({ dataset: rest[1], rank: args.rank || 2, epochs: args.max || 120, sourceDataset: args.source || null });
+          if (args.json) console.log(JSON.stringify(result, null, 2));
+          else {
+            console.log(green(`✓ ${result.adapter.id}`));
+            console.log(`  adaptacja: ${result.evaluation.adapted.accuracy} vs zamrożona baza ${result.evaluation.frozen.accuracy} · trenowalne ${result.trainableParameters}`);
+            if (result.quantization) console.log(`  4-bit: błąd W1 ${result.quantization.w1RelativeError}, W2 ${result.quantization.w2RelativeError}`);
+          }
+          return done(0);
+        }
+        if (action === 'distill') {
+          if (!rest[1]) { console.error(red('użycie: sentinel training distill <dataset>')); return done(4); }
+          const result = tl.distill({ dataset: rest[1], epochs: args.max || 100 });
+          console.log(green(`✓ destylacja: ${result.distilled.evaluation.accuracy} vs ${result.plain.evaluation.accuracy} (nauczyciel ${result.teacher.evaluation.accuracy})`));
+          console.log(dim(`  adapter ${result.adapter.id}`));
+          return done(0);
+        }
+        if (action === 'preference') {
+          const result = tl.preference({ count: args.max || 120, epochs: 80 });
+          console.log(green(`✓ preferencje: ${result.test.accuracy} (baseline ${result.baseline.accuracy}, delta ${result.delta})`));
+          return done(0);
+        }
+        if (action === 'gpt') {
+          const text = rest.slice(1).join(' ');
+          if (!text) { console.error(red('użycie: sentinel training gpt <tekst treningowy>')); return done(4); }
+          const result = tl.trainGpt({ texts: [text], epochs: args.max || 8, name: args.name || 'cli' });
+          console.log(green(`✓ loss ${result.report.final.trainLoss.toFixed(4)} · perplexity ${result.report.final.trainPerplexity.toFixed(2)}`));
+          console.log(`  checkpoint ${result.checkpoint.file} (${result.checkpoint.sha256.slice(0, 16)}…)`);
+          console.log(`  próbka: ${result.sample.text.slice(0, 120)}`);
+          return done(0);
+        }
+        if (action === 'hpo') {
+          if (!rest[1]) { console.error(red('użycie: sentinel training hpo <dataset>')); return done(4); }
+          const result = tl.hpo({ dataset: rest[1], budget: args.max || 4 });
+          console.log(result.ok ? green(`✓ najlepsze ${JSON.stringify(result.best.params)} → ${result.best.score}`) : red('brak trafień'));
+          for (const trial of result.trials) console.log(`  ${JSON.stringify(trial.params)} → ${trial.ok ? trial.score : trial.error.code} (${trial.durationMs} ms)`);
+          return done(0);
+        }
+        if (action === 'adapters') {
+          const rows = tl.listAdapters({ limit: 30 });
+          if (args.json) console.log(JSON.stringify(rows, null, 2));
+          else for (const adapter of rows) console.log(`  ${adapter.active ? '●' : '○'} ${adapter.id} · ${adapter.kind} · ${adapter.metrics ? JSON.stringify(adapter.metrics) : 'bez metryk'}`);
+          return done(0);
+        }
+        if (action === 'compare') {
+          const ids = rest.slice(1);
+          if (ids.length < 2) { console.error(red('użycie: sentinel training compare <id> <id>')); return done(4); }
+          const result = tl.compareAdapters(ids);
+          console.log(args.json ? JSON.stringify(result, null, 2) : `najlepszy: ${result.best}`);
+          return done(result.ok ? 0 : 4);
+        }
+        if (action === 'promote' || action === 'rollback') {
+          if (!args.approve) { console.error(red(`${action} wymaga --approve <imię>`)); return done(4); }
+          const result = action === 'promote' ? tl.promoteAdapter(rest[1], { approvedBy: args.approve }) : tl.rollbackAdapter({ approvedBy: args.approve, to: rest[1] || null });
+          if (!result.ok) { console.error(red(`✗ ${result.code}: ${result.message || ''}`)); return done(4); }
+          console.log(green(`✓ aktywny: ${result.active.id}`));
+          return done(0);
+        }
+        if (action === 'queue') {
+          const status = tl.queueStatus();
+          if (args.json) console.log(JSON.stringify(status, null, 2));
+          else {
+            console.log(`${status.counts.queued} czeka · ${status.counts.running} działa · ${status.counts.succeeded} gotowych · ${status.counts.failed} błędów · ${status.counts.cancelled} anulowanych`);
+            for (const job of status.recent) console.log(`  ${job.id} ${job.kind} ${job.status} ${job.checkpoint ? `checkpoint ${job.checkpoint}` : ''}`);
+          }
+          return done(0);
+        }
+        if (action === 'cancel') {
+          if (!rest[1]) { console.error(red('użycie: sentinel training cancel <id>')); return done(4); }
+          const result = tl.cancel(rest[1]);
+          console.log(result.ok ? green(`✓ ${result.status}`) : red(result.code));
+          return done(result.ok ? 0 : 4);
+        }
+        console.error(red(`nieznana akcja training: ${action}`));
+        return done(4);
+      }
+
       case 'research': {
         const action = rest[0] || 'list';
         if (action === 'list') {

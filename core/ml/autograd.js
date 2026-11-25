@@ -203,6 +203,53 @@ function rowSoftmax(a) {
   });
 }
 
+
+/** Causal (lower-triangular) row softmax for autoregressive attention. */
+function causalRowSoftmax(a) {
+  const out = new Float64Array(a.data.length);
+  for (let row = 0; row < a.rows; row += 1) {
+    let max = -Infinity;
+    for (let column = 0; column <= row; column += 1) max = Math.max(max, a.data[row * a.cols + column]);
+    let sum = 0;
+    for (let column = 0; column <= row; column += 1) {
+      const value = Math.exp(a.data[row * a.cols + column] - max);
+      out[row * a.cols + column] = value;
+      sum += value;
+    }
+    for (let column = 0; column <= row; column += 1) out[row * a.cols + column] /= sum || 1;
+  }
+  return new Node(out, a.rows, a.cols, {
+    op: 'causalRowSoftmax',
+    parents: [a],
+    backward: (grad) => {
+      const ga = new Float64Array(grad.length);
+      for (let row = 0; row < a.rows; row += 1) {
+        let dot = 0;
+        for (let column = 0; column <= row; column += 1) dot += grad[row * a.cols + column] * out[row * a.cols + column];
+        for (let column = 0; column <= row; column += 1) ga[row * a.cols + column] = out[row * a.cols + column] * (grad[row * a.cols + column] - dot);
+      }
+      return [ga];
+    },
+  });
+}
+
+/** Selects the last row of a matrix as a 1×cols node. */
+function lastRow(a) {
+  if (!a.rows) throw Object.assign(new Error('cannot take the last row of an empty matrix'), { code: 'BAD_TENSOR' });
+  const out = new Float64Array(a.cols);
+  const offset = (a.rows - 1) * a.cols;
+  for (let column = 0; column < a.cols; column += 1) out[column] = a.data[offset + column];
+  return new Node(out, 1, a.cols, {
+    op: 'lastRow',
+    parents: [a],
+    backward: (grad) => {
+      const ga = new Float64Array(a.data.length);
+      for (let column = 0; column < a.cols; column += 1) ga[offset + column] = grad[column];
+      return [ga];
+    },
+  });
+}
+
 function layerNorm(a, gamma, beta, { epsilon = 1e-5 } = {}) {
   if (gamma.rows !== 1 || beta.rows !== 1 || gamma.cols !== a.cols || beta.cols !== a.cols) throw Object.assign(new Error('layerNorm parameters must be 1×cols'), { code: 'BAD_SHAPE' });
   const out = new Float64Array(a.data.length);
@@ -323,6 +370,33 @@ function softmaxCrossEntropy(logits, labels) {
   return { loss: node, probabilities };
 }
 
+
+/** Cross-entropy against a full target distribution (knowledge distillation). */
+function softCrossEntropy(logits, targets) {
+  if (!Array.isArray(targets) || targets.length !== logits.cols || logits.rows !== 1) throw Object.assign(new Error('targets must match logits columns for a single row'), { code: 'BAD_SHAPE' });
+  let max = -Infinity;
+  for (const value of logits.data) max = Math.max(max, value);
+  let sum = 0;
+  const probabilities = new Float64Array(logits.cols);
+  for (let column = 0; column < logits.cols; column += 1) {
+    probabilities[column] = Math.exp(logits.data[column] - max);
+    sum += probabilities[column];
+  }
+  for (let column = 0; column < logits.cols; column += 1) probabilities[column] /= sum || 1;
+  let loss = 0;
+  for (let column = 0; column < logits.cols; column += 1) loss -= targets[column] * Math.log(Math.max(1e-12, probabilities[column]));
+  const node = new Node(Float64Array.from([loss]), 1, 1, {
+    op: 'softCrossEntropy',
+    parents: [logits],
+    backward: (grad) => {
+      const gl = new Float64Array(logits.cols);
+      for (let column = 0; column < logits.cols; column += 1) gl[column] = (probabilities[column] - targets[column]) * grad[0];
+      return [gl];
+    },
+  });
+  return { loss: node, probabilities };
+}
+
 function backward(root) {
   if (root.grad.length !== root.data.length) throw Object.assign(new Error('bad root gradient'), { code: 'BAD_GRAD' });
   const order = [];
@@ -434,10 +508,13 @@ module.exports = {
   relu,
   transpose,
   rowSoftmax,
+  causalRowSoftmax,
+  lastRow,
   layerNorm,
   meanRows,
   gather,
   softmaxCrossEntropy,
+  softCrossEntropy,
   backward,
   checkGradient,
   createAdam,

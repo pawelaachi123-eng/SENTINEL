@@ -1332,7 +1332,8 @@ test('the organisation chart covers every real agent exactly once', () => {
   const names = TIERS.flatMap((tier) => chart.tiers[tier].map((entry) => entry.name));
   assert.equal(names.length, agents.agents.size);
   assert.equal(new Set(names).size, names.length, 'an agent appeared in two tiers');
-  assert.equal(chart.total, 31);
+  assert.equal(chart.total, agents.agents.size);
+  assert.ok(chart.total >= 120, `expected at least 120 agents, saw ${chart.total}`);
   assert.ok(chart.counts.executive >= 1);
   assert.ok(chart.counts.worker >= 1);
   const titles = [...agents.agents.values()].map((agent) => agent.title);
@@ -1350,7 +1351,7 @@ test('delegation is capability-based, one-way and bounded', () => {
   assert.ok(plan.workers.every((worker) => TIERS.indexOf(worker.tier) >= TIERS.indexOf(plan.leadTier)));
   assert.ok(plan.depth <= plan.maxDepth);
   assert.match(plan.note, /nothing was executed/);
-  const unknown = org.planDelegation({ capability: 'orbital-mechanics' });
+  const unknown = org.planDelegation({ capability: 'teleportacja-kwantowa-xyz' });
   assert.equal(unknown.ok, false);
   assert.equal(unknown.code, 'NO_LEAD');
   assert.equal(org.leadFor('').ok, false);

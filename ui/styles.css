@@ -956,3 +956,9 @@ input.field::placeholder { color: var(--text-faint); }
 .patch-form { display: grid; gap: 8px; }
 .patch-row { display: grid; gap: 8px; }
 .patch-diff { max-height: 320px; overflow: auto; font-size: 0.78rem; line-height: 1.45; padding: 10px; border-radius: 10px; background: color-mix(in srgb, currentColor 7%, transparent); white-space: pre; }
+
+/* Training lab: curves and experiment controls */
+.training-curves { display: flex; align-items: center; gap: 8px; margin: 8px 0; min-height: 24px; }
+.training-curve { width: 100%; max-width: 260px; height: 72px; background: rgba(78, 161, 255, 0.06); border-radius: 6px; }
+.training-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.training-actions .btn { font-size: 12px; padding: 5px 9px; }

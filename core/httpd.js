@@ -468,6 +468,58 @@ class HttpApi {
       return this.json(res, 200, { ok: true, data: this.ai.lab.classify(text) });
     }
 
+    if (route === '/api/training' && req.method === 'GET') {
+      if (!this.ai || !this.ai.trainingLab) return this.json(res, 503, { ok: false, error: 'training lab not ready' });
+      return this.json(res, 200, { ok: true, data: this.ai.trainingLab.status() });
+    }
+
+    if (route === '/api/training/adapters' && req.method === 'GET') {
+      if (!this.ai || !this.ai.trainingLab) return this.json(res, 503, { ok: false, error: 'training lab not ready' });
+      return this.json(res, 200, { ok: true, data: { adapters: this.ai.trainingLab.listAdapters({ limit: 50 }), active: this.ai.trainingLab.adapters.active() } });
+    }
+
+    if (route === '/api/training/queue' && req.method === 'GET') {
+      if (!this.ai || !this.ai.trainingLab) return this.json(res, 503, { ok: false, error: 'training lab not ready' });
+      return this.json(res, 200, { ok: true, data: this.ai.trainingLab.queueStatus() });
+    }
+
+    if (route === '/api/training/train' && req.method === 'POST') {
+      if (!this.ai || !this.ai.trainingLab) return this.json(res, 503, { ok: false, error: 'training lab not ready' });
+      const body = await this.body(req).catch(() => ({}));
+      const kind = String(body.kind || '');
+      const allowed = new Set(['lora', 'qlora', 'distill', 'preference', 'gpt']);
+      if (!allowed.has(kind)) return this.json(res, 400, { ok: false, error: `kind must be one of ${[...allowed].join(', ')}` });
+      const payload = body.payload && typeof body.payload === 'object' ? body.payload : {};
+      try {
+        const result = kind === 'lora' ? this.ai.trainingLab.trainLora(payload)
+          : kind === 'qlora' ? this.ai.trainingLab.trainQlora(payload)
+            : kind === 'distill' ? this.ai.trainingLab.distill(payload)
+              : kind === 'preference' ? this.ai.trainingLab.preference(payload)
+                : this.ai.trainingLab.trainGpt(payload);
+        return this.json(res, 200, { ok: true, data: result });
+      } catch (err) {
+        return this.json(res, 400, { ok: false, error: err.message, code: err.code || 'TRAINING_FAILED' });
+      }
+    }
+
+    if (route === '/api/training/cancel' && req.method === 'POST') {
+      if (!this.ai || !this.ai.trainingLab) return this.json(res, 503, { ok: false, error: 'training lab not ready' });
+      const body = await this.body(req).catch(() => ({}));
+      return this.json(res, 200, { ok: true, data: this.ai.trainingLab.cancel(String(body.id || '')) });
+    }
+
+    if (route === '/api/graphrag' && req.method === 'GET') {
+      if (!this.ai || !this.ai.graphRag) return this.json(res, 503, { ok: false, error: 'graph not ready' });
+      return this.json(res, 200, { ok: true, data: { stats: this.ai.graphRag.stats(), entities: this.ai.graphRag.listEntities({ limit: 40 }), relations: this.ai.graphRag.listRelations({ limit: 40 }) } });
+    }
+
+    if (route === '/api/graphrag/search' && req.method === 'GET') {
+      if (!this.ai || !this.ai.graphRag) return this.json(res, 503, { ok: false, error: 'graph not ready' });
+      const query = String(url.searchParams.get('q') || '').slice(0, 500);
+      if (!query) return this.json(res, 400, { ok: false, error: 'q is required' });
+      return this.json(res, 200, { ok: true, data: this.ai.graphRag.expand(query, { hops: Number(url.searchParams.get('hops')) || 2 }) });
+    }
+
     if (route === '/api/neural' && req.method === 'GET') {
       if (!this.ai) return this.json(res, 503, { ok: false, error: 'AI not ready' });
       // Cached metadata only: this endpoint must not trigger provider calls.

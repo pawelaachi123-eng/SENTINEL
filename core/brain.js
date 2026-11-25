@@ -23,6 +23,8 @@
  * insights. That makes it testable without a PC, a phone or a network.
  */
 
+const { UnifiedRetriever } = require('./retrieval/unified');
+
 const RULES = [
   {
     id: 'cpu-sustained',
@@ -135,7 +137,7 @@ const RULES = [
 const LEVEL_ORDER = { error: 0, warn: 1, info: 2 };
 
 class Brain {
-  constructor({ config, log, now = () => Date.now(), llm = null, memory = null, knowledge = null, tools = null, agents = null, tasks = null, dispatcher = null, store = null, approvals = null, commander = null, stats = null, link = null, tunnel = null, automation = null, paths = null, cognitive = null, context = null, experience = null, events = null, metrics = null, semantics = null, executor = null, graph = null, specialists = null } = {}) {
+  constructor({ config, log, now = () => Date.now(), llm = null, memory = null, knowledge = null, tools = null, agents = null, tasks = null, dispatcher = null, store = null, approvals = null, commander = null, stats = null, link = null, tunnel = null, automation = null, paths = null, cognitive = null, context = null, experience = null, events = null, metrics = null, semantics = null, executor = null, graph = null, retrievalGraph = null, specialists = null, reranker = null } = {}) {
     this.config = config;
     this.log = log;
     this.now = now;
@@ -162,7 +164,9 @@ class Brain {
     this.semantics = semantics;
     this.executor = executor;
     this.graph = graph;
+    this.retrievalGraph = retrievalGraph;
     this.specialists = specialists;
+    this.reranker = reranker;
     this.context = context;
     this.experience = experience;
     this.events = events;
@@ -308,6 +312,56 @@ class Brain {
     return true;
   }
 
+
+  /**
+   * Fuses memory and knowledge candidates with the unified retriever while
+   * preserving each category for budgeting. Returns the original order when
+   * there is nothing to fuse, and never drops a candidate silently.
+   */
+  fuseRecall(question, memories, documents) {
+    const memoryList = Array.isArray(memories) ? memories : [];
+    const documentList = Array.isArray(documents) ? documents : [];
+    if (!memoryList.length && !documentList.length) return { memories: memoryList, documents: documentList, report: null };
+    const entries = [
+      ...memoryList.map((entry, index) => ({
+        id: `m:${entry.record.id}`,
+        text: `${entry.record.kind} ${entry.record.text}`,
+        group: `memory:${entry.record.kind}`,
+        metadata: { source: 'memory', index, ref: entry.record.id, kind: entry.record.kind },
+        payload: entry,
+      })),
+      ...documentList.map((entry, index) => ({
+        id: `k:${entry.id}`,
+        text: `${entry.title || ''} ${entry.text || entry.excerpt || ''}`,
+        group: `doc:${entry.docId || entry.id}`,
+        metadata: { source: 'knowledge', index, ref: entry.id, title: entry.title || null },
+        payload: entry,
+      })),
+    ];
+    if (entries.length < 2) return { memories: memoryList, documents: documentList, report: { used: false, reason: 'fewer than two candidates' } };
+    try {
+      const retriever = new UnifiedRetriever({
+        documents: entries.map(({ payload, ...document }) => document),
+        graph: this.retrievalGraph,
+        specialists: this.specialists,
+        reranker: this.reranker,
+      });
+      const result = retriever.search(question, { limit: entries.length, useGraph: Boolean(this.retrievalGraph), useNeural: true });
+      if (!result.ok || !result.results.length) return { memories: memoryList, documents: documentList, report: { used: false, reason: 'retriever returned no results' } };
+      const scores = new Map(result.results.map((row) => [row.id, row]));
+      const sortedMemories = [...memoryList].sort((a, b) => (scores.get(`m:${b.record.id}`)?.score || 0) - (scores.get(`m:${a.record.id}`)?.score || 0));
+      const sortedDocuments = [...documentList].sort((a, b) => (scores.get(`k:${b.id}`)?.score || 0) - (scores.get(`k:${a.id}`)?.score || 0));
+      const top = result.results.slice(0, 5).map((row) => ({ id: row.id, score: row.score, lexical: row.lexical, vector: row.vector, neural: row.neural, reranker: row.reranker, source: row.provenance.source }));
+      return {
+        memories: sortedMemories,
+        documents: sortedDocuments,
+        report: { used: true, candidates: entries.length, ms: result.ms, neural: result.provenance.neural, top },
+      };
+    } catch (err) {
+      this.log && this.log.debug('brain', `unified retrieval failed: ${err.message}`);
+      return { memories: memoryList, documents: documentList, report: { used: false, reason: err.message } };
+    }
+  }
 
   /** Optional trained relevance model: reorders memory hits, never invents one. */
   rerankMemories(question, hits) {
@@ -512,8 +566,13 @@ class Brain {
           })
         : Promise.resolve([]),
     ]);
-    const memories = this.rerankMemories(question, memoryHits);
-    const documents = this.rerankDocuments(question, documentHits);
+    // One fused ranking over memory and knowledge, not two disconnected
+    // searches. The categories stay separate so the context builder can budget
+    // them independently, but their order now comes from one score.
+    const fused = this.fuseRecall(question, memoryHits, documentHits);
+    const memories = this.rerankMemories(question, fused.memories);
+    const documents = this.rerankDocuments(question, fused.documents);
+    if (this.runMeta && this.runMeta.has(id)) this.runMeta.get(id).retrieval = fused.report;
 
     // 1b. structural recall: typed relationships with provenance. This is how a
     // question about a project can reach a file, a symbol and the test that
@@ -980,6 +1039,7 @@ class Brain {
       reflection,
       execution: answer.execution || null,
       runtime: answer.runtime || runtimeDecision,
+      retrieval: meta.retrieval || null,
       conversation: conversationSummary
         ? { id: conversationSummary.id, turns: conversationSummary.turns, topics: conversationSummary.topics, decisions: conversationSummary.decisions, constraints: conversationSummary.constraints, openQuestions: conversationSummary.openQuestions, skippedSecrets: conversationSummary.skippedSecrets }
         : null,
