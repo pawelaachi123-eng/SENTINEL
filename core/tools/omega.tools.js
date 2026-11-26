@@ -9,6 +9,7 @@
  */
 
 const { forwardChain, abduce, solveCsp, bayesUpdate, causalPaths, intervalRelations, spatialRelations, decide } = require('../reasoning/engines');
+const { MetacognitiveController } = require('../cognition/metacognition');
 
 const SCOPE = { type: 'string', minLength: 3, maxLength: 128, description: 'global, session:<id>, task:<id> or workspace:<id>' };
 const TEXT = { type: 'string', minLength: 1, maxLength: 20000 };
@@ -395,5 +396,40 @@ module.exports = [
     }],
     async run(args) { return { ok: true, ...decide(args) }; },
     format: (data) => `${data.winner} (+${data.margin.toFixed(3)})`,
+  },
+  {
+    name: 'omega.metacognize',
+    title: 'Assess answer sufficiency',
+    description: 'Combines verification, evidence counts, citations, tool failures, contradictions, ambiguity, answer shape and elapsed resources into a bounded action: proceed, qualify, gather, retry, clarify or stop.',
+    category: 'cognitive',
+    permission: 'read',
+    tags: ['reasoning', 'metacognition', 'verification', 'budget'],
+    parameters: {
+      type: 'object',
+      properties: {
+        text: { type: 'string', maxLength: 20000, default: '' },
+        model: { type: 'string', maxLength: 120 },
+        mode: { type: 'string', enum: ['fast', 'balanced', 'deep', 'research'], default: 'balanced' },
+        brief: { type: 'object' },
+        verification: { type: 'object' },
+        evidence: { type: 'object' },
+        toolLog: { type: 'array', items: { type: 'object' }, default: [] },
+        conflicts: { type: 'array', items: { type: 'object' }, default: [] },
+        citations: { type: 'array', items: {}, default: [] },
+        elapsedMs: { type: 'number', minimum: 0, default: 0 },
+        retryCount: { type: 'integer', minimum: 0, maximum: 5, default: 0 },
+        budget: { type: 'object' },
+      },
+      additionalProperties: false,
+    },
+    examples: [{
+      args: { text: 'A measured answer with enough words.', mode: 'balanced', verification: { ok: true, confidence: 0.9 } },
+      expect: { action: 'proceed' },
+    }],
+    async run(args) {
+      const result = new MetacognitiveController().assess(args);
+      return { ok: true, ...result };
+    },
+    format: (data) => `${data.action} (${data.status}, ${data.issues.length} issues)`,
   },
 ];

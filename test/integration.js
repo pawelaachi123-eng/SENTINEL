@@ -115,6 +115,9 @@ async function check(name, fn) {
       }, { source: 'integration' });
       assert.equal(deduced.ok, true, deduced.message);
       assert.ok(deduced.data.facts.some((fact) => fact.pred === 'ancestor' && fact.args[1] === 'cid'));
+      const meta = await agent.tools.execute('omega.metacognize', { text: 'A measured answer with enough words.', mode: 'balanced', verification: { ok: true, confidence: 0.9 } }, { source: 'integration' });
+      assert.equal(meta.ok, true, meta.message);
+      assert.equal(meta.data.action, 'proceed');
       const categories = agent.tools.categories();
       assert.ok(categories.some((entry) => entry.name === 'cognitive'));
       return `${agent.tools.list().length} tools in ${categories.length} categories`;

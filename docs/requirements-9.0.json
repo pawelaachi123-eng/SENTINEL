@@ -17,13 +17,13 @@
     "checks": 10000
   },
   "measured": {
-    "sourceLines": 87819,
-    "tools": 705,
+    "sourceLines": 93160,
+    "tools": 706,
     "toolCategories": 36,
     "agents": 123,
-    "checks": 2100,
-    "sourceFiles": 305,
-    "note": "9.0 adds the persistent blackboard, eight deterministic reasoning engines and 16 cognitive tools; checks = 1830 behavioural + 210 conformance + 13 integration + 6 graph-integrity + 18 blackboard + 21 reasoning + 2 assistant cognitive checks."
+    "checks": 2116,
+    "sourceFiles": 311,
+    "note": "9.0 adds the persistent blackboard, metacognitive controller, eight deterministic reasoning engines and 17 cognitive tools; checks = 1830 behavioural + 210 conformance + 13 integration + 6 graph + 18 blackboard + 21 reasoning + 16 metacognition + 2 assistant cognitive checks."
   },
   "requirements": [
     {
@@ -91,7 +91,7 @@
         "test/integration.js"
       ],
       "evidence": [
-        "631 of 638 fixture calls verified; 74 tool names still unexecuted",
+        "632 of 639 fixture calls verified; 74 tool names still unexecuted",
         "coded data.ok:false payloads are failures, not verification"
       ],
       "blockers": [
@@ -140,10 +140,11 @@
         "test/integration.js",
         "test/requirements.js",
         "test/blackboard.js",
-        "test/reasoning.js"
+        "test/reasoning.js",
+        "test/metacognition.js"
       ],
       "evidence": [
-        "2,100 checks across 15 suites"
+        "2,116 checks across 16 suites"
       ],
       "blockers": []
     },
@@ -179,7 +180,7 @@
         "scripts/audit-tools.js"
       ],
       "evidence": [
-        "705 tools in 36 categories"
+        "706 tools in 36 categories"
       ],
       "blockers": [
         "311 further tools need real distinct behaviour, not aliases"
@@ -197,7 +198,7 @@
         "scripts/audit-tools.js"
       ],
       "evidence": [
-        "705 measured"
+        "706 measured"
       ],
       "blockers": [
         "depends on tools-1000"
@@ -654,7 +655,7 @@
         "test/run.js"
       ],
       "evidence": [
-        "2,100 measured"
+        "2,116 measured"
       ],
       "blockers": [
         "7,944 further behavioural assertions required"
@@ -664,17 +665,20 @@
       "id": "M3-METACOGNITION",
       "milestone": "M3",
       "title": "Metacognitive controller for misunderstanding, insufficient evidence and excessive resource use",
-      "status": "PARTIAL",
+      "status": "VERIFIED",
       "implementation": [
-        "core/cognition.js",
-        "core/brain.js"
+        "core/cognition/metacognition.js",
+        "core/brain.js",
+        "core/tools/omega.tools.js"
       ],
       "tests": [
-        "test/deep.js",
+        "test/metacognition.js",
         "test/ai.js"
       ],
       "evidence": [
-        "reflection and verification exist; escalation across all modules is incomplete"
+        "16 controller checks",
+        "detects ambiguity, missing evidence, failed verification, tool failures, unresolved contradictions, thin complex answers, token and time overruns",
+        "chat answers report the action and the board stores the decision"
       ],
       "blockers": []
     },

@@ -46,6 +46,7 @@ const SAFE_CALLS = [
   { name: 'omega.causal', args: { from: 'a', to: 'c', edges: [{ from: 'a', to: 'b' }, { from: 'b', to: 'c' }] } },
   { name: 'omega.intervals', args: { a: { start: 1, end: 2 }, b: { start: 3, end: 4 } } },
   { name: 'omega.spatial', args: { a: { x: 0, y: 0, w: 2, h: 2 }, b: { x: 1, y: 1, w: 2, h: 2 } } },
+  { name: 'omega.metacognize', args: { text: 'A measured answer with enough words.', mode: 'balanced', verification: { ok: true, confidence: 0.9 } } },
   { name: 'omega.decide', args: { options: [{ id: 'a', speed: 1 }, { id: 'b', speed: 2 }], criteria: [{ id: 'speed' }] } },
   { name: 'blackboard.stats', args: {} },
   { name: 'system.info', args: {} },

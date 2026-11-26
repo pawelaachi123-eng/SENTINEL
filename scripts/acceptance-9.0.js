@@ -40,7 +40,7 @@ function gitLines() {
   return { files: files.length, lines: total };
 }
 
-const suites = ['run', 'ui', 'ai', 'deep', 'properties', 'toolpacks', 'agents', 'training', 'executive', 'coding', 'conformance', 'integration', 'requirements', 'blackboard', 'reasoning'];
+const suites = ['run', 'ui', 'ai', 'deep', 'properties', 'toolpacks', 'agents', 'training', 'executive', 'coding', 'conformance', 'integration', 'requirements', 'blackboard', 'reasoning', 'metacognition'];
 const results = [];
 if (!fast) {
   for (const suite of suites) {
@@ -93,6 +93,7 @@ function suiteChecks(result) {
     /(\d+) of \d+ requirements checks/,
     /(\d+) of \d+ blackboard checks/,
     /(\d+) of \d+ reasoning checks/,
+    /(\d+) of \d+ metacognition checks/,
   ];
   for (const pattern of patterns) {
     const match = String(result.tail || '').match(pattern);
@@ -121,7 +122,7 @@ const gates = {
   tools1000: { state: (auditTools || 0) >= 1000 ? 'met' : 'not met', detail: `${auditTools || 0}/1000` },
   tools2000: { state: (auditTools || 0) >= 2000 ? 'met' : 'not met', detail: `${auditTools || 0}/2000` },
   agents250: { state: 'not met', detail: '123/250' },
-  cognitiveCore: { state: 'met', detail: 'typed blackboard + 8 deterministic reasoning engines + 16 cognitive tools; 39 dedicated checks' },
+  cognitiveCore: { state: 'met', detail: 'typed blackboard + 8 reasoning engines + metacognitive controller + 17 cognitive tools; 55 dedicated checks' },
   checks10000: { state: checkTotal >= 10000 ? 'met' : 'not met', detail: `${checkTotal}/10000` },
   millionLines: { state: lines && lines.lines >= 1000000 ? 'met' : 'not met', detail: `${lines ? lines.lines : '?'}/1000000` },
   windowsInstaller: { state: 'not run', detail: 'no Windows host in this environment' },
