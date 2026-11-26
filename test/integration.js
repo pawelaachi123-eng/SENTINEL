@@ -103,6 +103,23 @@ async function check(name, fn) {
       return `${result.ok ? 'ok' : result.code}: ${result.text.slice(0, 60)}`;
     });
 
+    await check('blackboard and reasoning tools are reachable through the real registry', async () => {
+      const added = await agent.tools.execute('blackboard.add', { type: 'fact', content: 'registry fact: orbit is 12 days', scope: 'session:registry', status: 'proven', confidence: 1 }, { source: 'integration' });
+      assert.equal(added.ok, true, added.message);
+      const id = added.data.entry.id;
+      const got = await agent.tools.execute('blackboard.get', { id, scope: 'session:registry' }, { source: 'integration' });
+      assert.equal(got.ok, true, got.message);
+      const deduced = await agent.tools.execute('omega.deduce', {
+        facts: [{ pred: 'parent', args: ['ann', 'bob'] }, { pred: 'parent', args: ['bob', 'cid'] }],
+        rules: [{ id: 'ancestor', if: [{ pred: 'parent', args: ['?x', '?y'] }], then: { pred: 'ancestor', args: ['?x', '?y'] } }],
+      }, { source: 'integration' });
+      assert.equal(deduced.ok, true, deduced.message);
+      assert.ok(deduced.data.facts.some((fact) => fact.pred === 'ancestor' && fact.args[1] === 'cid'));
+      const categories = agent.tools.categories();
+      assert.ok(categories.some((entry) => entry.name === 'cognitive'));
+      return `${agent.tools.list().length} tools in ${categories.length} categories`;
+    });
+
     await check('training and executive services are the same objects the agent exposes', () => {
       assert.equal(agent.services.trainingLab, agent.trainingLab);
       assert.equal(agent.services.executive, agent.executive);

@@ -99,6 +99,21 @@ agent.config.set('ports.link', 7960);
     assert.ok(!answer.degraded, 'a tool answer must not be marked degraded');
   });
 
+  test('a chat run writes typed, scoped state to the cognitive blackboard', async () => {
+    const answer = await agent.brain.ask({ text: 'ile to 21*3', mode: 'fast', sessionId: 'board-session' });
+    assert.ok(answer.cognitiveState, 'the answer did not expose cognitive state');
+    assert.equal(answer.cognitiveState.scope, 'session:board-session');
+    assert.ok(answer.cognitiveState.board.entries >= 4, `board had ${answer.cognitiveState.board.entries} entries`);
+    const entries = agent.blackboard.query({ scope: 'session:board-session', limit: 100 });
+    const types = new Set(entries.map((entry) => entry.type));
+    for (const type of ['question', 'goal', 'answer', 'verification']) assert.ok(types.has(type), `missing ${type}`);
+    const question = entries.find((entry) => entry.type === 'question');
+    assert.equal(question.content, 'ile to 21*3');
+    assert.ok(question.provenance.some((item) => item.source === 'user'));
+    const other = agent.blackboard.query({ scope: 'session:another-session', text: '21*3' });
+    assert.equal(other.length, 0, 'session state leaked across scopes');
+  });
+
   test('the planner only runs when it is asked for', async () => {
     const shallow = await agent.brain.ask({ text: 'jaki jest stan komputera', mode: 'balanced' });
     assert.ok(!shallow.plan || !shallow.plan.length, 'balanced mode planned unasked');
@@ -317,6 +332,20 @@ agent.config.set('ports.link', 7960);
     assert.equal(denied.json.approved, false);
     const again = await apiCall('/api/approvals/decide', { method: 'POST', body: { id: entry.id, approve: true } });
     assert.equal(again.json.ok, false);
+  });
+
+  test('cognitive state is exposed over HTTP with scope validation', async () => {
+    const answer = await agent.brain.ask({ text: 'ile to 7*6', mode: 'fast', sessionId: 'web-board' });
+    assert.ok(answer.cognitiveState);
+    const state = await apiCall('/api/cognitive/state?scope=session:web-board');
+    assert.equal(state.status, 200);
+    assert.equal(state.json.ok, true);
+    assert.equal(state.json.data.stats.scope, 'session:web-board');
+    assert.ok(state.json.data.focus.entries >= 1);
+    assert.ok(Array.isArray(state.json.data.conflicts));
+    const bad = await apiCall('/api/cognitive/state?scope=not-a-scope');
+    assert.equal(bad.json.ok, false);
+    assert.equal(bad.json.code, 'BAD_SCOPE');
   });
 
   test('memory, knowledge and tasks are exposed over HTTP', async () => {
