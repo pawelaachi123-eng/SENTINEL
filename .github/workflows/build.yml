@@ -56,6 +56,12 @@ jobs:
         run: node test/integration.js
       - name: Requirements graph integrity
         run: node test/requirements.js
+      - name: Cognitive blackboard semantics
+        run: node test/blackboard.js
+      - name: Deterministic reasoning engines
+        run: node test/reasoning.js
+      - name: Metacognitive controller
+        run: node test/metacognition.js
       - name: Deterministic evaluation suite (providers disabled)
         run: node scripts/eval.js
       - name: Tool inventory audit (structure + real executions)
