@@ -1,0 +1,101 @@
+{
+  "name": "sentinel",
+  "version": "8.1.0",
+  "private": true,
+  "description": "SENTINEL \u2014 local-first neural cognitive platform: real trained specialist networks, a typed cognitive hypercore, persistent memory/research, an audited tool system and a PC/phone agent with no cloud account",
+  "author": "pawelaachi123-eng",
+  "license": "MIT",
+  "main": "desktop/main.js",
+  "bin": {
+    "sentinel-agent": "bin/sentinel-agent.js",
+    "sentinel": "bin/sentinel.js"
+  },
+  "scripts": {
+    "start": "node bin/sentinel-agent.js --open",
+    "agent": "node bin/sentinel-agent.js",
+    "pair": "node bin/sentinel-agent.js --pair",
+    "test": "node test/run.js && node test/ui.js && node test/ai.js && node test/deep.js && node test/properties.js && node test/toolpacks.js && node test/agents.js && node test/training.js && node test/executive.js && node test/coding.js && node test/conformance.js && node test/integration.js && node test/requirements.js",
+    "check": "node scripts/check.js",
+    "mobile:sync": "node scripts/sync-mobile.js",
+    "test:core": "node test/run.js",
+    "test:deep": "node test/deep.js",
+    "test:ui": "node test/ui.js",
+    "test:ai": "node test/ai.js",
+    "bench:lab": "node scripts/lab-bench.js",
+    "bench:neural": "node scripts/neural-bench.js",
+    "bench:specialists": "node scripts/specialists-bench.js",
+    "bench:retrieval": "node scripts/retrieval-bench.js",
+    "test:properties": "node test/properties.js",
+    "test:training": "node test/training.js",
+    "test:toolpacks": "node test/toolpacks.js",
+    "test:agents": "node test/agents.js",
+    "test:executive": "node test/executive.js",
+    "test:coding": "node test/coding.js",
+    "test:acceptance": "node scripts/acceptance-8.1.js",
+    "test:conformance": "node test/conformance.js",
+    "test:integration": "node test/integration.js",
+    "test:requirements": "node test/requirements.js",
+    "requirements": "node scripts/requirements-graph.js"
+  },
+  "pkg": {
+    "assets": [
+      "ui/**/*",
+      "package.json"
+    ],
+    "outputPath": "dist"
+  },
+  "build": {
+    "appId": "io.sentinel.pc-control",
+    "productName": "SENTINEL",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "desktop/**/*",
+      "core/**/*",
+      "ui/**/*",
+      "build/*.png",
+      "bin/**/*",
+      "package.json"
+    ],
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "SENTINEL-Setup-${version}-${arch}.${ext}"
+    },
+    "portable": {
+      "artifactName": "SENTINEL-Portable-${version}-${arch}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "SENTINEL"
+    }
+  },
+  "devDependencies": {
+    "@yao-pkg/pkg": "^6.5.1",
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8",
+    "jsdom": "^31.0.1"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

@@ -1,0 +1,1551 @@
+{
+  "version": 1,
+  "note": "Deterministic-core cases: they exercise cognition, semantics, security classification and command gating with no model involved. Model-quality cases belong in a live run (scripts/eval.js --live) and must not be inferred from these results.",
+  "cases": [
+    {
+      "id": "arith-basic-1",
+      "input": "ile to 6*7",
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "42"
+        ]
+      },
+      "adapter": "arithmetic"
+    },
+    {
+      "id": "arith-basic-2",
+      "input": "2+2*2",
+      "expected": {
+        "kind": "contains",
+        "value": "= 6"
+      },
+      "adapter": "arithmetic"
+    },
+    {
+      "id": "arith-percent",
+      "input": "15% ze 200",
+      "expected": {
+        "kind": "contains",
+        "value": "30"
+      },
+      "adapter": "arithmetic"
+    },
+    {
+      "id": "arith-power",
+      "input": "2^10",
+      "expected": {
+        "kind": "contains",
+        "value": "1,024"
+      },
+      "adapter": "arithmetic"
+    },
+    {
+      "id": "arith-sqrt",
+      "input": "pierwiastek z 144",
+      "expected": {
+        "kind": "contains",
+        "value": "12"
+      },
+      "adapter": "arithmetic"
+    },
+    {
+      "id": "arith-division",
+      "input": "100 / 8",
+      "expected": {
+        "kind": "contains",
+        "value": "12.5"
+      },
+      "adapter": "arithmetic"
+    },
+    {
+      "id": "arith-injection",
+      "input": "ile to 2+2; rm -rf /",
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "4"
+        ]
+      },
+      "adapter": "arithmetic"
+    },
+    {
+      "id": "lang-pl",
+      "input": "jaka jest pogoda w Krakowie",
+      "expected": {
+        "kind": "equals",
+        "value": "pl"
+      },
+      "adapter": "language"
+    },
+    {
+      "id": "lang-en",
+      "input": "what is the weather in London",
+      "expected": {
+        "kind": "equals",
+        "value": "en"
+      },
+      "adapter": "language"
+    },
+    {
+      "id": "spelling-pl",
+      "input": "jaki jest stauts systemu",
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "status"
+        ]
+      },
+      "adapter": "spelling"
+    },
+    {
+      "id": "risk-shell-1",
+      "input": "wyłącz komputer",
+      "expected": {
+        "kind": "equals",
+        "value": "medium"
+      },
+      "adapter": "risk"
+    },
+    {
+      "id": "risk-shell-2",
+      "input": "usuń wszystkie pliki z dysku",
+      "expected": {
+        "kind": "equals",
+        "value": "high"
+      },
+      "adapter": "risk"
+    },
+    {
+      "id": "risk-safe",
+      "input": "jaka jest pogoda",
+      "expected": {
+        "kind": "equals",
+        "value": "low"
+      },
+      "adapter": "risk"
+    },
+    {
+      "id": "secret-redaction",
+      "input": "moje hasło to hunter2 a token to abc123",
+      "expected": {
+        "kind": "contains",
+        "value": "password"
+      },
+      "adapter": "secret"
+    },
+    {
+      "id": "secret-not-stored",
+      "input": "zapisz hasło do bazy: tajne123",
+      "expected": {
+        "kind": "contains",
+        "value": "password"
+      },
+      "adapter": "secret"
+    },
+    {
+      "id": "permission-read-tool",
+      "input": "fs.read",
+      "expected": {
+        "kind": "equals",
+        "value": "read"
+      },
+      "adapter": "toolPermission"
+    },
+    {
+      "id": "permission-system-tool",
+      "input": "esp.reset",
+      "expected": {
+        "kind": "equals",
+        "value": "system"
+      },
+      "adapter": "toolPermission"
+    },
+    {
+      "id": "sandbox-escape",
+      "input": "/etc/passwd",
+      "expected": {
+        "kind": "contains",
+        "value": "outside"
+      },
+      "adapter": "sandbox",
+      "platformInput": {
+        "win32": "C:\\Windows\\System32\\config\\SAM"
+      }
+    },
+    {
+      "id": "semantics-compute",
+      "input": "ile to 12*12",
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "compute"
+        ]
+      },
+      "adapter": "semanticsKind"
+    },
+    {
+      "id": "semantics-clarify",
+      "input": "a to?",
+      "expected": {
+        "kind": "contains",
+        "value": "clarify"
+      },
+      "adapter": "semanticsKind"
+    },
+    {
+      "id": "semantics-risk-preserved",
+      "input": "wyłącz komputer",
+      "expected": {
+        "kind": "equals",
+        "value": "medium"
+      },
+      "adapter": "semanticsRisk"
+    },
+    {
+      "id": "memory-no-secret",
+      "input": "token=ghp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "expected": {
+        "kind": "contains",
+        "value": "password"
+      },
+      "adapter": "secret"
+    },
+    {
+      "id": "deny-default",
+      "input": "esp.reset",
+      "expected": {
+        "kind": "equals",
+        "value": "true"
+      },
+      "adapter": "toolApproval"
+    },
+    {
+      "id": "tool-csv-parse",
+      "input": "data.csv_parse",
+      "adapter": "tool",
+      "tool": "data.csv_parse",
+      "args": {
+        "text": "name,city\nKowalski,Kraków\nNowak,Warszawa\n"
+      },
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "Kowalski",
+          "columns"
+        ]
+      }
+    },
+    {
+      "id": "tool-csv-parse-quoted",
+      "input": "data.csv_parse",
+      "adapter": "tool",
+      "tool": "data.csv_parse",
+      "args": {
+        "text": "a,b\n\"x,y\",2\n"
+      },
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "x,y",
+          "\"rows\""
+        ]
+      }
+    },
+    {
+      "id": "tool-csv-generate",
+      "input": "data.csv_generate",
+      "adapter": "tool",
+      "tool": "data.csv_generate",
+      "args": {
+        "rows": [
+          {
+            "a": 1,
+            "b": "x,y"
+          }
+        ]
+      },
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "x,y",
+          "a,b"
+        ]
+      }
+    },
+    {
+      "id": "tool-json-flatten",
+      "input": "data.json_flatten",
+      "adapter": "tool",
+      "tool": "data.json_flatten",
+      "args": {
+        "value": {
+          "user": {
+            "name": "Pawel"
+          },
+          "list": [
+            1,
+            2
+          ]
+        }
+      },
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "user.name",
+          "list[1]"
+        ]
+      }
+    },
+    {
+      "id": "tool-json-path",
+      "input": "data.json_path",
+      "adapter": "tool",
+      "tool": "data.json_path",
+      "args": {
+        "value": {
+          "a": {
+            "b": 42
+          }
+        },
+        "path": "a.b"
+      },
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "42",
+          "true"
+        ]
+      }
+    },
+    {
+      "id": "tool-json-path-missing",
+      "input": "data.json_path",
+      "adapter": "tool",
+      "tool": "data.json_path",
+      "args": {
+        "value": {
+          "a": 1
+        },
+        "path": "b.c"
+      },
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "found",
+          "false"
+        ]
+      }
+    },
+    {
+      "id": "tool-json-diff",
+      "input": "data.json_diff",
+      "adapter": "tool",
+      "tool": "data.json_diff",
+      "args": {
+        "left": {
+          "a": 1
+        },
+        "right": {
+          "a": 2,
+          "b": 3
+        }
+      },
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "added",
+          "changed"
+        ]
+      }
+    },
+    {
+      "id": "tool-group-sum",
+      "input": "data.table_group",
+      "adapter": "tool",
+      "tool": "data.table_group",
+      "args": {
+        "rows": [
+          {
+            "k": "a",
+            "v": 2
+          },
+          {
+            "k": "a",
+            "v": 3
+          },
+          {
+            "k": "b",
+            "v": 1
+          }
+        ],
+        "key": "k",
+        "operations": [
+          {
+            "field": "v",
+            "op": "sum"
+          }
+        ]
+      },
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "sum_v",
+          "5"
+        ]
+      }
+    },
+    {
+      "id": "tool-group-avg",
+      "input": "data.table_group",
+      "adapter": "tool",
+      "tool": "data.table_group",
+      "args": {
+        "rows": [
+          {
+            "k": "a",
+            "v": 2
+          },
+          {
+            "k": "a",
+            "v": 4
+          }
+        ],
+        "key": "k",
+        "operations": [
+          {
+            "field": "v",
+            "op": "avg"
+          }
+        ]
+      },
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "avg_v",
+          "3"
+        ]
+      }
+    },
+    {
+      "id": "tool-sort",
+      "input": "data.table_sort",
+      "adapter": "tool",
+      "tool": "data.table_sort",
+      "args": {
+        "rows": [
+          {
+            "v": 3
+          },
+          {
+            "v": 1
+          },
+          {
+            "v": 2
+          }
+        ],
+        "keys": [
+          {
+            "field": "v"
+          }
+        ]
+      },
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "rows",
+          "1"
+        ]
+      }
+    },
+    {
+      "id": "tool-filter",
+      "input": "data.table_filter",
+      "adapter": "tool",
+      "tool": "data.table_filter",
+      "args": {
+        "rows": [
+          {
+            "v": 1
+          },
+          {
+            "v": 5
+          }
+        ],
+        "conditions": [
+          {
+            "field": "v",
+            "op": "gt",
+            "value": 2
+          }
+        ]
+      },
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "matched",
+          "1"
+        ]
+      }
+    },
+    {
+      "id": "tool-columns",
+      "input": "data.columns",
+      "adapter": "tool",
+      "tool": "data.columns",
+      "args": {
+        "rows": [
+          {
+            "a": 1,
+            "b": "x"
+          },
+          {
+            "a": 2
+          }
+        ]
+      },
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "number",
+          "nulls"
+        ]
+      }
+    },
+    {
+      "id": "tool-dedupe",
+      "input": "data.dedupe",
+      "adapter": "tool",
+      "tool": "data.dedupe",
+      "args": {
+        "rows": [
+          {
+            "a": 1
+          },
+          {
+            "a": 1
+          },
+          {
+            "a": 2
+          }
+        ],
+        "keys": [
+          "a"
+        ]
+      },
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "removed",
+          "1"
+        ]
+      }
+    },
+    {
+      "id": "tool-join",
+      "input": "data.join",
+      "adapter": "tool",
+      "tool": "data.join",
+      "args": {
+        "left": [
+          {
+            "id": 1
+          },
+          {
+            "id": 2
+          }
+        ],
+        "right": [
+          {
+            "id": 1,
+            "v": 9
+          }
+        ],
+        "leftKey": "id"
+      },
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "unmatched",
+          "1"
+        ]
+      }
+    },
+    {
+      "id": "tool-join-left",
+      "input": "data.join",
+      "adapter": "tool",
+      "tool": "data.join",
+      "args": {
+        "left": [
+          {
+            "id": 1
+          },
+          {
+            "id": 2
+          }
+        ],
+        "right": [
+          {
+            "id": 1,
+            "v": 9
+          }
+        ],
+        "leftKey": "id",
+        "type": "left"
+      },
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "rows",
+          "2"
+        ]
+      }
+    },
+    {
+      "id": "tool-stats-describe",
+      "input": "stats.describe",
+      "adapter": "tool",
+      "tool": "stats.describe",
+      "args": {
+        "values": [
+          2,
+          4,
+          4,
+          4,
+          5,
+          5,
+          7,
+          9
+        ]
+      },
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "mean",
+          "5",
+          "stdDev",
+          "2"
+        ]
+      }
+    },
+    {
+      "id": "tool-stats-percentile",
+      "input": "stats.percentile",
+      "adapter": "tool",
+      "tool": "stats.percentile",
+      "args": {
+        "values": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "percentiles": [
+          50,
+          90
+        ]
+      },
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "p50",
+          "p90"
+        ]
+      }
+    },
+    {
+      "id": "tool-stats-histogram",
+      "input": "stats.histogram",
+      "adapter": "tool",
+      "tool": "stats.histogram",
+      "args": {
+        "values": [
+          1,
+          2,
+          3,
+          4
+        ],
+        "bins": 2
+      },
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "bins",
+          "count"
+        ]
+      }
+    },
+    {
+      "id": "tool-stats-correlation",
+      "input": "stats.correlation",
+      "adapter": "tool",
+      "tool": "stats.correlation",
+      "args": {
+        "x": [
+          1,
+          2,
+          3
+        ],
+        "y": [
+          2,
+          4,
+          6
+        ]
+      },
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "\"r\":1",
+          "strong"
+        ]
+      }
+    },
+    {
+      "id": "tool-stats-regression",
+      "input": "stats.linear_regression",
+      "adapter": "tool",
+      "tool": "stats.linear_regression",
+      "args": {
+        "x": [
+          1,
+          2,
+          3
+        ],
+        "y": [
+          3,
+          5,
+          7
+        ]
+      },
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "slope",
+          "2",
+          "intercept",
+          "1"
+        ]
+      }
+    },
+    {
+      "id": "tool-stats-outliers",
+      "input": "stats.outliers",
+      "adapter": "tool",
+      "tool": "stats.outliers",
+      "args": {
+        "values": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          100
+        ]
+      },
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "Tukey",
+          "outliers"
+        ]
+      }
+    },
+    {
+      "id": "tool-stats-zscores",
+      "input": "stats.zscores",
+      "adapter": "tool",
+      "tool": "stats.zscores",
+      "args": {
+        "values": [
+          1,
+          2,
+          3
+        ]
+      },
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "stdDev",
+          "zscores"
+        ]
+      }
+    },
+    {
+      "id": "tool-stats-sample",
+      "input": "stats.sample",
+      "adapter": "tool",
+      "tool": "stats.sample",
+      "args": {
+        "values": [
+          1,
+          2,
+          3,
+          4
+        ],
+        "size": 2,
+        "seed": 7
+      },
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "sample",
+          "LCG"
+        ]
+      }
+    },
+    {
+      "id": "tool-stats-ci",
+      "input": "stats.mean_ci",
+      "adapter": "tool",
+      "tool": "stats.mean_ci",
+      "args": {
+        "values": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "low",
+          "high",
+          "normal approximation"
+        ]
+      }
+    },
+    {
+      "id": "tool-stats-ab",
+      "input": "stats.two_proportion",
+      "adapter": "tool",
+      "tool": "stats.two_proportion",
+      "args": {
+        "successesA": 50,
+        "totalA": 100,
+        "successesB": 50,
+        "totalB": 100
+      },
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "pValue",
+          "1"
+        ]
+      }
+    },
+    {
+      "id": "tool-text-extract",
+      "input": "text.extract",
+      "adapter": "tool",
+      "tool": "text.extract",
+      "args": {
+        "text": "mail a@b.pl oraz numer 12"
+      },
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "email",
+          "number"
+        ]
+      }
+    },
+    {
+      "id": "tool-text-extract-date",
+      "input": "text.extract",
+      "adapter": "tool",
+      "tool": "text.extract",
+      "args": {
+        "text": "data 2026-03-01 i IP 10.0.0.1"
+      },
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "date",
+          "ipv4"
+        ]
+      }
+    },
+    {
+      "id": "tool-text-redact",
+      "input": "text.redact",
+      "adapter": "tool",
+      "tool": "text.redact",
+      "args": {
+        "text": "password=abcdef123\nmail a@b.pl"
+      },
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "REDACTED:password",
+          "REDACTED:email"
+        ]
+      }
+    },
+    {
+      "id": "tool-text-slug",
+      "input": "text.slugify",
+      "adapter": "tool",
+      "tool": "text.slugify",
+      "args": {
+        "text": "Zażółć gęślą jaźń"
+      },
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "zazolc-gesla-jazn"
+        ]
+      }
+    },
+    {
+      "id": "tool-text-levenshtein",
+      "input": "text.levenshtein",
+      "adapter": "tool",
+      "tool": "text.levenshtein",
+      "args": {
+        "a": "kot",
+        "b": "koty"
+      },
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "distance",
+          "1"
+        ]
+      }
+    },
+    {
+      "id": "tool-text-similarity",
+      "input": "text.similarity",
+      "adapter": "tool",
+      "tool": "text.similarity",
+      "args": {
+        "a": "abc def",
+        "b": "abc def"
+      },
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "similarity",
+          "1"
+        ]
+      }
+    },
+    {
+      "id": "tool-text-chunk",
+      "input": "text.chunk",
+      "adapter": "tool",
+      "tool": "text.chunk",
+      "args": {
+        "text": "Pierwsze zdanie. Drugie zdanie. Trzecie zdanie.",
+        "size": 100
+      },
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "chunks",
+          "lineStart"
+        ]
+      }
+    },
+    {
+      "id": "tool-text-keywords",
+      "input": "text.keywords",
+      "adapter": "tool",
+      "tool": "text.keywords",
+      "args": {
+        "text": "dysk dysk pamiec procesor",
+        "limit": 2
+      },
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "dysk",
+          "count"
+        ]
+      }
+    },
+    {
+      "id": "tool-text-stats",
+      "input": "text.stats",
+      "adapter": "tool",
+      "tool": "text.stats",
+      "args": {
+        "text": "Zdanie. Drugie zdanie!\n\nAkapit."
+      },
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "words",
+          "sentences"
+        ]
+      }
+    },
+    {
+      "id": "tool-time-parse",
+      "input": "time.parse",
+      "adapter": "tool",
+      "tool": "time.parse",
+      "args": {
+        "value": "2026-03-01T10:00:00Z"
+      },
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "iso",
+          "2026-03-01"
+        ]
+      }
+    },
+    {
+      "id": "tool-time-diff",
+      "input": "time.diff",
+      "adapter": "tool",
+      "tool": "time.diff",
+      "args": {
+        "from": "2026-03-01T00:00:00Z",
+        "to": "2026-03-02T00:00:00Z"
+      },
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "days",
+          "1"
+        ]
+      }
+    },
+    {
+      "id": "tool-time-add",
+      "input": "time.add",
+      "adapter": "tool",
+      "tool": "time.add",
+      "args": {
+        "value": "2026-03-01T00:00:00Z",
+        "days": 1
+      },
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "result",
+          "2026-03-02"
+        ]
+      }
+    },
+    {
+      "id": "tool-base64",
+      "input": "encode.base64",
+      "adapter": "tool",
+      "tool": "encode.base64",
+      "args": {
+        "text": "abc"
+      },
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "YWJj"
+        ]
+      }
+    },
+    {
+      "id": "tool-base64-decode",
+      "input": "encode.base64",
+      "adapter": "tool",
+      "tool": "encode.base64",
+      "args": {
+        "text": "YWJj",
+        "mode": "decode"
+      },
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "abc"
+        ]
+      }
+    },
+    {
+      "id": "tool-hex",
+      "input": "encode.hex",
+      "adapter": "tool",
+      "tool": "encode.hex",
+      "args": {
+        "text": "abc"
+      },
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "616263"
+        ]
+      }
+    },
+    {
+      "id": "tool-url",
+      "input": "encode.url",
+      "adapter": "tool",
+      "tool": "encode.url",
+      "args": {
+        "text": "a b"
+      },
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "a%20b"
+        ]
+      }
+    },
+    {
+      "id": "tool-hash",
+      "input": "encode.hash",
+      "adapter": "tool",
+      "tool": "encode.hash",
+      "args": {
+        "text": "abc"
+      },
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "ba7816bf",
+          "sha256"
+        ]
+      }
+    },
+    {
+      "id": "tool-uuid",
+      "input": "encode.uuid",
+      "adapter": "tool",
+      "tool": "encode.uuid",
+      "args": {
+        "count": 2
+      },
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "uuids"
+        ]
+      }
+    },
+    {
+      "id": "tool-lab-status",
+      "input": "lab.status",
+      "adapter": "tool",
+      "tool": "lab.status",
+      "args": {},
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "dataset",
+          "synthetic"
+        ]
+      }
+    },
+    {
+      "id": "tool-lab-classify-no-model",
+      "input": "lab.classify",
+      "adapter": "tool",
+      "tool": "lab.classify",
+      "args": {
+        "text": "sprawdz cpu"
+      },
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "NO_MODEL"
+        ]
+      }
+    },
+    {
+      "id": "tool-models-capabilities",
+      "input": "models.capabilities",
+      "adapter": "tool",
+      "tool": "models.capabilities",
+      "args": {},
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "models",
+          "honest"
+        ]
+      }
+    },
+    {
+      "id": "tool-models-route",
+      "input": "models.route",
+      "adapter": "tool",
+      "tool": "models.route",
+      "args": {
+        "task": "vision"
+      },
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "NO_CAPABLE_MODEL"
+        ]
+      }
+    },
+    {
+      "id": "tool-reason-contradictions",
+      "input": "reason.contradictions",
+      "adapter": "tool",
+      "tool": "reason.contradictions",
+      "args": {
+        "facts": [
+          {
+            "key": "vram",
+            "value": "8 GB"
+          },
+          {
+            "key": "vram",
+            "value": "16 GB"
+          }
+        ]
+      },
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "conflicted",
+          "1"
+        ]
+      }
+    },
+    {
+      "id": "tool-research-list",
+      "input": "research.list",
+      "adapter": "tool",
+      "tool": "research.list",
+      "args": {},
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "sessions",
+          "online"
+        ]
+      }
+    },
+    {
+      "id": "tool-skills-list",
+      "input": "skill.list",
+      "adapter": "tool",
+      "tool": "skill.list",
+      "args": {},
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "skills",
+          "byStatus"
+        ]
+      }
+    },
+    {
+      "id": "tool-repo-map",
+      "input": "repo.map",
+      "adapter": "tool",
+      "tool": "repo.map",
+      "args": {},
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "honest",
+          "files"
+        ]
+      }
+    },
+    {
+      "id": "tool-memory-due",
+      "input": "memory.due",
+      "adapter": "tool",
+      "tool": "memory.due",
+      "args": {},
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "count"
+        ]
+      }
+    },
+    {
+      "id": "tool-memory-migrate-preview",
+      "input": "memory.migrate_preview",
+      "adapter": "tool",
+      "tool": "memory.migrate_preview",
+      "args": {},
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "pending",
+          "Preview only"
+        ]
+      }
+    },
+    {
+      "id": "tool-science-length",
+      "input": "science.length_convert",
+      "adapter": "tool",
+      "tool": "science.length_convert",
+      "args": {
+        "value": 1,
+        "from": "km",
+        "to": "m"
+      },
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "1000"
+        ]
+      }
+    },
+    {
+      "id": "tool-science-prime",
+      "input": "science.prime_factors",
+      "adapter": "tool",
+      "tool": "science.prime_factors",
+      "args": {
+        "n": 360
+      },
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "2^3 × 3^2 × 5"
+        ]
+      }
+    },
+    {
+      "id": "tool-science-temperature",
+      "input": "science.temperature_convert",
+      "adapter": "tool",
+      "tool": "science.temperature_convert",
+      "args": {
+        "value": 0,
+        "from": "C",
+        "to": "K"
+      },
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "273.15"
+        ]
+      }
+    },
+    {
+      "id": "tool-planning-critical-path",
+      "input": "planning.critical_path",
+      "adapter": "tool",
+      "tool": "planning.critical_path",
+      "args": {
+        "tasks": [
+          {
+            "id": "a",
+            "duration": 3
+          },
+          {
+            "id": "b",
+            "duration": 2,
+            "dependsOn": [
+              "a"
+            ]
+          },
+          {
+            "id": "c",
+            "duration": 5,
+            "dependsOn": [
+              "a"
+            ]
+          },
+          {
+            "id": "d",
+            "duration": 1,
+            "dependsOn": [
+              "b",
+              "c"
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "projectDuration",
+          "9"
+        ]
+      }
+    },
+    {
+      "id": "tool-planning-working-days",
+      "input": "planning.working_days",
+      "adapter": "tool",
+      "tool": "planning.working_days",
+      "args": {
+        "date": "2026-03-02",
+        "days": 5
+      },
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "2026-03-09"
+        ]
+      }
+    },
+    {
+      "id": "tool-finance-budget-split",
+      "input": "finance.budget_split",
+      "adapter": "tool",
+      "tool": "finance.budget_split",
+      "args": {
+        "amount": 100,
+        "weights": [
+          1,
+          1,
+          1
+        ]
+      },
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "shares",
+          "total"
+        ]
+      }
+    },
+    {
+      "id": "tool-decision-matrix",
+      "input": "decision.matrix",
+      "adapter": "tool",
+      "tool": "decision.matrix",
+      "args": {
+        "criteria": [
+          {
+            "name": "cost",
+            "weight": 1
+          }
+        ],
+        "options": [
+          {
+            "name": "a",
+            "scores": [
+              8
+            ]
+          },
+          {
+            "name": "b",
+            "scores": [
+              6
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "ranked",
+          "a"
+        ]
+      }
+    },
+    {
+      "id": "tool-hypercore-status",
+      "input": "hypercore.status",
+      "adapter": "tool",
+      "tool": "hypercore.status",
+      "args": {},
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "openConflicts",
+          "honest"
+        ]
+      }
+    },
+    {
+      "id": "tool-reranker-status",
+      "input": "reranker.status",
+      "adapter": "tool",
+      "tool": "reranker.status",
+      "args": {},
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "features",
+          "honest"
+        ]
+      }
+    },
+    {
+      "id": "tool-communication-status",
+      "input": "communication.status",
+      "adapter": "tool",
+      "tool": "communication.status",
+      "args": {},
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "liveCalls",
+          "provider"
+        ]
+      }
+    },
+    {
+      "id": "tool-assistant-briefing",
+      "input": "assistant.briefing",
+      "adapter": "tool",
+      "tool": "assistant.briefing",
+      "args": {
+        "horizonHours": 24
+      },
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "generatedAt",
+          "source"
+        ]
+      }
+    },
+    {
+      "id": "tool-proactive-status",
+      "input": "proactive.status",
+      "adapter": "tool",
+      "tool": "proactive.status",
+      "args": {},
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "honesty",
+          "deliveryConfigured"
+        ]
+      }
+    },
+    {
+      "id": "tool-lab-sentiment-status",
+      "input": "lab.sentiment_status",
+      "adapter": "tool",
+      "tool": "lab.sentiment_status",
+      "args": {},
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "honest",
+          "task"
+        ]
+      }
+    },
+    {
+      "id": "tool-science-ideal-gas",
+      "input": "science.ideal_gas",
+      "adapter": "tool",
+      "tool": "science.ideal_gas",
+      "args": {
+        "p": 101325,
+        "v": 0.024,
+        "n": 1,
+        "solve": "t"
+      },
+      "expected": {
+        "kind": "contains",
+        "value": [
+          "value",
+          "ideal-gas"
+        ]
+      }
+    }
+  ]
+}

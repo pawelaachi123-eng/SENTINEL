@@ -1,0 +1,1454 @@
+{
+  "version": "7.1.0",
+  "at": "2026-11-25T09:42:33.659Z",
+  "platform": "linux/x64",
+  "node": "v22.22.3",
+  "hardware": "CPU only; no GPU was used or measured",
+  "totalMs": 62036,
+  "models": {
+    "tools": {
+      "experiment": "tools_2026-11-25T09-41-35-775Z_16",
+      "dataset": {
+        "items": 79,
+        "labels": [
+          "assistant.briefing",
+          "data.csv_parse",
+          "fs.list",
+          "graph.query",
+          "lab.status",
+          "memory.recall",
+          "memory.remember",
+          "repo.map",
+          "research.start",
+          "security.scan",
+          "stats.describe",
+          "system.info",
+          "system.snapshot",
+          "task.create",
+          "text.slugify"
+        ],
+        "provenance": "authored requests mapped to real tool names",
+        "hash": "222e90cda7b0a3ac9840319dc150f6a8c3ec582c37bf5565910f5cf24c765868"
+      },
+      "split": {
+        "train": 719,
+        "validation": 16,
+        "test": 16,
+        "groups": null
+      },
+      "metrics": {
+        "cases": 16,
+        "accuracy": 0.8125,
+        "macroF1": 0.7556,
+        "ece": 0.1663,
+        "brier": 0.1425,
+        "uncalibratedEce": 0.1708,
+        "uncalibratedBrier": 0.1431
+      },
+      "baseline": {
+        "cases": 16,
+        "accuracy": 0.6875,
+        "macroF1": 0.5937
+      },
+      "delta": 0.125,
+      "gate": {
+        "passed": true,
+        "rule": "held-out accuracy must be at least the named baseline",
+        "calibrationReported": true
+      },
+      "calibration": {
+        "method": "temperature-scaling",
+        "temperature": 0.75,
+        "validation": {
+          "uncalibrated": {
+            "ece": 0.0122,
+            "bins": [
+              {
+                "bin": 8,
+                "count": 1,
+                "confidence": 0.813,
+                "accuracy": 1
+              },
+              {
+                "bin": 9,
+                "count": 15,
+                "confidence": 0.9995,
+                "accuracy": 1
+              }
+            ],
+            "brier": 0.0022,
+            "cases": 16,
+            "temperature": 1
+          },
+          "calibrated": {
+            "ece": 0.0046,
+            "bins": [
+              {
+                "bin": 9,
+                "count": 16,
+                "confidence": 0.9954,
+                "accuracy": 1
+              }
+            ],
+            "brier": 0.0003,
+            "cases": 16,
+            "temperature": 0.75
+          },
+          "searched": 126,
+          "nll": 0.004773
+        },
+        "test": {
+          "uncalibrated": {
+            "ece": 0.1708,
+            "bins": [
+              {
+                "bin": 4,
+                "count": 1,
+                "confidence": 0.436,
+                "accuracy": 0
+              },
+              {
+                "bin": 6,
+                "count": 1,
+                "confidence": 0.6764,
+                "accuracy": 1
+              },
+              {
+                "bin": 9,
+                "count": 14,
+                "confidence": 0.998,
+                "accuracy": 0.8571
+              }
+            ],
+            "brier": 0.1431,
+            "cases": 16,
+            "temperature": 1
+          },
+          "calibrated": {
+            "ece": 0.1663,
+            "bins": [
+              {
+                "bin": 5,
+                "count": 1,
+                "confidence": 0.5037,
+                "accuracy": 0
+              },
+              {
+                "bin": 8,
+                "count": 1,
+                "confidence": 0.8385,
+                "accuracy": 1
+              },
+              {
+                "bin": 9,
+                "count": 14,
+                "confidence": 0.9997,
+                "accuracy": 0.8571
+              }
+            ],
+            "brier": 0.1425,
+            "cases": 16,
+            "temperature": 0.75
+          }
+        }
+      },
+      "training": {
+        "bestEpoch": 10,
+        "bestValidationLoss": 0.013428388498128873,
+        "epochsRun": 51,
+        "durationMs": 3777,
+        "measuredDurationMs": 4163
+      },
+      "artifact": {
+        "bytes": 423847,
+        "checksum": "76774ccf136aef75c15c14ea60bc864e9b73911b0130d366940b1ec07907c08d"
+      },
+      "crossValidation": {
+        "ok": true,
+        "task": "tools",
+        "folds": 5,
+        "cases": 79,
+        "metrics": {
+          "cases": 79,
+          "accuracy": 0.8734,
+          "macroF1": 0.8807
+        },
+        "baseline": {
+          "cases": 79,
+          "accuracy": 0.7722
+        },
+        "perFold": [
+          {
+            "fold": 0,
+            "cases": 20,
+            "accuracy": 0.7,
+            "baselineAccuracy": 0.6
+          },
+          {
+            "fold": 1,
+            "cases": 16,
+            "accuracy": 1,
+            "baselineAccuracy": 0.875
+          },
+          {
+            "fold": 2,
+            "cases": 16,
+            "accuracy": 0.875,
+            "baselineAccuracy": 0.8125
+          },
+          {
+            "fold": 3,
+            "cases": 16,
+            "accuracy": 0.9375,
+            "baselineAccuracy": 0.75
+          },
+          {
+            "fold": 4,
+            "cases": 11,
+            "accuracy": 0.9091,
+            "baselineAccuracy": 0.9091
+          }
+        ],
+        "measuredDurationMs": 38004
+      }
+    },
+    "routing": {
+      "experiment": "routing_2026-11-25T09-41-37-542Z_8",
+      "dataset": {
+        "items": 47,
+        "labels": [
+          "code",
+          "communication",
+          "devices",
+          "hardware",
+          "knowledge",
+          "operations",
+          "security",
+          "windows"
+        ],
+        "provenance": "authored requests mapped to eight functional domains",
+        "hash": "c957754e3989b9652137d630e48be1f7ee84139cb1c9d26cb9a7168535d8cbe3"
+      },
+      "split": {
+        "train": 421,
+        "validation": 8,
+        "test": 8,
+        "groups": null
+      },
+      "metrics": {
+        "cases": 8,
+        "accuracy": 1,
+        "macroF1": 1,
+        "ece": 0.0029,
+        "brier": 0,
+        "uncalibratedEce": 0.0023,
+        "uncalibratedBrier": 0
+      },
+      "baseline": {
+        "cases": 8,
+        "accuracy": 0.875,
+        "macroF1": 0.8333
+      },
+      "delta": 0.125,
+      "gate": {
+        "passed": true,
+        "rule": "held-out accuracy must be at least the named baseline",
+        "calibrationReported": true
+      },
+      "calibration": {
+        "method": "temperature-scaling",
+        "temperature": 1.04,
+        "validation": {
+          "uncalibrated": {
+            "ece": 0.0649,
+            "bins": [
+              {
+                "bin": 4,
+                "count": 1,
+                "confidence": 0.4455,
+                "accuracy": 0
+              },
+              {
+                "bin": 9,
+                "count": 7,
+                "confidence": 0.9894,
+                "accuracy": 1
+              }
+            ],
+            "brier": 0.0251,
+            "cases": 8,
+            "temperature": 1
+          },
+          "calibrated": {
+            "ece": 0.0651,
+            "bins": [
+              {
+                "bin": 4,
+                "count": 1,
+                "confidence": 0.4339,
+                "accuracy": 0
+              },
+              {
+                "bin": 9,
+                "count": 7,
+                "confidence": 0.9876,
+                "accuracy": 1
+              }
+            ],
+            "brier": 0.024,
+            "cases": 8,
+            "temperature": 1.04
+          },
+          "searched": 126,
+          "nll": 0.24579
+        },
+        "test": {
+          "uncalibrated": {
+            "ece": 0.0023,
+            "bins": [
+              {
+                "bin": 9,
+                "count": 8,
+                "confidence": 0.9977,
+                "accuracy": 1
+              }
+            ],
+            "brier": 0,
+            "cases": 8,
+            "temperature": 1
+          },
+          "calibrated": {
+            "ece": 0.0029,
+            "bins": [
+              {
+                "bin": 9,
+                "count": 8,
+                "confidence": 0.9971,
+                "accuracy": 1
+              }
+            ],
+            "brier": 0,
+            "cases": 8,
+            "temperature": 1.04
+          }
+        }
+      },
+      "training": {
+        "bestEpoch": 3,
+        "bestValidationLoss": 0.2460470609965548,
+        "epochsRun": 44,
+        "durationMs": 1635,
+        "measuredDurationMs": 1765
+      },
+      "artifact": {
+        "bytes": 415242,
+        "checksum": "f9c96d65dce2f486c192ef8733bff5b369e6165b050fabdfb2a4ed89957f1d4d"
+      },
+      "crossValidation": {
+        "ok": true,
+        "task": "routing",
+        "folds": 5,
+        "cases": 47,
+        "metrics": {
+          "cases": 47,
+          "accuracy": 0.8936,
+          "macroF1": 0.8924
+        },
+        "baseline": {
+          "cases": 47,
+          "accuracy": 0.8085
+        },
+        "perFold": [
+          {
+            "fold": 0,
+            "cases": 14,
+            "accuracy": 1,
+            "baselineAccuracy": 0.8571
+          },
+          {
+            "fold": 1,
+            "cases": 9,
+            "accuracy": 0.7778,
+            "baselineAccuracy": 0.8889
+          },
+          {
+            "fold": 2,
+            "cases": 8,
+            "accuracy": 1,
+            "baselineAccuracy": 0.625
+          },
+          {
+            "fold": 3,
+            "cases": 8,
+            "accuracy": 0.75,
+            "baselineAccuracy": 1
+          },
+          {
+            "fold": 4,
+            "cases": 8,
+            "accuracy": 0.875,
+            "baselineAccuracy": 0.625
+          }
+        ],
+        "measuredDurationMs": 14668
+      }
+    },
+    "relevance": {
+      "experiment": "relevance_2026-11-25T09-41-37-689Z_18",
+      "dataset": {
+        "items": 120,
+        "labels": [
+          "irrelevant",
+          "relevant"
+        ],
+        "provenance": "authored query/memory pairs with relevance labels",
+        "hash": "eb5555e1e5831e98091731ad8fd691edd48715b30ccbc57008821f3d7b164540"
+      },
+      "split": {
+        "train": 84,
+        "validation": 18,
+        "test": 18,
+        "groups": null
+      },
+      "metrics": {
+        "cases": 18,
+        "accuracy": 0.9444,
+        "macroF1": 0.9443,
+        "ece": 0.0388,
+        "brier": 0.0265,
+        "uncalibratedEce": 0.0375,
+        "uncalibratedBrier": 0.0232
+      },
+      "baseline": {
+        "cases": 18,
+        "accuracy": 0.6667,
+        "macroF1": 0.625
+      },
+      "delta": 0.2777,
+      "gate": {
+        "passed": true,
+        "rule": "held-out accuracy must be at least the named baseline",
+        "calibrationReported": true
+      },
+      "calibration": {
+        "method": "temperature-scaling",
+        "temperature": 0.75,
+        "validation": {
+          "uncalibrated": {
+            "ece": 0.0001,
+            "bins": [
+              {
+                "bin": 9,
+                "count": 18,
+                "confidence": 0.9999,
+                "accuracy": 1
+              }
+            ],
+            "brier": 0,
+            "cases": 18,
+            "temperature": 1
+          },
+          "calibrated": {
+            "ece": 0,
+            "bins": [
+              {
+                "bin": 9,
+                "count": 18,
+                "confidence": 1,
+                "accuracy": 1
+              }
+            ],
+            "brier": 0,
+            "cases": 18,
+            "temperature": 0.75
+          },
+          "searched": 126,
+          "nll": 0.000011
+        },
+        "test": {
+          "uncalibrated": {
+            "ece": 0.0375,
+            "bins": [
+              {
+                "bin": 6,
+                "count": 1,
+                "confidence": 0.646,
+                "accuracy": 0
+              },
+              {
+                "bin": 9,
+                "count": 17,
+                "confidence": 0.9983,
+                "accuracy": 1
+              }
+            ],
+            "brier": 0.0232,
+            "cases": 18,
+            "temperature": 1
+          },
+          "calibrated": {
+            "ece": 0.0388,
+            "bins": [
+              {
+                "bin": 6,
+                "count": 1,
+                "confidence": 0.6904,
+                "accuracy": 0
+              },
+              {
+                "bin": 9,
+                "count": 17,
+                "confidence": 0.9995,
+                "accuracy": 1
+              }
+            ],
+            "brier": 0.0265,
+            "cases": 18,
+            "temperature": 0.75
+          }
+        }
+      },
+      "training": {
+        "bestEpoch": 243,
+        "bestValidationLoss": 0.00011978695300441232,
+        "epochsRun": 260,
+        "durationMs": 138,
+        "measuredDurationMs": 139
+      },
+      "artifact": {
+        "bytes": 5953,
+        "checksum": "8172397943a6312925922c859d46f4dad2576e1ee228bd31e7c56765297f438d"
+      },
+      "crossValidation": {
+        "ok": true,
+        "task": "relevance",
+        "folds": 5,
+        "cases": 120,
+        "metrics": {
+          "cases": 120,
+          "accuracy": 0.975,
+          "macroF1": 0.975
+        },
+        "baseline": {
+          "cases": 120,
+          "accuracy": 0.6833
+        },
+        "perFold": [
+          {
+            "fold": 0,
+            "cases": 24,
+            "accuracy": 0.9167,
+            "baselineAccuracy": 0.6667
+          },
+          {
+            "fold": 1,
+            "cases": 24,
+            "accuracy": 1,
+            "baselineAccuracy": 0.5833
+          },
+          {
+            "fold": 2,
+            "cases": 24,
+            "accuracy": 1,
+            "baselineAccuracy": 0.7083
+          },
+          {
+            "fold": 3,
+            "cases": 24,
+            "accuracy": 1,
+            "baselineAccuracy": 0.625
+          },
+          {
+            "fold": 4,
+            "cases": 24,
+            "accuracy": 0.9583,
+            "baselineAccuracy": 0.8333
+          }
+        ],
+        "measuredDurationMs": 370
+      }
+    },
+    "complexity": {
+      "experiment": "complexity_2026-11-25T09-41-37-746Z_6",
+      "dataset": {
+        "items": 40,
+        "labels": [
+          "complex",
+          "medium",
+          "simple"
+        ],
+        "provenance": "authored request complexity labels",
+        "hash": "cf13ef78144b475c703f84825a0cffab7c0296ee32dc1a5349596f451138d87b"
+      },
+      "split": {
+        "train": 28,
+        "validation": 6,
+        "test": 6,
+        "groups": null
+      },
+      "metrics": {
+        "cases": 6,
+        "accuracy": 0.8333,
+        "macroF1": 0.7778,
+        "ece": 0.1587,
+        "brier": 0.167,
+        "uncalibratedEce": 0.1497,
+        "uncalibratedBrier": 0.168
+      },
+      "baseline": {
+        "cases": 6,
+        "accuracy": 0.8333,
+        "macroF1": 0.6
+      },
+      "delta": 0,
+      "gate": {
+        "passed": true,
+        "rule": "held-out accuracy must be at least the named baseline",
+        "calibrationReported": true
+      },
+      "calibration": {
+        "method": "temperature-scaling",
+        "temperature": 0.75,
+        "validation": {
+          "uncalibrated": {
+            "ece": 0.0003,
+            "bins": [
+              {
+                "bin": 9,
+                "count": 6,
+                "confidence": 0.9997,
+                "accuracy": 1
+              }
+            ],
+            "brier": 0,
+            "cases": 6,
+            "temperature": 1
+          },
+          "calibrated": {
+            "ece": 0,
+            "bins": [
+              {
+                "bin": 9,
+                "count": 6,
+                "confidence": 1,
+                "accuracy": 1
+              }
+            ],
+            "brier": 0,
+            "cases": 6,
+            "temperature": 0.75
+          },
+          "searched": 126,
+          "nll": 0.00002
+        },
+        "test": {
+          "uncalibrated": {
+            "ece": 0.1497,
+            "bins": [
+              {
+                "bin": 9,
+                "count": 6,
+                "confidence": 0.983,
+                "accuracy": 0.8333
+              }
+            ],
+            "brier": 0.168,
+            "cases": 6,
+            "temperature": 1
+          },
+          "calibrated": {
+            "ece": 0.1587,
+            "bins": [
+              {
+                "bin": 9,
+                "count": 6,
+                "confidence": 0.992,
+                "accuracy": 0.8333
+              }
+            ],
+            "brier": 0.167,
+            "cases": 6,
+            "temperature": 0.75
+          }
+        }
+      },
+      "training": {
+        "bestEpoch": 258,
+        "bestValidationLoss": 0.0002924020967626067,
+        "epochsRun": 260,
+        "durationMs": 56,
+        "measuredDurationMs": 57
+      },
+      "artifact": {
+        "bytes": 6087,
+        "checksum": "025ae9c8212a3180014698fb41eecd28b7d4898633fb644d6125f3735e0326cd"
+      },
+      "crossValidation": {
+        "ok": true,
+        "task": "complexity",
+        "folds": 5,
+        "cases": 40,
+        "metrics": {
+          "cases": 40,
+          "accuracy": 0.9,
+          "macroF1": 0.8696
+        },
+        "baseline": {
+          "cases": 40,
+          "accuracy": 0.825
+        },
+        "perFold": [
+          {
+            "fold": 0,
+            "cases": 9,
+            "accuracy": 0.8889,
+            "baselineAccuracy": 1
+          },
+          {
+            "fold": 1,
+            "cases": 9,
+            "accuracy": 0.8889,
+            "baselineAccuracy": 0.7778
+          },
+          {
+            "fold": 2,
+            "cases": 8,
+            "accuracy": 0.875,
+            "baselineAccuracy": 0.75
+          },
+          {
+            "fold": 3,
+            "cases": 7,
+            "accuracy": 1,
+            "baselineAccuracy": 0.8571
+          },
+          {
+            "fold": 4,
+            "cases": 7,
+            "accuracy": 0.8571,
+            "baselineAccuracy": 0.7143
+          }
+        ],
+        "measuredDurationMs": 177
+      }
+    },
+    "semantic": {
+      "experiment": "semantic_2026-11-25T09-41-38-007Z_80",
+      "dataset": {
+        "items": 484,
+        "labels": [
+          "match",
+          "no-match"
+        ],
+        "provenance": "authored bilingual query/passage pairs with hard same-topic negatives",
+        "hash": "5b1a8608616b7f17252dcfec1952d78770222029dec8aad0c5ae5b43ec9a58e2"
+      },
+      "split": {
+        "train": 324,
+        "validation": 80,
+        "test": 80,
+        "groups": {
+          "train": 8,
+          "validation": 2,
+          "test": 2
+        }
+      },
+      "metrics": {
+        "cases": 80,
+        "accuracy": 0.7625,
+        "macroF1": 0.7561,
+        "ece": 0.0543,
+        "brier": 0.1552,
+        "uncalibratedEce": 0.0901,
+        "uncalibratedBrier": 0.1528
+      },
+      "baseline": {
+        "cases": 80,
+        "accuracy": 0.675,
+        "macroF1": 0.5513
+      },
+      "delta": 0.0875,
+      "gate": {
+        "passed": true,
+        "rule": "held-out accuracy must be at least the named baseline",
+        "calibrationReported": true
+      },
+      "calibration": {
+        "method": "temperature-scaling",
+        "temperature": 0.75,
+        "validation": {
+          "uncalibrated": {
+            "ece": 0.1294,
+            "bins": [
+              {
+                "bin": 5,
+                "count": 16,
+                "confidence": 0.5381,
+                "accuracy": 0.75
+              },
+              {
+                "bin": 6,
+                "count": 10,
+                "confidence": 0.6582,
+                "accuracy": 0.8
+              },
+              {
+                "bin": 7,
+                "count": 15,
+                "confidence": 0.751,
+                "accuracy": 0.9333
+              },
+              {
+                "bin": 8,
+                "count": 10,
+                "confidence": 0.8562,
+                "accuracy": 1
+              },
+              {
+                "bin": 9,
+                "count": 29,
+                "confidence": 0.9526,
+                "accuracy": 1
+              }
+            ],
+            "brier": 0.0912,
+            "cases": 80,
+            "temperature": 1
+          },
+          "calibrated": {
+            "ece": 0.1081,
+            "bins": [
+              {
+                "bin": 5,
+                "count": 15,
+                "confidence": 0.5465,
+                "accuracy": 0.7333
+              },
+              {
+                "bin": 6,
+                "count": 7,
+                "confidence": 0.6729,
+                "accuracy": 1
+              },
+              {
+                "bin": 7,
+                "count": 10,
+                "confidence": 0.7639,
+                "accuracy": 0.7
+              },
+              {
+                "bin": 8,
+                "count": 12,
+                "confidence": 0.8469,
+                "accuracy": 1
+              },
+              {
+                "bin": 9,
+                "count": 36,
+                "confidence": 0.97,
+                "accuracy": 1
+              }
+            ],
+            "brier": 0.083,
+            "cases": 80,
+            "temperature": 0.75
+          },
+          "searched": 126,
+          "nll": 0.271827
+        },
+        "test": {
+          "uncalibrated": {
+            "ece": 0.0901,
+            "bins": [
+              {
+                "bin": 5,
+                "count": 17,
+                "confidence": 0.5439,
+                "accuracy": 0.4706
+              },
+              {
+                "bin": 6,
+                "count": 11,
+                "confidence": 0.6501,
+                "accuracy": 0.8182
+              },
+              {
+                "bin": 7,
+                "count": 16,
+                "confidence": 0.7751,
+                "accuracy": 0.625
+              },
+              {
+                "bin": 8,
+                "count": 18,
+                "confidence": 0.8578,
+                "accuracy": 0.8889
+              },
+              {
+                "bin": 9,
+                "count": 18,
+                "confidence": 0.9358,
+                "accuracy": 1
+              }
+            ],
+            "brier": 0.1528,
+            "cases": 80,
+            "temperature": 1
+          },
+          "calibrated": {
+            "ece": 0.0543,
+            "bins": [
+              {
+                "bin": 5,
+                "count": 12,
+                "confidence": 0.5354,
+                "accuracy": 0.5
+              },
+              {
+                "bin": 6,
+                "count": 11,
+                "confidence": 0.6381,
+                "accuracy": 0.6364
+              },
+              {
+                "bin": 7,
+                "count": 8,
+                "confidence": 0.7519,
+                "accuracy": 0.75
+              },
+              {
+                "bin": 8,
+                "count": 18,
+                "confidence": 0.859,
+                "accuracy": 0.6667
+              },
+              {
+                "bin": 9,
+                "count": 31,
+                "confidence": 0.9542,
+                "accuracy": 0.9677
+              }
+            ],
+            "brier": 0.1552,
+            "cases": 80,
+            "temperature": 0.75
+          }
+        }
+      },
+      "training": {
+        "bestEpoch": 18,
+        "bestValidationLoss": 0.3057162701252982,
+        "epochsRun": 59,
+        "durationMs": 262,
+        "measuredDurationMs": 263
+      },
+      "artifact": {
+        "bytes": 17804,
+        "checksum": "9fe3995821e213359fb673c6775b25f2fe4168dd61510ee44b83b48bb69ae383"
+      }
+    },
+    "context": {
+      "experiment": "context_2026-11-25T09-41-39-875Z_144",
+      "dataset": {
+        "items": 648,
+        "labels": [
+          "background",
+          "critical",
+          "useful"
+        ],
+        "provenance": "authored scenarios with critical, useful and background chunks",
+        "hash": "6e79f06c9a051ed5b5314fbf797d0626e2d5b6a944d853654139576beb737dc6"
+      },
+      "split": {
+        "train": 396,
+        "validation": 108,
+        "test": 144,
+        "groups": {
+          "train": 11,
+          "validation": 3,
+          "test": 4
+        }
+      },
+      "metrics": {
+        "cases": 144,
+        "accuracy": 1,
+        "macroF1": 1,
+        "ece": 0,
+        "brier": 0,
+        "uncalibratedEce": 0,
+        "uncalibratedBrier": 0
+      },
+      "baseline": {
+        "cases": 144,
+        "accuracy": 0.5556,
+        "macroF1": 0.2516
+      },
+      "delta": 0.4444,
+      "gate": {
+        "passed": true,
+        "rule": "held-out accuracy must be at least the named baseline",
+        "calibrationReported": true
+      },
+      "calibration": {
+        "method": "temperature-scaling",
+        "temperature": 0.75,
+        "validation": {
+          "uncalibrated": {
+            "ece": 0,
+            "bins": [
+              {
+                "bin": 9,
+                "count": 108,
+                "confidence": 1,
+                "accuracy": 1
+              }
+            ],
+            "brier": 0,
+            "cases": 108,
+            "temperature": 1
+          },
+          "calibrated": {
+            "ece": 0,
+            "bins": [
+              {
+                "bin": 9,
+                "count": 108,
+                "confidence": 1,
+                "accuracy": 1
+              }
+            ],
+            "brier": 0,
+            "cases": 108,
+            "temperature": 0.75
+          },
+          "searched": 126,
+          "nll": 0
+        },
+        "test": {
+          "uncalibrated": {
+            "ece": 0,
+            "bins": [
+              {
+                "bin": 9,
+                "count": 144,
+                "confidence": 1,
+                "accuracy": 1
+              }
+            ],
+            "brier": 0,
+            "cases": 144,
+            "temperature": 1
+          },
+          "calibrated": {
+            "ece": 0,
+            "bins": [
+              {
+                "bin": 9,
+                "count": 144,
+                "confidence": 1,
+                "accuracy": 1
+              }
+            ],
+            "brier": 0,
+            "cases": 144,
+            "temperature": 0.75
+          }
+        }
+      },
+      "training": {
+        "bestEpoch": 316,
+        "bestValidationLoss": 0.000004945035171659243,
+        "epochsRun": 320,
+        "durationMs": 1872,
+        "measuredDurationMs": 1872
+      },
+      "artifact": {
+        "bytes": 18661,
+        "checksum": "f8760d7500ca3363a720634ec0491a2b0a4a672dd86d9370e7c1818287e29d89"
+      }
+    },
+    "failure": {
+      "experiment": "failure_2026-11-25T09-41-40-411Z_144",
+      "dataset": {
+        "items": 720,
+        "labels": [
+          "elevated",
+          "high",
+          "low"
+        ],
+        "provenance": "synthetic operational scenarios labelled by the documented rubric, not observed incidents",
+        "hash": "3fd121bfb83afc6cb094b37802f2981e65958c7d40cdaf41ebb8b273bfb74e0d"
+      },
+      "split": {
+        "train": 432,
+        "validation": 144,
+        "test": 144,
+        "groups": {
+          "train": 6,
+          "validation": 2,
+          "test": 2
+        }
+      },
+      "metrics": {
+        "cases": 144,
+        "accuracy": 0.7153,
+        "macroF1": 0.5638,
+        "ece": 0.1634,
+        "brier": 0.2049,
+        "uncalibratedEce": 0.1941,
+        "uncalibratedBrier": 0.2192
+      },
+      "baseline": {
+        "cases": 144,
+        "accuracy": 0.6667,
+        "macroF1": 0.6125
+      },
+      "delta": 0.0486,
+      "gate": {
+        "passed": true,
+        "rule": "held-out accuracy must be at least the named baseline",
+        "calibrationReported": true
+      },
+      "calibration": {
+        "method": "temperature-scaling",
+        "temperature": 1.3,
+        "validation": {
+          "uncalibrated": {
+            "ece": 0.0431,
+            "bins": [
+              {
+                "bin": 5,
+                "count": 14,
+                "confidence": 0.5536,
+                "accuracy": 0.5
+              },
+              {
+                "bin": 6,
+                "count": 18,
+                "confidence": 0.6531,
+                "accuracy": 0.5556
+              },
+              {
+                "bin": 7,
+                "count": 13,
+                "confidence": 0.7493,
+                "accuracy": 0.6154
+              },
+              {
+                "bin": 8,
+                "count": 21,
+                "confidence": 0.8468,
+                "accuracy": 0.8095
+              },
+              {
+                "bin": 9,
+                "count": 78,
+                "confidence": 0.9766,
+                "accuracy": 0.9615
+              }
+            ],
+            "brier": 0.1221,
+            "cases": 144,
+            "temperature": 1
+          },
+          "calibrated": {
+            "ece": 0.0283,
+            "bins": [
+              {
+                "bin": 5,
+                "count": 20,
+                "confidence": 0.5562,
+                "accuracy": 0.55
+              },
+              {
+                "bin": 6,
+                "count": 21,
+                "confidence": 0.6516,
+                "accuracy": 0.5714
+              },
+              {
+                "bin": 7,
+                "count": 17,
+                "confidence": 0.7588,
+                "accuracy": 0.7059
+              },
+              {
+                "bin": 8,
+                "count": 21,
+                "confidence": 0.8546,
+                "accuracy": 0.8571
+              },
+              {
+                "bin": 9,
+                "count": 65,
+                "confidence": 0.9645,
+                "accuracy": 0.9846
+              }
+            ],
+            "brier": 0.1197,
+            "cases": 144,
+            "temperature": 1.3
+          },
+          "searched": 126,
+          "nll": 0.392462
+        },
+        "test": {
+          "uncalibrated": {
+            "ece": 0.1941,
+            "bins": [
+              {
+                "bin": 5,
+                "count": 9,
+                "confidence": 0.5456,
+                "accuracy": 0.4444
+              },
+              {
+                "bin": 6,
+                "count": 4,
+                "confidence": 0.6552,
+                "accuracy": 0.5
+              },
+              {
+                "bin": 7,
+                "count": 8,
+                "confidence": 0.7657,
+                "accuracy": 0.5
+              },
+              {
+                "bin": 8,
+                "count": 22,
+                "confidence": 0.8462,
+                "accuracy": 0.4545
+              },
+              {
+                "bin": 9,
+                "count": 101,
+                "confidence": 0.977,
+                "accuracy": 0.8218
+              }
+            ],
+            "brier": 0.2192,
+            "cases": 144,
+            "temperature": 1
+          },
+          "calibrated": {
+            "ece": 0.1634,
+            "bins": [
+              {
+                "bin": 5,
+                "count": 10,
+                "confidence": 0.5394,
+                "accuracy": 0.5
+              },
+              {
+                "bin": 6,
+                "count": 6,
+                "confidence": 0.6618,
+                "accuracy": 0.3333
+              },
+              {
+                "bin": 7,
+                "count": 20,
+                "confidence": 0.7593,
+                "accuracy": 0.5
+              },
+              {
+                "bin": 8,
+                "count": 22,
+                "confidence": 0.8543,
+                "accuracy": 0.5909
+              },
+              {
+                "bin": 9,
+                "count": 86,
+                "confidence": 0.9672,
+                "accuracy": 0.8488
+              }
+            ],
+            "brier": 0.2049,
+            "cases": 144,
+            "temperature": 1.3
+          }
+        }
+      },
+      "training": {
+        "bestEpoch": 6,
+        "bestValidationLoss": 0.4032213625074966,
+        "epochsRun": 47,
+        "durationMs": 529,
+        "measuredDurationMs": 532
+      },
+      "artifact": {
+        "bytes": 61680,
+        "checksum": "937f7bbf18fe767d6a270e40bd60920892fd7bf6f0caa9cb1682e27a63f8017b"
+      }
+    }
+  },
+  "examples": {
+    "tools": {
+      "ok": true,
+      "label": "system.info",
+      "confidence": 1,
+      "neural": {
+        "label": "system.info",
+        "confidence": 1,
+        "uncalibratedConfidence": 0.9999
+      },
+      "baseline": "system.info",
+      "usedFallback": false,
+      "temperature": 0.75,
+      "model": {
+        "experimentId": "tools_2026-11-25T09-41-35-775Z_16",
+        "checksum": "76774ccf136aef75c15c14ea60bc864e9b73911b0130d366940b1ec07907c08d",
+        "accuracy": 0.8125,
+        "baseline": 0.6875,
+        "ece": 0.1663,
+        "brier": 0.1425,
+        "temperature": 0.75
+      }
+    },
+    "routing": {
+      "ok": true,
+      "label": "code",
+      "confidence": 0.4253,
+      "neural": {
+        "label": "windows",
+        "confidence": 0.4253,
+        "uncalibratedConfidence": 0.4389
+      },
+      "baseline": "code",
+      "usedFallback": true,
+      "temperature": 1.04,
+      "model": {
+        "experimentId": "routing_2026-11-25T09-41-37-542Z_8",
+        "checksum": "f9c96d65dce2f486c192ef8733bff5b369e6165b050fabdfb2a4ed89957f1d4d",
+        "accuracy": 1,
+        "baseline": 0.875,
+        "ece": 0.0029,
+        "brier": 0,
+        "temperature": 1.04
+      }
+    },
+    "relevance": {
+      "ok": true,
+      "label": "relevant",
+      "confidence": 1,
+      "neural": {
+        "label": "relevant",
+        "confidence": 1,
+        "uncalibratedConfidence": 1
+      },
+      "baseline": "relevant",
+      "usedFallback": false,
+      "temperature": 0.75,
+      "model": {
+        "experimentId": "relevance_2026-11-25T09-41-37-689Z_18",
+        "checksum": "8172397943a6312925922c859d46f4dad2576e1ee228bd31e7c56765297f438d",
+        "accuracy": 0.9444,
+        "baseline": 0.6667,
+        "ece": 0.0388,
+        "brier": 0.0265,
+        "temperature": 0.75
+      }
+    },
+    "complexity": {
+      "ok": true,
+      "label": "medium",
+      "confidence": 0.7358,
+      "neural": {
+        "label": "medium",
+        "confidence": 0.7358,
+        "uncalibratedConfidence": 0.6831
+      },
+      "baseline": "medium",
+      "usedFallback": false,
+      "temperature": 0.75,
+      "model": {
+        "experimentId": "complexity_2026-11-25T09-41-37-746Z_6",
+        "checksum": "025ae9c8212a3180014698fb41eecd28b7d4898633fb644d6125f3735e0326cd",
+        "accuracy": 0.8333,
+        "baseline": 0.8333,
+        "ece": 0.1587,
+        "brier": 0.167,
+        "temperature": 0.75
+      }
+    },
+    "semantic": {
+      "ok": true,
+      "label": "match",
+      "confidence": 0.9345,
+      "neural": {
+        "label": "match",
+        "confidence": 0.9345,
+        "uncalibratedConfidence": 0.8801
+      },
+      "baseline": "no-match",
+      "usedFallback": false,
+      "temperature": 0.75,
+      "model": {
+        "experimentId": "semantic_2026-11-25T09-41-38-007Z_80",
+        "checksum": "9fe3995821e213359fb673c6775b25f2fe4168dd61510ee44b83b48bb69ae383",
+        "accuracy": 0.7625,
+        "baseline": 0.675,
+        "ece": 0.0543,
+        "brier": 0.1552,
+        "temperature": 0.75
+      }
+    },
+    "context": {
+      "ok": true,
+      "label": "critical",
+      "confidence": 0.9585,
+      "neural": {
+        "label": "critical",
+        "confidence": 0.9585,
+        "uncalibratedConfidence": 0.9134
+      },
+      "baseline": "useful",
+      "usedFallback": false,
+      "temperature": 0.75,
+      "model": {
+        "experimentId": "context_2026-11-25T09-41-39-875Z_144",
+        "checksum": "f8760d7500ca3363a720634ec0491a2b0a4a672dd86d9370e7c1818287e29d89",
+        "accuracy": 1,
+        "baseline": 0.5556,
+        "ece": 0,
+        "brier": 0,
+        "temperature": 0.75
+      }
+    },
+    "failure": {
+      "ok": true,
+      "label": "low",
+      "confidence": 0.5392,
+      "neural": {
+        "label": "low",
+        "confidence": 0.5392,
+        "uncalibratedConfidence": 0.5707
+      },
+      "baseline": "low",
+      "usedFallback": false,
+      "temperature": 1.3,
+      "model": {
+        "experimentId": "failure_2026-11-25T09-41-40-411Z_144",
+        "checksum": "937f7bbf18fe767d6a270e40bd60920892fd7bf6f0caa9cb1682e27a63f8017b",
+        "accuracy": 0.7153,
+        "baseline": 0.6667,
+        "ece": 0.1634,
+        "brier": 0.2049,
+        "temperature": 1.3
+      }
+    }
+  },
+  "honesty": [
+    "Datasets are authored synthetic examples, not private conversations or scraped data.",
+    "Text models use hashed character n-gram features plus authored lexical keyword features; they are not language understanding.",
+    "Held-out authored requests are never seen verbatim during fitting; generated training paraphrases come from the lexicons in core/ml/data/specialists.js.",
+    "The four original specialists also report deterministic 5-fold cross-validation over every authored item, not only one small test slice.",
+    "Semantic/context/failure datasets are authored synthetic scenarios; hard negatives share a topic with the query.",
+    "A model at or below its named baseline is not promoted.",
+    "Confidence is temperature-scaled on the validation split; ECE/Brier before and after are in the experiment record.",
+    "Failure labels come from the documented synthetic rubric, not observed incidents; the predictor is advisory only.",
+    "No live phone, email, GPU or language-model measurement is included in this file."
+  ]
+}

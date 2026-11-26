@@ -1,0 +1,150 @@
+{
+  "version": "3.0.0",
+  "at": "2026-11-24T03:03:58.742Z",
+  "platform": "linux/x64",
+  "tools": 206,
+  "categories": {
+    "ai": 9,
+    "automation": 6,
+    "code": 14,
+    "desktop": 10,
+    "dev": 5,
+    "documents": 11,
+    "esp32": 5,
+    "files": 19,
+    "git": 10,
+    "healing": 6,
+    "knowledge": 17,
+    "math": 9,
+    "mcp": 4,
+    "memory": 13,
+    "mobile": 3,
+    "network": 10,
+    "perf": 3,
+    "security": 6,
+    "system": 34,
+    "tasks": 5,
+    "vision": 3,
+    "voice": 4
+  },
+  "categoryCount": 22,
+  "permissions": {
+    "read": 139,
+    "write": 40,
+    "system": 23,
+    "network": 3,
+    "privileged": 1
+  },
+  "structural": {
+    "checked": 206,
+    "problems": [],
+    "ok": true
+  },
+  "execution": {
+    "attempted": 14,
+    "verified": 14,
+    "failed": 0,
+    "results": [
+      {
+        "tool": "system.info",
+        "ok": true,
+        "code": null,
+        "ms": 30,
+        "message": null
+      },
+      {
+        "tool": "math.eval",
+        "ok": true,
+        "code": null,
+        "ms": 10,
+        "message": null
+      },
+      {
+        "tool": "math.percent",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "graph.stats",
+        "ok": true,
+        "code": null,
+        "ms": 2,
+        "message": null
+      },
+      {
+        "tool": "runtime.status",
+        "ok": true,
+        "code": null,
+        "ms": 29,
+        "message": null
+      },
+      {
+        "tool": "mcp.status",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "task.list",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "memory.stats",
+        "ok": true,
+        "code": null,
+        "ms": 2,
+        "message": null
+      },
+      {
+        "tool": "kb.stats",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "kb.list",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "fs.list",
+        "ok": true,
+        "code": null,
+        "ms": 4,
+        "message": null
+      },
+      {
+        "tool": "system.snapshot",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "org.status",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "org.plan",
+        "ok": true,
+        "code": null,
+        "ms": 2,
+        "message": null
+      }
+    ],
+    "note": "Only these tools were executed. Every other tool is unverified, not \"verified\"."
+  },
+  "unexecuted": 192
+}

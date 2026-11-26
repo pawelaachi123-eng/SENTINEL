@@ -1,0 +1,544 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#06090f">
+<meta name="color-scheme" content="dark">
+<meta name="description" content="SENTINEL — control your own PC from your phone over an encrypted channel.">
+<title>SENTINEL</title>
+<link rel="icon" href="/assets/icon-192.png" sizes="192x192">
+<link rel="apple-touch-icon" href="/assets/icon-192.png">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+
+<!-- ── ambient background ──────────────────────────────────────────────── -->
+<div class="backdrop" aria-hidden="true">
+  <div class="glow glow-a"></div>
+  <div class="glow glow-b"></div>
+  <div class="grid-lines"></div>
+</div>
+
+<!-- ── boot splash ─────────────────────────────────────────────────────── -->
+<div id="boot" class="boot" role="status" aria-live="polite">
+  <div class="boot-mark">
+    <svg viewBox="0 0 64 64" width="44" height="44" aria-hidden="true">
+      <path d="M32 5 55 16v18c0 13-9.6 21.6-23 25C18.6 55.6 9 47 9 34V16Z" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/>
+      <path d="M22 32.5 29 39l14-15" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+  </div>
+  <p class="boot-text">Opening SENTINEL…</p>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<!--  PAIRING                                                               -->
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<main id="pair" class="pair" hidden>
+  <header class="pair-head">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 64 64" width="26" height="26">
+          <path d="M32 5 55 16v18c0 13-9.6 21.6-23 25C18.6 55.6 9 47 9 34V16Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/>
+          <path d="M22 32.5 29 39l14-15" fill="none" stroke="currentColor" stroke-width="4.4" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </span>
+      <span class="brand-text">SENTINEL</span>
+    </div>
+    <button class="ghost-btn" id="pair-diagnostics-toggle" type="button" aria-expanded="false">
+      Diagnostics
+    </button>
+  </header>
+
+  <section class="pair-intro">
+    <h1>Pair this phone</h1>
+    <p>
+      SENTINEL talks straight to your own machine. No account, no VPN, no cloud —
+      the key below turns into a private encrypted channel between this phone and
+      your PC or ESP32.
+    </p>
+  </section>
+
+  <form id="pair-form" class="card pair-card" autocomplete="off" novalidate>
+    <div class="field">
+      <div class="field-head">
+        <label for="pair-address">Address</label>
+        <button type="button" class="link-btn" id="pair-address-help">Where do I find this?</button>
+      </div>
+      <input id="pair-address" name="address" type="text" inputmode="url" spellcheck="false"
+             placeholder="192.168.1.50:7878" aria-describedby="pair-address-hint">
+      <p class="hint" id="pair-address-hint">
+        Your PC's local IP and the console port, or the ESP32's IP. Scheme and port are optional.
+      </p>
+      <div class="chips" role="group" aria-label="Suggested addresses">
+        <button type="button" class="chip" data-fill="self">This computer</button>
+        <button type="button" class="chip" data-fill="esp32">ESP32 · 192.168.1.1</button>
+        <button type="button" class="chip" id="pair-test">Test address</button>
+      </div>
+      <div id="pair-probe" class="probe" hidden></div>
+    </div>
+
+    <div class="field">
+      <div class="field-head">
+        <label for="pair-key">Pairing key</label>
+        <button type="button" class="link-btn" id="pair-key-paste">Paste</button>
+      </div>
+      <div class="key-wrap">
+        <input id="pair-key" name="key" type="password" spellcheck="false" autocapitalize="off"
+               placeholder="64 hex characters" aria-describedby="pair-key-hint">
+        <button type="button" class="eye-btn" id="pair-key-eye" aria-label="Show the key" aria-pressed="false">
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12Z" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="12" r="2.6" fill="none" stroke="currentColor" stroke-width="1.7"/></svg>
+        </button>
+      </div>
+      <p class="hint" id="pair-key-hint">
+        Shown in the PC console under <em>Pairing</em>, and on the ESP32 setup page.
+      </p>
+    </div>
+
+    <details class="advanced" id="pair-advanced">
+      <summary>I only have a console token</summary>
+      <div class="field">
+        <label for="pair-token">Console token</label>
+        <input id="pair-token" name="token" type="text" spellcheck="false" placeholder="e.g. 4f1c…">
+        <p class="hint">Token mode works when this page is served by the PC itself (same Wi-Fi, no encryption layer).</p>
+      </div>
+    </details>
+
+    <button class="primary-btn" id="pair-submit" type="submit">
+      <span class="btn-label">Connect</span>
+      <span class="spinner" hidden aria-hidden="true"></span>
+    </button>
+
+    <div id="pair-steps" class="steps" hidden></div>
+    <div id="pair-error" class="alert" role="alert" hidden></div>
+    <p class="fineprint">
+      The phone keeps only the address and the key, stored on this device.
+      Every command travels encrypted; nothing is sent to a third party.
+    </p>
+  </form>
+
+  <section id="pair-diagnostics" class="card diag" hidden>
+    <h2>Connection diagnostics</h2>
+    <p class="hint">Everything the app tried, in order. Useful when the phone and the PC disagree about the network.</p>
+    <pre id="diag-log" class="diag-log">(nothing yet)</pre>
+    <div class="row-actions">
+      <button type="button" class="ghost-btn" id="diag-copy">Copy</button>
+      <button type="button" class="ghost-btn" id="diag-clear">Clear</button>
+    </div>
+    <dl class="diag-meta" id="diag-meta"></dl>
+  </section>
+
+  <footer class="pair-foot">
+    <span id="pair-version">SENTINEL 2.1</span>
+    <button type="button" class="link-btn" id="pair-demo">Explore a demo</button>
+  </footer>
+</main>
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<!--  APP SHELL                                                             -->
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<div id="app" class="app" hidden>
+  <header class="topbar">
+    <div class="topbar-left">
+      <span class="brand-mark small" aria-hidden="true">
+        <svg viewBox="0 0 64 64" width="22" height="22">
+          <path d="M32 5 55 16v18c0 13-9.6 21.6-23 25C18.6 55.6 9 47 9 34V16Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/>
+          <path d="M22 32.5 29 39l14-15" fill="none" stroke="currentColor" stroke-width="4.4" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </span>
+      <div class="topbar-titles">
+        <h1 id="device-name">SENTINEL</h1>
+        <p id="device-sub" class="muted">connecting…</p>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <span id="link-pill" class="pill pill-wait">
+        <span class="dot"></span><span id="link-pill-text">linking</span>
+      </span>
+      <button class="icon-btn" id="btn-refresh" type="button" aria-label="Refresh now">
+        <svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="screens">
+    <!-- HOME ---------------------------------------------------------- -->
+
+  <!-- ── approvals ──────────────────────────────────────────────────────── -->
+  <div id="approval-strip" class="approval-strip" hidden></div>
+    <section id="screen-home" class="screen" data-screen="home">
+      <div class="hero card" id="hero">
+        <div class="hero-ring" id="hero-ring">
+          <svg viewBox="0 0 120 120" width="132" height="132" aria-hidden="true">
+            <circle class="ring-track" cx="60" cy="60" r="52" fill="none" stroke-width="7"/>
+            <circle class="ring-value" id="ring-cpu" cx="60" cy="60" r="52" fill="none" stroke-width="7"
+                    stroke-dasharray="326.7" stroke-dashoffset="326.7" transform="rotate(-90 60 60)"/>
+          </svg>
+          <div class="ring-label">
+            <span id="ring-percent">—</span>
+            <small>CPU</small>
+          </div>
+        </div>
+        <div class="hero-body">
+          <p class="eyebrow" id="hero-state">Reading state…</p>
+          <h2 id="hero-host">—</h2>
+          <p class="hero-meta" id="hero-meta">—</p>
+          <div class="hero-actions">
+            <button class="action-btn primary" data-quick="screen.wake" type="button">Wake display</button>
+            <button class="action-btn danger-ghost" data-quick="system.shutdown" data-confirm type="button">Shut down</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="metrics" id="metrics"></div>
+
+      <section class="block" id="brain-block">
+        <div class="block-head">
+          <h3>What SENTINEL noticed</h3>
+          <span class="muted">advisory — nothing runs on its own</span>
+        </div>
+        <div class="insights" id="insights"></div>
+      </section>
+
+      <section class="block">
+        <div class="block-head">
+          <h3>Quick actions</h3>
+          <span class="muted" id="quick-hint">Tap to run · destructive actions ask first</span>
+        </div>
+        <div class="action-grid" id="quick-actions"></div>
+      </section>
+
+      <section class="block">
+        <div class="block-head">
+          <h3>Hardware</h3>
+          <span class="muted" id="hw-hint">Relay on the ESP32</span>
+        </div>
+        <div class="card hw-card" id="hardware"></div>
+      </section>
+
+      <section class="block">
+        <div class="block-head">
+          <h3>Anything else</h3>
+          <span class="muted">Every command the agent exposes</span>
+        </div>
+        <div class="card catalogue" id="catalogue"></div>
+      </section>
+    </section>
+
+    <!-- ACTIVITY ------------------------------------------------------ -->
+
+    <!-- ══════════════════════════════════════════════════════════════════ -->
+    <!--  CHAT                                                              -->
+    <!-- ══════════════════════════════════════════════════════════════════ -->
+    <section id="screen-chat" class="screen screen-chat" data-screen="chat" hidden>
+      <div class="orb-stage">
+        <canvas id="orb" class="orb" width="320" height="320" aria-hidden="true"></canvas>
+        <p id="orb-label" class="orb-label">Gotowy</p>
+        <div class="mode-switch" role="group" aria-label="Tryb rozumowania">
+          <button type="button" class="mode-btn" data-mode="fast" title="Jedno przejście, najszybciej">Fast</button>
+          <button type="button" class="mode-btn is-on" data-mode="balanced" title="Domyślny: jedno przejście + weryfikacja">Balanced</button>
+          <button type="button" class="mode-btn" data-mode="deep" title="Plan, kilka kroków, audyt odpowiedzi">Deep</button>
+          <button type="button" class="mode-btn" data-mode="research" title="Wiele źródeł, cytowania, dłuższy budżet">Research</button>
+        </div>
+      </div>
+
+      <div id="chat-messages" class="chat-messages" role="log" aria-live="polite"></div>
+
+      <div id="chat-attachments" class="chat-attachments"></div>
+      <form id="chat-form" class="composer">
+        <label class="sr-only" for="chat-input">Wiadomość</label>
+        <textarea id="chat-input" class="composer-input" rows="1" placeholder="Zapytaj SENTINELA…" autocomplete="off"></textarea>
+        <div class="composer-actions">
+          <input id="chat-file" type="file" accept="image/*,.pdf,.txt,.md,.csv,.json,.log" multiple hidden>
+          <button id="chat-attach" class="icon-btn" type="button" aria-label="Załącz plik" title="Załącz plik">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+          </button>
+          <button id="chat-mic" class="icon-btn" type="button" aria-label="Nagraj wiadomość" title="Push-to-talk (offline STT)">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+          </button>
+          <span id="chat-stage" class="chat-stage" aria-live="polite"></span>
+          <button id="chat-stop" class="btn btn-stop" type="button" hidden>STOP</button>
+          <button id="chat-send" class="btn btn-primary btn-send" type="submit">Wyślij</button>
+        </div>
+      </form>
+    </section>
+
+    <!-- AGENTS -->
+    <section id="screen-agents" class="screen" data-screen="agents" hidden>
+      <div class="section-head"><h2>Agenci</h2><span class="muted">współdzielą jeden model i jedno audytowane narzędzie</span></div>
+      <div data-panel="agents" class="panel"></div>
+    </section>
+
+    <!-- TOOLS -->
+    <section id="screen-tools" class="screen" data-screen="tools" hidden>
+      <div class="section-head"><h2>Narzędzia</h2><span class="muted">jedyna droga asystenta do komputera</span></div>
+      <div data-panel="tools" class="panel"></div>
+    </section>
+
+    <!-- TASKS -->
+    <section id="screen-tasks" class="screen" data-screen="tasks" hidden>
+      <div class="section-head"><h2>Zadania</h2><span class="muted">plan, kroki, zależności, anulowanie</span></div>
+      <div data-panel="tasks" class="panel"></div>
+    </section>
+
+    <!-- MEMORY -->
+    <section id="screen-memory" class="screen" data-screen="memory" hidden>
+      <div class="section-head"><h2>Pamięć</h2><span class="muted">trwała, lokalna, bez sekretów</span></div>
+      <div data-panel="memory" class="panel"></div>
+    </section>
+
+    <!-- KNOWLEDGE -->
+    <section id="screen-knowledge" class="screen" data-screen="knowledge" hidden>
+      <div class="section-head"><h2>Baza wiedzy</h2><span class="muted">PDF, DOCX, XLSX, kod, logi — z cytowaniami</span></div>
+      <div data-panel="knowledge" class="panel"></div>
+    </section>
+
+    <!-- AUTOMATIONS -->
+    <section id="screen-automations" class="screen" data-screen="automations" hidden>
+      <div class="section-head"><h2>Automatyzacje</h2><span class="muted">cykliczne pytania i polecenia</span></div>
+      <div data-panel="automations" class="panel"></div>
+    </section>
+
+    <!-- COMPUTER -->
+    <section id="screen-computer" class="screen" data-screen="computer" hidden>
+      <div class="section-head"><h2>Komputer</h2><span class="muted">stan, procesy, sprzęt</span></div>
+      <div data-panel="computer" class="panel"></div>
+    </section>
+
+    <!-- MODELS -->
+    <section id="screen-models" class="screen" data-screen="models" hidden>
+      <div class="section-head"><h2>Modele</h2><span class="muted">Ollama / LM Studio / llama.cpp / zgodne z OpenAI</span></div>
+      <div data-panel="models" class="panel"></div>
+      <div class="section-head"><h2>Laboratorium i badania</h2><span class="muted">realny trening CPU, metryki i źródła z cytatami</span></div>
+      <div data-panel="lab" class="panel"></div>
+    </section>
+
+    <!-- DIAGNOSTICS -->
+    <section id="screen-diagnostics" class="screen" data-screen="diagnostics" hidden>
+      <div class="section-head"><h2>Diagnostyka</h2><span class="muted">doctor, stos AI, backupy</span></div>
+      <div data-panel="diagnostics" class="panel"></div>
+    </section>
+
+    <!-- COGNITION ----------------------------------------------------- -->
+    <section id="screen-cognition" class="screen" data-screen="cognition" hidden>
+      <div class="block-head sticky">
+        <h2>Poznanie</h2>
+        <span class="muted">co SENTINEL naprawdę zrobił w ostatnim przebiegu</span>
+      </div>
+      <div class="card">
+        <div class="block-head">
+          <h3>Ostatni przebieg</h3>
+          <button class="ghost-btn" id="btn-cognition-refresh" type="button">Odśwież</button>
+        </div>
+        <div data-panel="cognition" class="cognition-panel"></div>
+      </div>
+      <div class="card">
+        <div class="block-head">
+          <h3>Oś czasu zdarzeń</h3>
+          <span class="muted">typowane zdarzenia z magistrali</span>
+        </div>
+        <ol data-panel="eventlog" class="eventlog"></ol>
+      </div>
+      <div class="card">
+        <div class="block-head">
+          <h3>Doświadczenie</h3>
+          <span class="muted">strategie, które działają — z próbkami i wynikiem</span>
+        </div>
+        <div data-panel="experience" class="experience-panel"></div>
+      </div>
+      <div class="card">
+        <div class="block-head">
+          <h3>Zmiany w kodzie</h3>
+          <span class="muted">etap → weryfikacja → diff → zatwierdzenie → zapis</span>
+        </div>
+        <div data-panel="patches" class="patches-panel"></div>
+      </div>
+      <div class="card">
+        <div class="block-head">
+          <h3>Niezawodność</h3>
+          <span class="muted">bezpieczniki, incydenty, watchdogi</span>
+        </div>
+        <div data-panel="reliability" class="reliability-panel"></div>
+      </div>
+      <div class="card">
+        <div class="block-head">
+          <h3>Model i sprzęt</h3>
+          <span class="muted">profil pracy · realne modele w pamięci · VRAM</span>
+        </div>
+        <div class="row-actions" id="runtime-profiles" role="group" aria-label="Profil pracy modeli"></div>
+        <div data-panel="runtime" class="runtime-panel"></div>
+      </div>
+      <div class="card">
+        <div class="block-head">
+          <h3>Graf wiedzy</h3>
+          <span class="muted">relacje z proveniencją, węzły i krawędzie</span>
+        </div>
+        <form class="inline-form" id="graph-form" autocomplete="off">
+          <input id="graph-query" type="search" placeholder="np. Atlas" aria-label="Szukaj w grafie" maxlength="120">
+          <button class="btn" type="submit">Szukaj</button>
+          <button class="btn btn-ghost" type="button" id="graph-sync">Uzupełnij z pamięci</button>
+        </form>
+        <div data-panel="graph" class="graph-panel"></div>
+      </div>
+      <div class="card">
+        <div class="block-head">
+          <h3>Organizacja</h3>
+          <span class="muted">warstwy, domeny i limit delegacji</span>
+        </div>
+        <div data-panel="org" class="org-panel"></div>
+      </div>
+      <div class="card">
+        <div class="block-head">
+          <h3>MCP</h3>
+          <span class="muted">opcjonalne serwery zewnętrzne; domyślnie wyłączone</span>
+        </div>
+        <div data-panel="mcp" class="mcp-panel"></div>
+      </div>
+    </section>
+
+    <section id="screen-activity" class="screen" data-screen="activity" hidden>
+      <div class="block-head sticky">
+        <h2>Activity</h2>
+        <div class="segmented" id="activity-filter" role="group" aria-label="Filter activity">
+          <button type="button" class="seg is-on" data-filter="all">All</button>
+          <button type="button" class="seg" data-filter="command">Commands</button>
+          <button type="button" class="seg" data-filter="security">Security</button>
+        </div>
+      </div>
+      <div class="card timeline" id="timeline">
+        <p class="empty">Nothing yet. Commands you run will appear here.</p>
+      </div>
+    </section>
+
+    <!-- DEVICES ------------------------------------------------------- -->
+    <section id="screen-devices" class="screen" data-screen="devices" hidden>
+      <div class="block-head sticky">
+        <h2>Devices</h2>
+        <button class="ghost-btn" id="btn-pair-new" type="button">Pair another</button>
+      </div>
+      <div id="devices" class="devices"></div>
+      <div class="card note-card">
+        <h3>How this stays private</h3>
+        <ul class="ticks">
+          <li>The channel key is derived fresh every time you connect (ECDH P-256).</li>
+          <li>Both sides prove they know the pairing key before a single command is sent.</li>
+          <li>Messages are AES-256-GCM with a counter, so replays are rejected.</li>
+          <li>Nothing reaches a cloud service — the phone talks only to your hardware.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- SETTINGS ------------------------------------------------------ -->
+    <section id="screen-settings" class="screen" data-screen="settings" hidden>
+      <div class="block-head sticky"><h2>Settings</h2></div>
+      <div class="card">
+        <h3>This connection</h3>
+        <dl class="kv" id="conn-kv"></dl>
+        <div class="row-actions">
+          <button class="ghost-btn" id="btn-reconnect" type="button">Reconnect</button>
+          <button class="ghost-btn" id="btn-diagnostics" type="button">Diagnostics</button>
+          <button class="ghost-btn danger" id="btn-unpair" type="button">Unpair this phone</button>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Policy on the PC</h3>
+        <dl class="kv" id="policy-kv"></dl>
+        <p class="hint">Change these in the PC console — SENTINEL will not let the phone widen its own permissions.</p>
+      </div>
+      <div class="card">
+        <h3>App</h3>
+        <dl class="kv" id="app-kv"></dl>
+        <div class="row-actions">
+          <button class="ghost-btn" id="btn-install" type="button" hidden>Install on this phone</button>
+          <button class="ghost-btn" id="btn-demo-out" type="button">Leave demo</button>
+        </div>
+      </div>
+      <pre id="settings-diag" class="diag-log" hidden></pre>
+    </section>
+  </main>
+
+  <nav class="tabbar" aria-label="Sections">
+    <button class="tab is-on" data-tab="home" type="button">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>
+      <span>Home</span>
+    </button>
+    <button class="tab" data-tab="chat" type="button">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8.5 8.5 0 0 1-12.4 7.6L3 21l1.4-5.6A8.5 8.5 0 1 1 21 12Z"/></svg>
+      <span>Chat</span>
+    </button>
+    <button class="tab" data-tab="agents" type="button">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="10" r="2.4"/><path d="M3 19a6 6 0 0 1 12 0M15 19a5 5 0 0 1 6-4.6"/></svg>
+      <span>Agenci</span>
+    </button>
+    <button class="tab" data-tab="tools" type="button">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 6a4 4 0 0 0 5 5l-8 8-4-4 8-8a4 4 0 0 0-1-1Z"/><path d="M5 19l2-2"/></svg>
+      <span>Narzędzia</span>
+    </button>
+    <button class="tab" data-tab="tasks" type="button">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h11M8 12h11M8 18h11"/><circle cx="4" cy="6" r="1.2"/><circle cx="4" cy="12" r="1.2"/><circle cx="4" cy="18" r="1.2"/></svg>
+      <span>Zadania</span>
+    </button>
+    <button class="tab" data-tab="memory" type="button">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a5 5 0 0 1 5 5v1a4 4 0 0 1 0 8v1a3 3 0 0 1-5 2.2A3 3 0 0 1 7 18v-1a4 4 0 0 1 0-8V8a5 5 0 0 1 5-5Z"/></svg>
+      <span>Pamięć</span>
+    </button>
+    <button class="tab" data-tab="knowledge" type="button">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H19v16H6.5A2.5 2.5 0 0 0 4 21.5Z"/><path d="M8 7h7M8 11h5"/></svg>
+      <span>Wiedza</span>
+    </button>
+    <button class="tab" data-tab="automations" type="button">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3.5 2"/></svg>
+      <span>Automaty</span>
+    </button>
+    <button class="tab" data-tab="computer" type="button">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>
+      <span>Komputer</span>
+    </button>
+    <button class="tab" data-tab="devices" type="button">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M10.5 18.5h3"/></svg>
+      <span>Urządzenia</span>
+    </button>
+    <button class="tab" data-tab="models" type="button">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 4v10l-7 4-7-4V7Z"/><path d="M12 12l7-4M12 12v9M12 12L5 8"/></svg>
+      <span>Modele</span>
+    </button>
+    <button class="tab" data-tab="cognition" type="button">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 3a9 9 0 0 0-9 9M12 21a9 9 0 0 0 9-9M4.6 5.4l2 2M19.4 18.6l-2-2M12 3v3M12 21v-3"/></svg>
+      <span>Poznanie</span>
+    </button>
+    <button class="tab" data-tab="activity" type="button">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2-5 3 10 2-5h7"/></svg>
+      <span>Aktywność</span>
+    </button>
+    <button class="tab" data-tab="diagnostics" type="button">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h3l2-4 3 8 2-6 2 2h6"/></svg>
+      <span>Diagnostyka</span>
+    </button>
+    <button class="tab" data-tab="settings" type="button">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a7.9 7.9 0 0 0 .1-1 7.9 7.9 0 0 0-.1-1l2-1.5-2-3.4-2.3 1a8 8 0 0 0-1.7-1L15 2.5h-4l-.4 2.6a8 8 0 0 0-1.7 1l-2.3-1-2 3.4L6.6 10a7.9 7.9 0 0 0 0 2l-2 1.5 2 3.4 2.3-1a8 8 0 0 0 1.7 1l.4 2.6h4l.4-2.6a8 8 0 0 0 1.7-1l2.3 1 2-3.4Z"/></svg>
+      <span>Ustawienia</span>
+    </button>
+  </nav>
+</div>
+
+<!-- ── overlays ────────────────────────────────────────────────────────── -->
+<div id="toasts" class="toasts" role="status" aria-live="polite"></div>
+
+<div id="sheet-backdrop" class="sheet-backdrop" hidden></div>
+<aside id="sheet" class="sheet" hidden role="dialog" aria-modal="true" aria-labelledby="sheet-title">
+  <header class="sheet-head">
+    <h2 id="sheet-title">Confirm</h2>
+    <button class="icon-btn" id="sheet-close" type="button" aria-label="Close">
+      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg>
+    </button>
+  </header>
+  <div class="sheet-body" id="sheet-body"></div>
+  <footer class="sheet-foot" id="sheet-foot"></footer>
+</aside>
+
+<script src="/transport.js"></script>
+<script src="/app.js"></script>
+<script src="/ai.js" defer></script>
+</body>
+</html>

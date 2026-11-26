@@ -1,0 +1,2781 @@
+{
+  "version": "7.2.0",
+  "at": "2026-11-25T20:38:34.231Z",
+  "platform": "linux/x64",
+  "tools": 689,
+  "categories": {
+    "ai": 13,
+    "automation": 6,
+    "code": 26,
+    "communication": 8,
+    "data": 11,
+    "desktop": 10,
+    "dev": 5,
+    "documents": 12,
+    "esp32": 5,
+    "files": 19,
+    "finance": 26,
+    "geometry": 20,
+    "git": 10,
+    "healing": 6,
+    "knowledge": 24,
+    "learning": 33,
+    "math": 122,
+    "mcp": 4,
+    "memory": 21,
+    "mobile": 3,
+    "network": 11,
+    "orchestration": 9,
+    "perf": 3,
+    "productivity": 20,
+    "programming": 10,
+    "reasoning": 10,
+    "science": 63,
+    "security": 18,
+    "statistics": 34,
+    "system": 39,
+    "tasks": 5,
+    "text": 51,
+    "time": 25,
+    "vision": 3,
+    "voice": 4
+  },
+  "categoryCount": 35,
+  "permissions": {
+    "read": 579,
+    "write": 68,
+    "system": 38,
+    "network": 3,
+    "privileged": 1
+  },
+  "structural": {
+    "checked": 689,
+    "problems": [],
+    "ok": true
+  },
+  "execution": {
+    "attempted": 388,
+    "verified": 388,
+    "failed": 0,
+    "results": [
+      {
+        "tool": "system.info",
+        "ok": true,
+        "code": null,
+        "ms": 56,
+        "message": null
+      },
+      {
+        "tool": "math.eval",
+        "ok": true,
+        "code": null,
+        "ms": 16,
+        "message": null
+      },
+      {
+        "tool": "math.percent",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "graph.stats",
+        "ok": true,
+        "code": null,
+        "ms": 2,
+        "message": null
+      },
+      {
+        "tool": "runtime.status",
+        "ok": true,
+        "code": null,
+        "ms": 36,
+        "message": null
+      },
+      {
+        "tool": "mcp.status",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "task.list",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "memory.stats",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "kb.stats",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "kb.list",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "fs.list",
+        "ok": true,
+        "code": null,
+        "ms": 3,
+        "message": null
+      },
+      {
+        "tool": "system.snapshot",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "org.status",
+        "ok": true,
+        "code": null,
+        "ms": 2,
+        "message": null
+      },
+      {
+        "tool": "org.plan",
+        "ok": true,
+        "code": null,
+        "ms": 3,
+        "message": null
+      },
+      {
+        "tool": "lab.status",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "models.capabilities",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "reason.contradictions",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "skill.list",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "research.list",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "memory.due",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "memory.migrate_preview",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "repo.map",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "data.csv_parse",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "data.csv_generate",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "data.json_flatten",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "data.json_path",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "data.json_diff",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "data.table_group",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "data.table_sort",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "data.table_filter",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "data.columns",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "data.dedupe",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "data.join",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "stats.describe",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "stats.percentile",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "stats.histogram",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "stats.correlation",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "stats.linear_regression",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "stats.outliers",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "stats.zscores",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "stats.sample",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "stats.mean_ci",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "stats.two_proportion",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "text.extract",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "text.redact",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "text.slugify",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "text.levenshtein",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "text.similarity",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "text.chunk",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "text.keywords",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "text.stats",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "time.parse",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "time.diff",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "hypercore.status",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "hypercore.goals",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "hypercore.conflicts",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "hypercore.attention",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "hypercore.focus",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "reranker.status",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "communication.status",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "communication.history",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "science.length_convert",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "science.temperature_convert",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "science.prime_factors",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "science.quadratic",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "science.gcd_lcm",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "science.mod_pow",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "planning.critical_path",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "planning.pert",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "planning.working_days",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "calendar.week_number",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "finance.budget_split",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "decision.matrix",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "assistant.briefing",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "calendar.status",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "calendar.upcoming",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "calendar.export_ics",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "proactive.status",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "lab.sentiment_status",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "specialists.status",
+        "ok": true,
+        "code": null,
+        "ms": 3,
+        "message": null
+      },
+      {
+        "tool": "time.add",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "encode.base64",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "encode.hex",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "encode.url",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "encode.hash",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "encode.uuid",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "finx.amortization_row",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "finx.break_even_units",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "finx.cagr",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "finx.compound_amount",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "finx.compound_interest",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "finx.discount",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "finx.fee_adjusted_return",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "finx.future_value_series",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "finx.loan_payment",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "finx.loan_total_interest",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "finx.margin",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "finx.markup",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "finx.npv",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "finx.percentage_change",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "finx.present_value",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "finx.real_return",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "finx.rule_of_72",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "finx.savings_goal_deposit",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "finx.simple_interest",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "finx.vat_add",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "finx.vat_extract",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "geom.arc_length",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "geom.circle_area",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "geom.circle_circumference",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "geom.cone_volume",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "geom.cuboid_volume",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "geom.cylinder_volume",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "geom.distance_2d",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "geom.distance_3d",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "geom.midpoint_2d",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "geom.point_line_distance",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "geom.rectangle_area",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "geom.rectangle_perimeter",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "geom.regular_polygon_area",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "geom.sector_area",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "geom.slope",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "geom.sphere_surface",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "geom.sphere_volume",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "geom.square_area",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "geom.triangle_area_base_height",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "geom.triangle_area_heron",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "basex.binary_string",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "basex.from_decimal",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "basex.from_gray",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "basex.gray_code",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "basex.hex_string",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "basex.to_decimal",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "bits.and",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "bits.is_power_of_two",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "bits.next_power_of_two",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "bits.not",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "bits.or",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "bits.parity",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "bits.popcount",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "bits.shift_left",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "bits.shift_right",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "bits.xor",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "matrix.add",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "matrix.determinant",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "matrix.identity",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "matrix.inverse",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "matrix.multiply",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "matrix.rank",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "matrix.scale",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "matrix.subtract",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "matrix.trace",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "matrix.transpose",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "numext.abs",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "numext.acos",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "numext.acosh",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "numext.add",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "numext.asin",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "numext.asinh",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "numext.atan",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "numext.atan2",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "numext.atanh",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "numext.catalan",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "numext.cbrt",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "numext.ceil",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "numext.clamp",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "numext.combinations",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "numext.cos",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "numext.cosh",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "numext.degrees",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "numext.divide",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "numext.divisors",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "numext.exp",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "numext.factorial",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "numext.fibonacci",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "numext.floor",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "numext.gcd",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "numext.hypot",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "numext.hypot_many",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "numext.inverse_lerp",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "numext.is_prime",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "numext.lcm",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "numext.lerp",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "numext.ln",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "numext.log_base",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "numext.log10",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "numext.lucas",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "numext.max",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "numext.min",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "numext.modulo",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "numext.multiply",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "numext.next_prime",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "numext.percent_of",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "numext.permutations",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "numext.power",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "numext.prime_factors",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "numext.product",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "numext.radians",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "numext.remap",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "numext.round",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "numext.safe_divide",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "numext.sign",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "numext.sin",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "numext.sinh",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "numext.sqrt",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "numext.subtract",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "numext.sum",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "numext.tan",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "numext.tanh",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "numext.truncate",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "seqx.arithmetic_nth",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "seqx.arithmetic_sum",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "seqx.batch",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "seqx.collatz",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "seqx.consecutive_differences",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "seqx.consecutive_ratios",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "seqx.geometric_nth",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "seqx.geometric_sum",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "seqx.range_list",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "seqx.square_pyramidal",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "seqx.sum_squares",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "seqx.triangular",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "setx.cartesian_product",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "setx.difference",
+        "ok": true,
+        "code": null,
+        "ms": 2,
+        "message": null
+      },
+      {
+        "tool": "setx.intersection",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "setx.is_disjoint",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "setx.is_subset",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "setx.power_set",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "setx.symmetric_difference",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "setx.union",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "phys.acceleration",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "phys.centripetal_acceleration",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "phys.density",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "phys.electrical_power",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "phys.escape_velocity",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "phys.force",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "phys.gravitational_force",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "phys.heat_energy",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "phys.ideal_gas_pressure",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "phys.kinetic_energy",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "phys.momentum",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "phys.ohms_law_current",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "phys.ohms_law_resistance",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "phys.ohms_law_voltage",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "phys.photon_energy",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "phys.potential_energy",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "phys.power",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "phys.pressure",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "phys.velocity",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "phys.wave_frequency",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "phys.wavelength",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "phys.weight",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "phys.work",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "unitsx.angle",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "unitsx.data_decimal",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "unitsx.decimal_to_dms",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "unitsx.dms_to_decimal",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "unitsx.energy",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "unitsx.fuel_consumption",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "unitsx.length",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "unitsx.mass",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "unitsx.power",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "unitsx.pressure",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "unitsx.si_prefix",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "unitsx.speed",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "unitsx.temperature",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "unitsx.time",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "unitsx.volume",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "checksumx.constant_time_check_prefix",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "checksumx.crc32",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "checksumx.hmac_sha256",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "checksumx.md5",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "checksumx.random_hex",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "checksumx.sha1",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "checksumx.sha256",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "checksumx.sha384",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "checksumx.sha512",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "checksumx.timing_safe_equal",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "statx.coefficient_of_variation",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "statx.correlation_pearson",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "statx.correlation_spearman",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "statx.covariance_population",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "statx.covariance_sample",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "statx.cumulative_sum",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "statx.differences",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "statx.entropy_shannon",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "statx.exponential_moving_average",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "statx.geometric_mean",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "statx.gini",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "statx.harmonic_mean",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "statx.histogram",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "statx.iqr",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "statx.kurtosis_excess",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "statx.linear_fit",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "statx.mean",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "statx.mean_confidence_interval",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "statx.median",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "statx.mode",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "statx.moving_average",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "statx.outlier_indices",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "statx.predict_linear",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "statx.quantile",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "statx.range",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "statx.skewness",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "statx.stddev_population",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "statx.stddev_sample",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "statx.trimmed_mean",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "statx.variance_population",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "statx.variance_sample",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "statx.weighted_mean",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "statx.zscore",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "statx.zscores",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "fmtx.bullet_list",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "fmtx.bytes",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "fmtx.compact",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "fmtx.csv_quote",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "fmtx.duration",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "fmtx.from_roman",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "fmtx.group_digits",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "fmtx.ordinal_en",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "fmtx.ordinal_pl",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "fmtx.percent",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "fmtx.roman",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "fmtx.scientific",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "fmtx.table_markdown",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "txtx.base64_decode",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "txtx.base64_encode",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "txtx.caesar",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "txtx.camel_case",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "txtx.count_chars",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "txtx.count_digits",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "txtx.count_letters",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "txtx.count_sentences",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "txtx.count_words",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "txtx.escape_html",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "txtx.frequency",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "txtx.hex_decode",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "txtx.hex_encode",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "txtx.initials",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "txtx.is_anagram",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "txtx.is_palindrome",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "txtx.kebab_case",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "txtx.longest_word",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "txtx.lower",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "txtx.mask",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "txtx.ngrams",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "txtx.normalize_whitespace",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "txtx.pascal_case",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "txtx.remove_diacritics",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "txtx.reverse",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "txtx.reverse_words",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "txtx.rot13",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "txtx.sentence_case",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "txtx.snake_case",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "txtx.strip_html",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "txtx.title_case",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "txtx.top_words",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "txtx.truncate",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "txtx.unescape_html",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "txtx.upper",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "txtx.vowel_count",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "txtx.word_lengths",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "txtx.wrap",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "datex.add_business_days",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "datex.add_days",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "datex.add_hours",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "datex.add_months",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "datex.age",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "datex.business_days_between",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "datex.day_of_week",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "datex.day_of_year",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "datex.days_in_month",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "datex.diff_days",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "datex.diff_ms",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "datex.easter_sunday",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "datex.end_of_day",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "datex.end_of_month",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "datex.from_unix",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "datex.is_leap_year",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "datex.iso_week",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "datex.next_weekday",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "datex.quarter",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "datex.range_overlaps",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "datex.start_of_day",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "datex.start_of_month",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "datex.start_of_week",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "datex.start_of_year",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "datex.to_unix",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      }
+    ],
+    "note": "Only these tools were executed. Every other tool is unverified, not \"verified\"."
+  },
+  "unexecuted": 301
+}

@@ -1,0 +1,562 @@
+{
+  "version": "6.0.0",
+  "at": "2026-11-24T15:56:00.919Z",
+  "platform": "linux/x64",
+  "node": "v22.22.3",
+  "task": "intent-classification",
+  "dataset": {
+    "items": 346,
+    "labels": 10,
+    "provenance": "synthetic, project-authored, non-sensitive",
+    "hash": "f666c9c2b2fffafac8971aa6ac4c58fede18bff2da79ae78c625a43ecaa37293"
+  },
+  "split": {
+    "train": 249,
+    "validation": 48,
+    "test": 49,
+    "hash": "2f242fc5a566d8197c6405a7b0e7d4a94b31b7572232fe2c76e7127251f00aee",
+    "contamination": {
+      "clean": true,
+      "problems": [],
+      "checked": 346
+    },
+    "curated": [
+      {
+        "moved": "move project directory without deleting",
+        "from": "validation",
+        "twin": "list project directory without deleting"
+      },
+      {
+        "moved": "fix a unit test and show the result",
+        "from": "validation",
+        "twin": "add a unit test and show the result"
+      },
+      {
+        "moved": "run a model checkpoint with metrics",
+        "from": "test",
+        "twin": "show a model checkpoint with metrics"
+      }
+    ]
+  },
+  "hyperparameters": {
+    "epochs": 60,
+    "seed": 7,
+    "hidden": [
+      24,
+      12
+    ],
+    "learningRate": 0.004,
+    "batchSize": 16,
+    "patience": 10,
+    "l2": 0.002,
+    "features": "hashed-ngram-v1"
+  },
+  "training": {
+    "epochsRun": 22,
+    "bestEpoch": 11,
+    "bestValidationLoss": 0.6599,
+    "history": [
+      {
+        "epoch": 0,
+        "trainLoss": 2.28074,
+        "validationLoss": 2.24201,
+        "validationAccuracy": 0.22916666666666666
+      },
+      {
+        "epoch": 1,
+        "trainLoss": 2.15468,
+        "validationLoss": 2.10502,
+        "validationAccuracy": 0.3333333333333333
+      },
+      {
+        "epoch": 2,
+        "trainLoss": 1.9302,
+        "validationLoss": 1.86045,
+        "validationAccuracy": 0.5208333333333334
+      },
+      {
+        "epoch": 3,
+        "trainLoss": 1.57755,
+        "validationLoss": 1.52981,
+        "validationAccuracy": 0.6666666666666666
+      },
+      {
+        "epoch": 4,
+        "trainLoss": 1.16611,
+        "validationLoss": 1.19458,
+        "validationAccuracy": 0.75
+      },
+      {
+        "epoch": 5,
+        "trainLoss": 0.7898,
+        "validationLoss": 0.93532,
+        "validationAccuracy": 0.75
+      },
+      {
+        "epoch": 6,
+        "trainLoss": 0.51349,
+        "validationLoss": 0.79806,
+        "validationAccuracy": 0.75
+      },
+      {
+        "epoch": 7,
+        "trainLoss": 0.33057,
+        "validationLoss": 0.72112,
+        "validationAccuracy": 0.7708333333333334
+      },
+      {
+        "epoch": 8,
+        "trainLoss": 0.22054,
+        "validationLoss": 0.68691,
+        "validationAccuracy": 0.8125
+      },
+      {
+        "epoch": 9,
+        "trainLoss": 0.14827,
+        "validationLoss": 0.66386,
+        "validationAccuracy": 0.7916666666666666
+      },
+      {
+        "epoch": 10,
+        "trainLoss": 0.10105,
+        "validationLoss": 0.67346,
+        "validationAccuracy": 0.7708333333333334
+      },
+      {
+        "epoch": 11,
+        "trainLoss": 0.07332,
+        "validationLoss": 0.65994,
+        "validationAccuracy": 0.7708333333333334
+      },
+      {
+        "epoch": 12,
+        "trainLoss": 0.05464,
+        "validationLoss": 0.66288,
+        "validationAccuracy": 0.7916666666666666
+      },
+      {
+        "epoch": 13,
+        "trainLoss": 0.04272,
+        "validationLoss": 0.66998,
+        "validationAccuracy": 0.7708333333333334
+      },
+      {
+        "epoch": 14,
+        "trainLoss": 0.03403,
+        "validationLoss": 0.66926,
+        "validationAccuracy": 0.7916666666666666
+      },
+      {
+        "epoch": 15,
+        "trainLoss": 0.02756,
+        "validationLoss": 0.66726,
+        "validationAccuracy": 0.7708333333333334
+      },
+      {
+        "epoch": 16,
+        "trainLoss": 0.02292,
+        "validationLoss": 0.67461,
+        "validationAccuracy": 0.7708333333333334
+      },
+      {
+        "epoch": 17,
+        "trainLoss": 0.01964,
+        "validationLoss": 0.6797,
+        "validationAccuracy": 0.7708333333333334
+      },
+      {
+        "epoch": 18,
+        "trainLoss": 0.01685,
+        "validationLoss": 0.68114,
+        "validationAccuracy": 0.75
+      },
+      {
+        "epoch": 19,
+        "trainLoss": 0.01472,
+        "validationLoss": 0.68139,
+        "validationAccuracy": 0.75
+      },
+      {
+        "epoch": 20,
+        "trainLoss": 0.01301,
+        "validationLoss": 0.6882,
+        "validationAccuracy": 0.75
+      },
+      {
+        "epoch": 21,
+        "trainLoss": 0.01154,
+        "validationLoss": 0.68741,
+        "validationAccuracy": 0.75
+      }
+    ]
+  },
+  "metrics": {
+    "cases": 49,
+    "correct": 39,
+    "accuracy": 0.796,
+    "macroF1": 0.799,
+    "perClass": {
+      "chat": {
+        "support": 5,
+        "recall": 0.6,
+        "hits": 3
+      },
+      "code": {
+        "support": 5,
+        "recall": 0.6,
+        "hits": 3
+      },
+      "documents": {
+        "support": 5,
+        "recall": 1,
+        "hits": 5
+      },
+      "files": {
+        "support": 5,
+        "recall": 0.8,
+        "hits": 4
+      },
+      "learning": {
+        "support": 4,
+        "recall": 1,
+        "hits": 4
+      },
+      "memory": {
+        "support": 5,
+        "recall": 0.8,
+        "hits": 4
+      },
+      "network": {
+        "support": 5,
+        "recall": 0.6,
+        "hits": 3
+      },
+      "planning": {
+        "support": 5,
+        "recall": 1,
+        "hits": 5
+      },
+      "security": {
+        "support": 5,
+        "recall": 0.6,
+        "hits": 3
+      },
+      "status": {
+        "support": 5,
+        "recall": 1,
+        "hits": 5
+      }
+    },
+    "confusion": [
+      [
+        3,
+        0,
+        1,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        3,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0
+      ],
+      [
+        0,
+        0,
+        5,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        4,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        0,
+        4,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        1,
+        0,
+        0,
+        4,
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        1,
+        1,
+        0,
+        0,
+        3,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        5,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        3,
+        1
+      ],
+      [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        5
+      ]
+    ]
+  },
+  "baseline": {
+    "cases": 49,
+    "correct": 37,
+    "accuracy": 0.755,
+    "macroF1": 0.749,
+    "perClass": {
+      "chat": {
+        "support": 5,
+        "recall": 1,
+        "hits": 5
+      },
+      "code": {
+        "support": 5,
+        "recall": 0.6,
+        "hits": 3
+      },
+      "documents": {
+        "support": 5,
+        "recall": 1,
+        "hits": 5
+      },
+      "files": {
+        "support": 5,
+        "recall": 1,
+        "hits": 5
+      },
+      "learning": {
+        "support": 4,
+        "recall": 0.75,
+        "hits": 3
+      },
+      "memory": {
+        "support": 5,
+        "recall": 0.6,
+        "hits": 3
+      },
+      "network": {
+        "support": 5,
+        "recall": 1,
+        "hits": 5
+      },
+      "planning": {
+        "support": 5,
+        "recall": 0.6,
+        "hits": 3
+      },
+      "security": {
+        "support": 5,
+        "recall": 0.2,
+        "hits": 1
+      },
+      "status": {
+        "support": 5,
+        "recall": 0.8,
+        "hits": 4
+      }
+    },
+    "confusion": [
+      [
+        5,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        1,
+        3,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        5,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        5,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        1,
+        0,
+        0,
+        0,
+        3,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        2,
+        0,
+        0,
+        0,
+        0,
+        3,
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        5,
+        0,
+        0,
+        0
+      ],
+      [
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        3,
+        0,
+        1
+      ],
+      [
+        0,
+        0,
+        1,
+        3,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0
+      ],
+      [
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        4
+      ]
+    ]
+  },
+  "delta": 0.041,
+  "artifact": {
+    "bytes": 197681,
+    "checksum": "61f8bf8b33ded7c15da73b8c3ea70cde3472927df9dff176da3ee0b5a3209958",
+    "location": "SENTINEL_HOME/models (not in the repository)"
+  },
+  "durationMs": 606,
+  "status": "candidate",
+  "honest": "CPU-trained small MLP on synthetic data; not LoRA and not a language model. Weights are not committed."
+}

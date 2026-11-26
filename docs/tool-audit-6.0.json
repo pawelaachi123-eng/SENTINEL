@@ -1,0 +1,467 @@
+{
+  "version": "6.0.0",
+  "at": "2026-11-24T15:56:01.179Z",
+  "platform": "linux/x64",
+  "tools": 270,
+  "categories": {
+    "ai": 13,
+    "automation": 6,
+    "code": 26,
+    "data": 11,
+    "desktop": 10,
+    "dev": 5,
+    "documents": 12,
+    "esp32": 5,
+    "files": 19,
+    "git": 10,
+    "healing": 6,
+    "knowledge": 22,
+    "learning": 5,
+    "math": 19,
+    "mcp": 4,
+    "memory": 21,
+    "mobile": 3,
+    "network": 11,
+    "perf": 3,
+    "security": 8,
+    "system": 39,
+    "tasks": 5,
+    "vision": 3,
+    "voice": 4
+  },
+  "categoryCount": 24,
+  "permissions": {
+    "read": 192,
+    "write": 47,
+    "system": 27,
+    "network": 3,
+    "privileged": 1
+  },
+  "structural": {
+    "checked": 270,
+    "problems": [],
+    "ok": true
+  },
+  "execution": {
+    "attempted": 59,
+    "verified": 59,
+    "failed": 0,
+    "results": [
+      {
+        "tool": "system.info",
+        "ok": true,
+        "code": null,
+        "ms": 34,
+        "message": null
+      },
+      {
+        "tool": "math.eval",
+        "ok": true,
+        "code": null,
+        "ms": 16,
+        "message": null
+      },
+      {
+        "tool": "math.percent",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "graph.stats",
+        "ok": true,
+        "code": null,
+        "ms": 2,
+        "message": null
+      },
+      {
+        "tool": "runtime.status",
+        "ok": true,
+        "code": null,
+        "ms": 41,
+        "message": null
+      },
+      {
+        "tool": "mcp.status",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "task.list",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "memory.stats",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "kb.stats",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "kb.list",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "fs.list",
+        "ok": true,
+        "code": null,
+        "ms": 4,
+        "message": null
+      },
+      {
+        "tool": "system.snapshot",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "org.status",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "org.plan",
+        "ok": true,
+        "code": null,
+        "ms": 2,
+        "message": null
+      },
+      {
+        "tool": "lab.status",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "models.capabilities",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "reason.contradictions",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "skill.list",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "research.list",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "memory.due",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "memory.migrate_preview",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "repo.map",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "data.csv_parse",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "data.csv_generate",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "data.json_flatten",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "data.json_path",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "data.json_diff",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "data.table_group",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "data.table_sort",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "data.table_filter",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "data.columns",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "data.dedupe",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "data.join",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "stats.describe",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "stats.percentile",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "stats.histogram",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "stats.correlation",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "stats.linear_regression",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "stats.outliers",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "stats.zscores",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "stats.sample",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "stats.mean_ci",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "stats.two_proportion",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "text.extract",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "text.redact",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "text.slugify",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "text.levenshtein",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "text.similarity",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "text.chunk",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "text.keywords",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "text.stats",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "time.parse",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "time.diff",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "time.add",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "encode.base64",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "encode.hex",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "encode.url",
+        "ok": true,
+        "code": null,
+        "ms": null,
+        "message": null
+      },
+      {
+        "tool": "encode.hash",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      },
+      {
+        "tool": "encode.uuid",
+        "ok": true,
+        "code": null,
+        "ms": 1,
+        "message": null
+      }
+    ],
+    "note": "Only these tools were executed. Every other tool is unverified, not \"verified\"."
+  },
+  "unexecuted": 211
+}

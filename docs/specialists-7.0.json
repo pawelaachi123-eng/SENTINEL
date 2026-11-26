@@ -1,0 +1,279 @@
+{
+  "version": "7.0.0",
+  "at": "2026-11-25T07:41:36.488Z",
+  "platform": "linux/x64",
+  "node": "v22.22.3",
+  "hardware": "CPU only; no GPU was used or measured",
+  "totalMs": 5778,
+  "models": {
+    "tools": {
+      "experiment": "tools_2026-11-25T07-41-34-542Z_16",
+      "dataset": {
+        "items": 79,
+        "labels": [
+          "assistant.briefing",
+          "data.csv_parse",
+          "fs.list",
+          "graph.query",
+          "lab.status",
+          "memory.recall",
+          "memory.remember",
+          "repo.map",
+          "research.start",
+          "security.scan",
+          "stats.describe",
+          "system.info",
+          "system.snapshot",
+          "task.create",
+          "text.slugify"
+        ],
+        "provenance": "authored requests mapped to real tool names",
+        "hash": "222e90cda7b0a3ac9840319dc150f6a8c3ec582c37bf5565910f5cf24c765868"
+      },
+      "split": {
+        "train": 719,
+        "validation": 16,
+        "test": 16
+      },
+      "metrics": {
+        "cases": 16,
+        "accuracy": 0.8125,
+        "macroF1": 0.7556
+      },
+      "baseline": {
+        "cases": 16,
+        "accuracy": 0.6875,
+        "macroF1": 0.5937
+      },
+      "delta": 0.125,
+      "gate": {
+        "passed": true,
+        "rule": "held-out accuracy must be at least the named baseline"
+      },
+      "training": {
+        "bestEpoch": 10,
+        "bestValidationLoss": 0.013428388498128873,
+        "epochsRun": 51,
+        "durationMs": 3474,
+        "measuredDurationMs": 3843
+      },
+      "artifact": {
+        "bytes": 423767,
+        "checksum": "76774ccf136aef75c15c14ea60bc864e9b73911b0130d366940b1ec07907c08d"
+      }
+    },
+    "routing": {
+      "experiment": "routing_2026-11-25T07-41-36-282Z_8",
+      "dataset": {
+        "items": 47,
+        "labels": [
+          "code",
+          "communication",
+          "devices",
+          "hardware",
+          "knowledge",
+          "operations",
+          "security",
+          "windows"
+        ],
+        "provenance": "authored requests mapped to eight functional domains",
+        "hash": "c957754e3989b9652137d630e48be1f7ee84139cb1c9d26cb9a7168535d8cbe3"
+      },
+      "split": {
+        "train": 421,
+        "validation": 8,
+        "test": 8
+      },
+      "metrics": {
+        "cases": 8,
+        "accuracy": 1,
+        "macroF1": 1
+      },
+      "baseline": {
+        "cases": 8,
+        "accuracy": 0.875,
+        "macroF1": 0.8333
+      },
+      "delta": 0.125,
+      "gate": {
+        "passed": true,
+        "rule": "held-out accuracy must be at least the named baseline"
+      },
+      "training": {
+        "bestEpoch": 3,
+        "bestValidationLoss": 0.2460470609965548,
+        "epochsRun": 44,
+        "durationMs": 1620,
+        "measuredDurationMs": 1738
+      },
+      "artifact": {
+        "bytes": 415172,
+        "checksum": "f9c96d65dce2f486c192ef8733bff5b369e6165b050fabdfb2a4ed89957f1d4d"
+      }
+    },
+    "relevance": {
+      "experiment": "relevance_2026-11-25T07-41-36-409Z_18",
+      "dataset": {
+        "items": 120,
+        "labels": [
+          "irrelevant",
+          "relevant"
+        ],
+        "provenance": "authored query/memory pairs with relevance labels",
+        "hash": "eb5555e1e5831e98091731ad8fd691edd48715b30ccbc57008821f3d7b164540"
+      },
+      "split": {
+        "train": 84,
+        "validation": 18,
+        "test": 18
+      },
+      "metrics": {
+        "cases": 18,
+        "accuracy": 0.9444,
+        "macroF1": 0.9443
+      },
+      "baseline": {
+        "cases": 18,
+        "accuracy": 0.6667,
+        "macroF1": 0.625
+      },
+      "delta": 0.2777,
+      "gate": {
+        "passed": true,
+        "rule": "held-out accuracy must be at least the named baseline"
+      },
+      "training": {
+        "bestEpoch": 243,
+        "bestValidationLoss": 0.00011978695300441232,
+        "epochsRun": 260,
+        "durationMs": 118,
+        "measuredDurationMs": 119
+      },
+      "artifact": {
+        "bytes": 5873,
+        "checksum": "8172397943a6312925922c859d46f4dad2576e1ee228bd31e7c56765297f438d"
+      }
+    },
+    "complexity": {
+      "experiment": "complexity_2026-11-25T07-41-36-465Z_6",
+      "dataset": {
+        "items": 40,
+        "labels": [
+          "complex",
+          "medium",
+          "simple"
+        ],
+        "provenance": "authored request complexity labels",
+        "hash": "cf13ef78144b475c703f84825a0cffab7c0296ee32dc1a5349596f451138d87b"
+      },
+      "split": {
+        "train": 28,
+        "validation": 6,
+        "test": 6
+      },
+      "metrics": {
+        "cases": 6,
+        "accuracy": 0.8333,
+        "macroF1": 0.7778
+      },
+      "baseline": {
+        "cases": 6,
+        "accuracy": 0.8333,
+        "macroF1": 0.6
+      },
+      "delta": 0,
+      "gate": {
+        "passed": true,
+        "rule": "held-out accuracy must be at least the named baseline"
+      },
+      "training": {
+        "bestEpoch": 258,
+        "bestValidationLoss": 0.0002924020967626067,
+        "epochsRun": 260,
+        "durationMs": 56,
+        "measuredDurationMs": 56
+      },
+      "artifact": {
+        "bytes": 6009,
+        "checksum": "025ae9c8212a3180014698fb41eecd28b7d4898633fb644d6125f3735e0326cd"
+      }
+    }
+  },
+  "examples": {
+    "tools": {
+      "ok": true,
+      "label": "system.info",
+      "confidence": 0.9999,
+      "neural": {
+        "label": "system.info",
+        "confidence": 0.9999
+      },
+      "baseline": "system.info",
+      "usedFallback": false,
+      "model": {
+        "experimentId": "tools_2026-11-25T07-41-34-542Z_16",
+        "checksum": "76774ccf136aef75c15c14ea60bc864e9b73911b0130d366940b1ec07907c08d",
+        "accuracy": 0.8125,
+        "baseline": 0.6875
+      }
+    },
+    "routing": {
+      "ok": true,
+      "label": "code",
+      "confidence": 0.4389,
+      "neural": {
+        "label": "windows",
+        "confidence": 0.4389
+      },
+      "baseline": "code",
+      "usedFallback": true,
+      "model": {
+        "experimentId": "routing_2026-11-25T07-41-36-282Z_8",
+        "checksum": "f9c96d65dce2f486c192ef8733bff5b369e6165b050fabdfb2a4ed89957f1d4d",
+        "accuracy": 1,
+        "baseline": 0.875
+      }
+    },
+    "relevance": {
+      "ok": true,
+      "label": "relevant",
+      "confidence": 1,
+      "neural": {
+        "label": "relevant",
+        "confidence": 1
+      },
+      "baseline": "relevant",
+      "usedFallback": false,
+      "model": {
+        "experimentId": "relevance_2026-11-25T07-41-36-409Z_18",
+        "checksum": "8172397943a6312925922c859d46f4dad2576e1ee228bd31e7c56765297f438d",
+        "accuracy": 0.9444,
+        "baseline": 0.6667
+      }
+    },
+    "complexity": {
+      "ok": true,
+      "label": "medium",
+      "confidence": 0.6831,
+      "neural": {
+        "label": "medium",
+        "confidence": 0.6831
+      },
+      "baseline": "medium",
+      "usedFallback": false,
+      "model": {
+        "experimentId": "complexity_2026-11-25T07-41-36-465Z_6",
+        "checksum": "025ae9c8212a3180014698fb41eecd28b7d4898633fb644d6125f3735e0326cd",
+        "accuracy": 0.8333,
+        "baseline": 0.8333
+      }
+    }
+  },
+  "honesty": [
+    "Datasets are authored synthetic examples, not private conversations or scraped data.",
+    "Text models use hashed character n-gram features plus authored lexical keyword features; they are not language understanding.",
+    "Held-out authored requests are never seen verbatim during fitting; generated training paraphrases come from the lexicons in core/ml/data/specialists.js.",
+    "A model at or below its named baseline is not promoted.",
+    "No live phone, email, GPU or language-model measurement is included in this file."
+  ]
+}

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SENTINEL talks to your own agent over HTTP inside your VPN.
+     Traffic is authenticated with a bearer token and the ESP32 link with HMAC;
+     cleartext is required because the agent uses a self-hosted, non-public IP. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

@@ -1,0 +1,274 @@
+{
+  "generatedAt": "2026-11-25T22:18:48.949Z",
+  "version": "8.1.0",
+  "measured": {
+    "firstPartyLines": {
+      "files": 298,
+      "lines": 84532
+    },
+    "tools": {
+      "tools": 689,
+      "categories": 35,
+      "audit": {
+        "verified": 615,
+        "attempted": 619,
+        "tools": 689,
+        "categories": 35
+      }
+    },
+    "agents": 123,
+    "checks": 2058,
+    "coding": {
+      "files": 222,
+      "symbols": 3115,
+      "uniqueSymbols": 2096,
+      "imports": 754,
+      "calls": 36338,
+      "languages": {
+        "powershell": 2,
+        "javascript": 189,
+        "c": 23,
+        "cpp": 4,
+        "java": 3,
+        "python": 1
+      },
+      "errorFiles": 0,
+      "scanMs": 861,
+      "truncated": false
+    },
+    "suites": [
+      {
+        "suite": "run",
+        "exit": 0,
+        "ms": 1366,
+        "tail": " 23 tests passed."
+      },
+      {
+        "suite": "ui",
+        "exit": 0,
+        "ms": 11520,
+        "tail": " 48/48 UI checks passed"
+      },
+      {
+        "suite": "ai",
+        "exit": 0,
+        "ms": 2544,
+        "tail": " 25 assistant checks passed."
+      },
+      {
+        "suite": "deep",
+        "exit": 0,
+        "ms": 21140,
+        "tail": " 160 deep checks passed."
+      },
+      {
+        "suite": "properties",
+        "exit": 0,
+        "ms": 66,
+        "tail": " 5 property checks passed."
+      },
+      {
+        "suite": "toolpacks",
+        "exit": 0,
+        "ms": 67,
+        "tail": "✓ 302 tools, 1510 schema/execute/expectation checks passed"
+      },
+      {
+        "suite": "agents",
+        "exit": 0,
+        "ms": 178,
+        "tail": "✓ 123 agents; routing 82/86 (95.3%)   ✓ 7 agent checks passed"
+      },
+      {
+        "suite": "training",
+        "exit": 0,
+        "ms": 3289,
+        "tail": " 23 of 23 training checks passed."
+      },
+      {
+        "suite": "executive",
+        "exit": 0,
+        "ms": 2573,
+        "tail": " 15 of 15 executive checks passed."
+      },
+      {
+        "suite": "coding",
+        "exit": 0,
+        "ms": 90,
+        "tail": " 14 of 14 coding checks passed."
+      },
+      {
+        "suite": "conformance",
+        "exit": 0,
+        "ms": 2474,
+        "tail": "210 of 210 conformance checks passed."
+      },
+      {
+        "suite": "integration",
+        "exit": 0,
+        "ms": 2480,
+        "tail": " 12 of 12 integration checks passed."
+      },
+      {
+        "suite": "requirements",
+        "exit": 0,
+        "ms": 35,
+        "tail": " 6 of 6 requirements checks passed."
+      }
+    ]
+  },
+  "requirements": {
+    "total": 34,
+    "byStatus": {
+      "NOT_STARTED": 3,
+      "IMPLEMENTED_UNTESTED": 0,
+      "PARTIAL": 22,
+      "VERIFIED": 7,
+      "BLOCKED": 2
+    },
+    "byMilestone": {
+      "M1": {
+        "total": 3,
+        "verified": 3,
+        "partial": 0,
+        "blocked": 0,
+        "notStarted": 0
+      },
+      "M2": {
+        "total": 4,
+        "verified": 3,
+        "partial": 1,
+        "blocked": 0,
+        "notStarted": 0
+      },
+      "M7": {
+        "total": 5,
+        "verified": 0,
+        "partial": 4,
+        "blocked": 0,
+        "notStarted": 1
+      },
+      "M3": {
+        "total": 2,
+        "verified": 0,
+        "partial": 2,
+        "blocked": 0,
+        "notStarted": 0
+      },
+      "M4": {
+        "total": 2,
+        "verified": 0,
+        "partial": 1,
+        "blocked": 0,
+        "notStarted": 1
+      },
+      "M5": {
+        "total": 3,
+        "verified": 0,
+        "partial": 3,
+        "blocked": 0,
+        "notStarted": 0
+      },
+      "M6": {
+        "total": 2,
+        "verified": 0,
+        "partial": 2,
+        "blocked": 0,
+        "notStarted": 0
+      },
+      "M8": {
+        "total": 2,
+        "verified": 0,
+        "partial": 2,
+        "blocked": 0,
+        "notStarted": 0
+      },
+      "M9": {
+        "total": 1,
+        "verified": 0,
+        "partial": 0,
+        "blocked": 1,
+        "notStarted": 0
+      },
+      "M10": {
+        "total": 3,
+        "verified": 0,
+        "partial": 2,
+        "blocked": 1,
+        "notStarted": 0
+      },
+      "M11": {
+        "total": 3,
+        "verified": 0,
+        "partial": 3,
+        "blocked": 0,
+        "notStarted": 0
+      },
+      "M12": {
+        "total": 4,
+        "verified": 1,
+        "partial": 2,
+        "blocked": 0,
+        "notStarted": 1
+      }
+    },
+    "verified": 7
+  },
+  "gates": {
+    "baseline": {
+      "state": "met",
+      "detail": "8.1.0, 0 parser errors"
+    },
+    "functionalChecks": {
+      "state": "met",
+      "detail": "2058/2000"
+    },
+    "requirementsGraph": {
+      "state": "met",
+      "detail": "7/34 requirements VERIFIED"
+    },
+    "tools1000": {
+      "state": "not met",
+      "detail": "689/1000"
+    },
+    "tools2000": {
+      "state": "not met",
+      "detail": "689/2000"
+    },
+    "agents250": {
+      "state": "not met",
+      "detail": "123/250"
+    },
+    "checks10000": {
+      "state": "not met",
+      "detail": "2058/10000"
+    },
+    "millionLines": {
+      "state": "not met",
+      "detail": "84532/1000000"
+    },
+    "windowsInstaller": {
+      "state": "not run",
+      "detail": "no Windows host in this environment"
+    },
+    "liveProviders": {
+      "state": "not run",
+      "detail": "requires explicit approval"
+    }
+  },
+  "targets": {
+    "lineTarget": 1000000,
+    "lineState": "not met",
+    "millionLineGap": 915468,
+    "toolsTarget": 2000,
+    "toolsState": "not met",
+    "agentTarget": 250,
+    "agentState": "not met",
+    "checkTarget": 2000,
+    "checkState": "met",
+    "checkStretchTarget": 10000,
+    "checkStretchState": "not met"
+  },
+  "failures": [],
+  "ok": true
+}

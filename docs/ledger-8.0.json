@@ -1,0 +1,115 @@
+{
+  "generatedAt": "2026-11-25T21:23:00.675Z",
+  "version": "8.0.0",
+  "measured": {
+    "firstPartyLines": {
+      "files": 283,
+      "lines": 78446
+    },
+    "tools": {
+      "tools": 689,
+      "categories": 35,
+      "audit": {
+        "verified": 530,
+        "attempted": 530,
+        "tools": 689,
+        "categories": 35
+      }
+    },
+    "agents": 123,
+    "checks": 1830,
+    "coding": {
+      "files": 217,
+      "symbols": 3044,
+      "uniqueSymbols": 2083,
+      "imports": 728,
+      "calls": 35647,
+      "languages": {
+        "powershell": 2,
+        "javascript": 184,
+        "c": 23,
+        "cpp": 4,
+        "java": 3,
+        "python": 1
+      },
+      "errorFiles": 0,
+      "scanMs": 1028,
+      "truncated": false
+    },
+    "suites": [
+      {
+        "suite": "run",
+        "exit": 0,
+        "ms": 1590,
+        "tail": " 23 tests passed."
+      },
+      {
+        "suite": "ui",
+        "exit": 0,
+        "ms": 12025,
+        "tail": " 48/48 UI checks passed"
+      },
+      {
+        "suite": "ai",
+        "exit": 0,
+        "ms": 2929,
+        "tail": " 25 assistant checks passed."
+      },
+      {
+        "suite": "deep",
+        "exit": 0,
+        "ms": 23312,
+        "tail": " 160 deep checks passed."
+      },
+      {
+        "suite": "properties",
+        "exit": 0,
+        "ms": 108,
+        "tail": " 5 property checks passed."
+      },
+      {
+        "suite": "toolpacks",
+        "exit": 0,
+        "ms": 72,
+        "tail": "✓ 302 tools, 1510 schema/execute/expectation checks passed"
+      },
+      {
+        "suite": "agents",
+        "exit": 0,
+        "ms": 195,
+        "tail": "✓ 123 agents; routing 82/86 (95.3%)   ✓ 7 agent checks passed"
+      },
+      {
+        "suite": "training",
+        "exit": 0,
+        "ms": 3606,
+        "tail": " 23 of 23 training checks passed."
+      },
+      {
+        "suite": "executive",
+        "exit": 0,
+        "ms": 2587,
+        "tail": " 15 of 15 executive checks passed."
+      },
+      {
+        "suite": "coding",
+        "exit": 0,
+        "ms": 133,
+        "tail": " 14 of 14 coding checks passed."
+      }
+    ]
+  },
+  "targets": {
+    "lineTarget": 1000000,
+    "lineState": "not met",
+    "millionLineGap": 921554,
+    "toolsTarget": 2000,
+    "toolsState": "not met",
+    "agentTarget": 250,
+    "agentState": "not met",
+    "checkTarget": 10000,
+    "checkState": "not met"
+  },
+  "failures": [],
+  "ok": true
+}

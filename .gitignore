@@ -1,0 +1,43 @@
+# Dependencies
+node_modules/
+
+# Build output (artifacts are built by CI or locally, never committed)
+dist/
+mobile/www/
+mobile/android/.gradle/
+mobile/android/app/build/
+mobile/android/build/
+*.apk
+*.aab
+*.exe
+*.msi
+*.blockmap
+
+# Local state
+.sentinel/
+*.log
+config.json
+sentinel-debug.keystore
+
+# Firmware
+firmware/.pio/
+firmware/.vscode/
+.pio/
+.pioenvs/
+.piolibdeps/
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Generated Capacitor web assets (copied from /ui at build time)
+mobile/android/app/src/main/assets/public/
+mobile/android/keystore.properties
+mobile/android/*.jks
+
+# CI failure logs published to the ci-logs branch, never to this one
+ci-logs/

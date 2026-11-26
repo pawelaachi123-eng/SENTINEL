@@ -1,0 +1,66 @@
+{
+  "version": "7.0.0",
+  "at": "2026-11-25T05:00:11.089Z",
+  "environment": {
+    "platform": "linux/x64",
+    "node": "v22.22.3",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.60GHz",
+    "cores": 2,
+    "memoryGb": 3.8,
+    "gpu": "not detected in this sandbox",
+    "note": "Linux container, no GPU passthrough. Windows figures must be measured on the target machine; these are not."
+  },
+  "measurements": {
+    "boot": {
+      "ms": 46.2,
+      "what": "constructing the agent, opening the store and building subsystems"
+    },
+    "arithmetic": {
+      "iterations": 10,
+      "p50": 3,
+      "p95": 32.37,
+      "max": 32.37,
+      "what": "full brain.ask through routing, the mathematics agent and math.eval; providers disabled",
+      "example": "100 / 8 = 12.5"
+    },
+    "semantics": {
+      "iterations": 60,
+      "p50": 0.2,
+      "p95": 0.93,
+      "what": "deterministic interpretation only (spelling, language, references); model pass is skipped without a provider"
+    },
+    "memory": {
+      "records": 150,
+      "p50": 0.94,
+      "p95": 5.19,
+      "what": "written to a temporary store in this run, then recalled 30 times"
+    },
+    "retrieval": {
+      "documents": 40,
+      "p50": 0.3,
+      "p95": 0.66,
+      "what": "knowledge search over 40 generated documents; lexical + hashed embeddings, not a model"
+    },
+    "graph": {
+      "nodes": 200,
+      "edges": 199,
+      "p50": 0.54,
+      "p95": 0.95,
+      "what": "200-node chain, bounded two-hop expansion with seed matching"
+    },
+    "executor": {
+      "stepsPerRun": 5,
+      "runs": 5,
+      "p50": 5.67,
+      "p95": 8.45,
+      "status": "done",
+      "what": "five read-only tool steps through the real DAG executor (persistence, transitions, batching)"
+    }
+  },
+  "limits": [
+    "No model was called; latency here is the deterministic core, not inference.",
+    "Linux container without a GPU: VRAM figures must be measured on the target Windows machine.",
+    "Memory and retrieval numbers use hashed embeddings, not nomic-embed-text.",
+    "Boot time is a single construction, not a cold start of Windows services."
+  ]
+}

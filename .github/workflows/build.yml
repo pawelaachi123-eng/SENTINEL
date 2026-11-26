@@ -1,0 +1,158 @@
+name: source-ci
+
+# 7.0 source-only CI. Binary packaging and publishing are deliberately disabled:
+# no EXE, MSI, APK, AAB, BIN, HEX or UF2 is produced. Android, desktop and ESP32
+# sources remain in the repository and are linted/syntax-checked, not packaged.
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: source-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  linux:
+    name: Linux source checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dev dependencies (jsdom for the UI test)
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Behaviour tests (signatures, replay, policy, secrets)
+        run: node test/run.js
+      - name: Syntax, assets and boot checks (no packaging)
+        run: node scripts/check.js
+      - name: UI source test (real page, real agent, real WebCrypto)
+        run: node test/ui.js
+      - name: Assistant stack test (HTTP API, mocked model)
+        run: node test/ai.js
+      - name: Deep checks (cognition, neural, memory, executor, tools)
+        run: node test/deep.js
+      - name: Property tests (seeded invariants)
+        run: node test/properties.js
+      - name: Agent routing and organisation checks
+        run: node test/agents.js
+      - name: Tool-pack execution checks
+        run: node test/toolpacks.js
+      - name: Training lab checks
+        run: node test/training.js
+      - name: Executive engine checks
+        run: node test/executive.js
+      - name: Code intelligence checks
+        run: node test/coding.js
+      - name: Numeric/date/text conformance matrix
+        run: node test/conformance.js
+      - name: Cross-subsystem integration checks
+        run: node test/integration.js
+      - name: Requirements graph integrity
+        run: node test/requirements.js
+      - name: Deterministic evaluation suite (providers disabled)
+        run: node scripts/eval.js
+      - name: Tool inventory audit (structure + real executions)
+        run: node scripts/audit-tools.js --no-write
+      - name: Measurement run (informational, not a gate)
+        continue-on-error: true
+        run: node scripts/bench.js
+
+  windows:
+    name: Windows source checks
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dev dependencies
+        shell: pwsh
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Source test suites on Windows
+        shell: pwsh
+        run: |
+          $failed = $false
+          $suites = @(
+            @{ name = 'run';  file = 'test/run.js' },
+            @{ name = 'check'; file = 'scripts/check.js' },
+            @{ name = 'ai';   file = 'test/ai.js' },
+            @{ name = 'deep'; file = 'test/deep.js' }
+          )
+          foreach ($suite in $suites) {
+            Write-Host "::group::$($suite.file)"
+            $output = & node $suite.file 2>&1 | Out-String
+            $code = $LASTEXITCODE
+            Write-Host $output
+            Write-Host "::endgroup::"
+            $output | Set-Content "windows-$($suite.name).log"
+            if ($code -ne 0) {
+              $failed = $true
+              $details = ($output -split "`r?`n" | Where-Object { $_ -match '✗|Error|failed|AssertionError' } | Select-Object -First 6) -join ' | '
+              if (-not $details) { $details = ($output -split "`r?`n" | Select-Object -Last 3) -join ' | ' }
+              $details = $details -replace '%', '%25' -replace "`r", '' -replace "`n", '%0A'
+              Write-Host "::error title=Windows $($suite.file) failed::$details"
+            } else {
+              Write-Host "::notice title=Windows $($suite.file) passed::exit 0"
+            }
+          }
+          if ($failed) { exit 1 }
+      - name: Deterministic evaluation on Windows
+        shell: pwsh
+        run: |
+          $output = & node scripts/eval.js 2>&1 | Out-String
+          $code = $LASTEXITCODE
+          Write-Host $output
+          if ($code -ne 0) {
+            $details = ($output -split "`r?`n" | Where-Object { $_ -match '✗|FAIL|failed|Error' } | Select-Object -First 8) -join ' | '
+            $details = $details -replace '%', '%25' -replace "`r", '' -replace "`n", '%0A'
+            Write-Host "::error title=Windows eval failed::$details"
+            exit 1
+          }
+      - name: Tool audit on Windows
+        shell: pwsh
+        run: |
+          $output = & node scripts/audit-tools.js --no-write 2>&1 | Out-String
+          $code = $LASTEXITCODE
+          Write-Host $output
+          if ($code -ne 0) {
+            $details = ($output -split "`r?`n" | Where-Object { $_ -match 'problem|✗|Error|failed' } | Select-Object -First 8) -join ' | '
+            $details = $details -replace '%', '%25' -replace "`r", '' -replace "`n", '%0A'
+            Write-Host "::error title=Windows tool audit failed::$details"
+            exit 1
+          }
+      - name: Upload source-test logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-source-logs
+          path: windows-*.log
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # Simulated device/mobile integration is source-only. No APK or firmware is
+  # compiled or uploaded.
+  simulated-devices:
+    name: Simulated device and mobile sources
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dev dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Mobile UI sync check (writes no binary)
+        run: node scripts/sync-mobile.js --check
+      - name: Source presence and syntax checks
+        run: |
+          node --check core/link.js
+          node --check core/tunnel.js
+          test -f firmware/src/main.cpp
+          test -f mobile/package.json

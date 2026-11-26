@@ -1,0 +1,60 @@
+{
+  "version": "7.0.0",
+  "at": "2026-11-25T09:31:04.022Z",
+  "platform": "linux/x64",
+  "corpusDocuments": 64,
+  "cases": 48,
+  "modes": {
+    "lexical": {
+      "ndcgAtK": 0.4683,
+      "mrr": 0.5538,
+      "recallAtK": 0.3438
+    },
+    "vector": {
+      "ndcgAtK": 0.4407,
+      "mrr": 0.5434,
+      "recallAtK": 0.3125
+    },
+    "hybrid": {
+      "ndcgAtK": 0.4704,
+      "mrr": 0.5451,
+      "recallAtK": 0.3646
+    },
+    "neural": {
+      "ndcgAtK": 0.504,
+      "mrr": 0.6049,
+      "recallAtK": 0.3542
+    }
+  },
+  "latency": {
+    "lexical": {
+      "p50": 0.634,
+      "p95": 1.57
+    },
+    "vector": {
+      "p50": 0.396,
+      "p95": 0.596
+    },
+    "hybrid": {
+      "p50": 0.401,
+      "p95": 0.605
+    },
+    "neural": {
+      "p50": 1.903,
+      "p95": 2.372
+    }
+  },
+  "provenance": {
+    "features": "hashed word unigrams + char 4-grams",
+    "fusion": "reciprocal-rank fusion (0.55 lexical, 0.35 vector, 0.10 graph)",
+    "reranker": "promoted retrieval reranker",
+    "semantic": "promoted semantic specialist"
+  },
+  "totalMs": 702,
+  "honesty": [
+    "The corpus and graded judgments are authored synthetic data, not a production search log.",
+    "A 64-document corpus is a smoke-scale retrieval benchmark; it is not a claim of web-scale quality.",
+    "The neural mode is measured only with promoted checkpoints created in a temporary home.",
+    "Failure to improve NDCG is reported as measured; no number is selected for presentation."
+  ]
+}
