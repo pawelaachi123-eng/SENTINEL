@@ -14,7 +14,7 @@
     "start": "node bin/sentinel-agent.js --open",
     "agent": "node bin/sentinel-agent.js",
     "pair": "node bin/sentinel-agent.js --pair",
-    "test": "node test/run.js && node test/ui.js && node test/ai.js && node test/deep.js && node test/properties.js && node test/toolpacks.js && node test/agents.js && node test/training.js && node test/executive.js && node test/coding.js && node test/conformance.js && node test/integration.js && node test/requirements.js && node test/blackboard.js && node test/reasoning.js",
+    "test": "node test/run.js && node test/ui.js && node test/ai.js && node test/deep.js && node test/properties.js && node test/toolpacks.js && node test/agents.js && node test/training.js && node test/executive.js && node test/coding.js && node test/conformance.js && node test/integration.js && node test/requirements.js && node test/blackboard.js && node test/reasoning.js && node test/metacognition.js",
     "check": "node scripts/check.js",
     "mobile:sync": "node scripts/sync-mobile.js",
     "test:core": "node test/run.js",
@@ -37,7 +37,8 @@
     "test:requirements": "node test/requirements.js",
     "requirements": "node scripts/requirements-graph.js",
     "test:blackboard": "node test/blackboard.js",
-    "test:reasoning": "node test/reasoning.js"
+    "test:reasoning": "node test/reasoning.js",
+    "test:metacognition": "node test/metacognition.js"
   },
   "pkg": {
     "assets": [

@@ -19,23 +19,23 @@ the same rules in CI. The last gate ledger is
 
 | Status | Count |
 |---|---:|
-| VERIFIED | 8 |
-| PARTIAL | 23 |
+| VERIFIED | 9 |
+| PARTIAL | 22 |
 | NOT_STARTED | 3 |
 | BLOCKED | 2 |
 | **Tracked** | **36** |
 
-This is 22.2% of tracked requirements, not 22.2% of the 9.0 target set.
+This is 25.0% of tracked requirements, not 22.2% of the 9.0 target set.
 
 | Target | Measured | State |
 |---|---:|---|
-| 1,000,000 source lines | 87,819 | not met |
-| 2,000 tools | 705 | not met |
+| 1,000,000 source lines | 93,160 | not met |
+| 2,000 tools | 706 | not met |
 | 100 categories | 36 | not met |
 | 250 agents | 123 | not met |
-| 10,000 checks | 2,100 | not met |
-| 2,000 checks | 2,100 | **met** |
-| 1,000 tools | 705 | not met |
+| 10,000 checks | 2,116 | not met |
+| 2,000 checks | 2,116 | **met** |
+| 1,000 tools | 706 | not met |
 
 ## Verified in 9.0
 
@@ -48,6 +48,7 @@ This is 22.2% of tracked requirements, not 22.2% of the 9.0 target set.
 7. Source-only delivery.
 8. **Persistent typed cognitive blackboard** with provenance, scopes, attention,
    conflicts, persistence, HTTP state and real chat integration.
+9. **Metacognitive controller** integrated into chat answers and the blackboard.
 
 ## Immediate backlog
 

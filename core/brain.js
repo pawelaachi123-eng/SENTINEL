@@ -24,6 +24,7 @@
  */
 
 const { UnifiedRetriever } = require('./retrieval/unified');
+const { MetacognitiveController } = require('./cognition/metacognition');
 
 const RULES = [
   {
@@ -137,7 +138,7 @@ const RULES = [
 const LEVEL_ORDER = { error: 0, warn: 1, info: 2 };
 
 class Brain {
-  constructor({ config, log, now = () => Date.now(), llm = null, memory = null, knowledge = null, tools = null, agents = null, tasks = null, dispatcher = null, store = null, approvals = null, commander = null, stats = null, link = null, tunnel = null, automation = null, paths = null, cognitive = null, context = null, experience = null, events = null, metrics = null, semantics = null, executor = null, graph = null, retrievalGraph = null, specialists = null, reranker = null, blackboard = null } = {}) {
+  constructor({ config, log, now = () => Date.now(), llm = null, memory = null, knowledge = null, tools = null, agents = null, tasks = null, dispatcher = null, store = null, approvals = null, commander = null, stats = null, link = null, tunnel = null, automation = null, paths = null, cognitive = null, context = null, experience = null, events = null, metrics = null, semantics = null, executor = null, graph = null, retrievalGraph = null, specialists = null, reranker = null, blackboard = null, metacognitive = null } = {}) {
     this.config = config;
     this.log = log;
     this.now = now;
@@ -162,6 +163,7 @@ class Brain {
     // experience. All optional so a bare Brain still runs the advisory rules.
     this.cognitive = cognitive;
     this.blackboard = blackboard;
+    this.metacognitive = metacognitive || new MetacognitiveController({ config: this.config, now: this.now });
     this.semantics = semantics;
     this.executor = executor;
     this.graph = graph;
@@ -862,6 +864,26 @@ class Brain {
     }
 
     const citations = this.collectCitations(result.text, memories, documents);
+    const metacognition = this.metacognitive
+      ? this.metacognitive.assess({
+          brief,
+          verification,
+          text: result.text,
+          model: result.model || null,
+          citations,
+          evidence: { memories: memories.length, documents: documents.length, graphNodes: graphContext && graphContext.nodes ? graphContext.nodes.length : 0 },
+          toolLog: runtime.toolLog,
+          conflicts: this.blackboard ? this.blackboard.conflicts({ scope: boardScope }).filter((pair) => !pair.resolved) : [],
+          elapsedMs: this.now() - started,
+          mode: chosenMode,
+          retryCount: result.repaired ? 1 : 0,
+          budget: { tokens: budget.tokens || 0, usedTokens: contextReport ? contextReport.tokens : 0 },
+        })
+      : null;
+    if (metacognition && this.metrics) {
+      this.metrics.increment(`metacognition.${metacognition.action}`);
+      this.metrics.observe('metacognition.confidence', metacognition.confidence);
+    }
     const answer = {
       text: String(result.text || '').trim(),
       agent: route.primary.name,
@@ -870,6 +892,7 @@ class Brain {
       data: result.data || null,
       citations,
       verification,
+      metacognition,
       tools: runtime.toolLog.map((entry) => entry.name).concat(result.toolsUsed || []).filter((name, index, all) => all.indexOf(name) === index),
       toolLog: runtime.toolLog,
       model: result.model || null,
@@ -1111,6 +1134,24 @@ class Brain {
           salience: 1,
           tags: ['answer'],
         });
+        if (answer.metacognition) {
+          this.boardAdd(boardScope, {
+            type: 'decision',
+            key: `metacognition:${run.id}`,
+            content: {
+              action: answer.metacognition.action,
+              status: answer.metacognition.status,
+              confidence: answer.metacognition.confidence,
+              issues: answer.metacognition.issues.map((issue) => issue.code),
+            },
+            provenance: [{ source: 'metacognition', ref: run.id }],
+            owner: { sessionId: run.sessionId, runId: run.id },
+            confidence: answer.metacognition.confidence,
+            status: answer.metacognition.status === 'sufficient' ? 'supported' : 'estimated',
+            salience: 0.75,
+            tags: ['metacognition'],
+          });
+        }
         this.boardAdd(boardScope, {
           type: 'verification',
           key: `verification:${run.id}`,
@@ -1160,6 +1201,7 @@ class Brain {
       ms,
       confidence: this.confidenceOf({ text, verification, toolLog: runtime.toolLog, cancelled, exact }),
       verification: exact ? { ...verification, confidence: this.confidenceOf({ text, verification, toolLog: runtime.toolLog, exact }) } : verification,
+      metacognition: answer.metacognition || null,
       brief: brief
         ? {
             intent: brief.intent,
