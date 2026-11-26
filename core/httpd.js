@@ -429,6 +429,24 @@ class HttpApi {
       return this.json(res, 200, { ok: true, data: this.ai.agents.list(), stats: this.ai.agents.stats() });
     }
 
+    if (route === '/api/cognitive/state' && req.method === 'GET') {
+      if (!this.ai || !this.ai.blackboard) return this.json(res, 503, { ok: false, error: 'cognitive state not ready' });
+      const scope = url.searchParams.get('scope') || 'session:default';
+      try {
+        const focus = this.ai.blackboard.focus({ scope, tokens: 500, limit: 20 });
+        return this.json(res, 200, {
+          ok: true,
+          data: {
+            stats: this.ai.blackboard.stats(scope),
+            conflicts: this.ai.blackboard.conflicts({ scope }),
+            focus: { entries: focus.entries, omitted: focus.omitted, estimatedTokens: focus.estimatedTokens, selected: focus.selected.map((entry) => ({ id: entry.id, type: entry.type, status: entry.status, confidence: entry.confidence, content: entry.content, attention: entry.attention })) },
+          },
+        });
+      } catch (err) {
+        return this.json(res, 200, { ok: false, code: err.code || 'BAD_SCOPE', message: err.message });
+      }
+    }
+
     if (route === '/api/tools' && req.method === 'GET') {
       if (!this.ai) return this.json(res, 503, { ok: false, error: 'AI not ready' });
       const category = url.searchParams.get('category');

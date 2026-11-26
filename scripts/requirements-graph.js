@@ -14,7 +14,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const ROOT = path.resolve(__dirname, '..');
-const GRAPH = path.join(ROOT, 'docs', 'requirements-8.1.json');
+const GRAPH = path.join(ROOT, 'docs', 'requirements-9.0.json');
 const STATUSES = ['NOT_STARTED', 'IMPLEMENTED_UNTESTED', 'PARTIAL', 'VERIFIED', 'BLOCKED'];
 
 function exists(relative) {
@@ -91,7 +91,7 @@ if (require.main === module) {
       console.log(`  ${milestone.padEnd(4)} ${String(bucket.verified).padStart(2)} verified / ${String(bucket.total).padStart(2)} total, ${bucket.partial} partial, ${bucket.blocked} blocked, ${bucket.notStarted} not started`);
     }
     const verified = graph.requirements.filter((requirement) => requirement.status === 'VERIFIED').length;
-    console.log(`\nVerified integration level: ${((verified / graph.requirements.length) * 100).toFixed(1)}% of tracked requirements (not of the 8.1 target set).`);
+    console.log(`\nVerified integration level: ${((verified / graph.requirements.length) * 100).toFixed(1)}% of tracked requirements (not of the 9.0 target set).`);
     if (errors.length) {
       console.log(`\n${errors.length} integrity error(s):`);
       for (const error of errors) console.log(`  ✗ ${error}`);
