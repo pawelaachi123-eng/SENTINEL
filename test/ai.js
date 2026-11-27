@@ -114,6 +114,21 @@ agent.config.set('ports.link', 7960);
     assert.equal(other.length, 0, 'session state leaked across scopes');
   });
 
+  test('cognitive events and goal arbitration are wired to real runs', async () => {
+    const answer = await agent.brain.ask({ text: 'ile to 6*7', mode: 'fast', sessionId: 'events-session' });
+    assert.equal(answer.text, '6*7 = 42');
+    assert.ok(answer.cognitiveState.events, 'the answer did not expose event statistics');
+    assert.ok(answer.cognitiveState.events.buffered >= 4, `events buffered: ${answer.cognitiveState.events.buffered}`);
+    assert.ok(answer.cognitiveState.recentEvents.some((event) => event.type === 'run.started'));
+    const events = agent.cognitiveEvents.query({ scope: 'session:events-session', limit: 100 });
+    assert.ok(events.some((event) => event.type === 'run.answered'), 'no run.answered event was recorded');
+    assert.ok(events.some((event) => event.type === 'blackboard.added' && event.entryType === 'question'));
+    assert.ok(events.every((event) => event.scope === 'session:events-session'), 'events leaked across scopes');
+    const goals = agent.goalArbiter.list({ scope: 'session:events-session' });
+    assert.ok(goals.length >= 1, 'the run did not register a goal');
+    assert.ok(goals.every((goal) => ['done', 'failed', 'cancelled', 'active', 'pending'].includes(goal.status)));
+  });
+
   test('the planner only runs when it is asked for', async () => {
     const shallow = await agent.brain.ask({ text: 'jaki jest stan komputera', mode: 'balanced' });
     assert.ok(!shallow.plan || !shallow.plan.length, 'balanced mode planned unasked');

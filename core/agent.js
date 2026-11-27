@@ -32,6 +32,7 @@ const { VisionEngine } = require('./vision');
 const { SelfHeal } = require('./selfheal');
 const { CognitiveCore } = require('./cognition');
 const { Blackboard } = require('./cognition/blackboard');
+const { CognitiveEventBus, GoalArbiter } = require('./cognition/events');
 const { ContextManager } = require('./context');
 const { PatchManager } = require('./patching');
 const { SemanticInterpreter } = require('./semantics');
@@ -104,6 +105,8 @@ class Agent extends EventEmitter {
       this.events = new EventBus({ log: this.log, store: this.store });
       this.cognitive = new CognitiveCore({ config: this.config, log: this.log });
       this.blackboard = new Blackboard({ dataDir: path.join(pathsModule.dataDir(), 'cognition'), log: this.log });
+      this.cognitiveEvents = new CognitiveEventBus({ board: this.blackboard, log: this.log });
+      this.goalArbiter = new GoalArbiter({ bus: this.cognitiveEvents, log: this.log });
       this.context = new ContextManager({ config: this.config, log: this.log });
       this.experience = new ExperienceStore({ store: this.store, log: this.log });
       this.patches = new PatchManager({ paths: pathsModule, sandbox: null, log: this.log, store: this.store, config: this.config });
@@ -226,6 +229,8 @@ class Agent extends EventEmitter {
         paths: pathsModule,
         cognitive: this.cognitive,
         blackboard: this.blackboard,
+        cognitiveEvents: this.cognitiveEvents,
+        goalArbiter: this.goalArbiter,
         context: this.context,
         semantics: this.semantics,
         patches: this.patches,
@@ -271,6 +276,8 @@ class Agent extends EventEmitter {
         // them from the service bag, so omitting them silently disabled tools.
         cognitive: this.cognitive,
         blackboard: this.blackboard,
+        cognitiveEvents: this.cognitiveEvents,
+        goalArbiter: this.goalArbiter,
         context: this.context,
         semantics: this.semantics,
         patches: this.patches,
@@ -525,6 +532,8 @@ class Agent extends EventEmitter {
       healing: this.healing.stats(),
       cognitive: this.cognitive ? this.cognitive.stats() : null,
       blackboard: this.blackboard ? this.blackboard.stats() : null,
+      cognitiveEvents: this.cognitiveEvents ? this.cognitiveEvents.stats() : null,
+      goals: this.goalArbiter ? { tracked: this.goalArbiter.list().length, ready: this.goalArbiter.arbitrate().ranking.length } : null,
       semantics: this.semantics ? this.semantics.stats() : null,
       context: this.context ? this.context.stats() : null,
       experience: this.experience ? this.experience.stats() : null,
@@ -565,6 +574,7 @@ class Agent extends EventEmitter {
     try { if (this.executive) this.executive.stop('agent stopping'); } catch { /* scheduler is optional */ }
     clearInterval(this.brainTimer);
     if (this.blackboard) this.blackboard.close().catch((err) => this.log.warn('blackboard', `close failed: ${err.message}`));
+    if (this.cognitiveEvents) this.cognitiveEvents.close();
     if (this.automation) this.automation.stop();
     for (const watchdog of this.watchdogs || []) watchdog.stop();
     if (this.tasks) this.tasks.cancelAll('agent stopping');

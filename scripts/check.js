@@ -71,7 +71,7 @@ const forbidden = [
 for (const [label, pattern] of forbidden) if (pattern.test(workflow)) fail(`workflow still performs ${label}`);
 const packageJson = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
 for (const script of ['build:exe', 'build:desktop', 'build:all']) if (packageJson.scripts[script]) fail(`package.json still exposes binary build script ${script}`);
-if (!/^9\.0\.0$/.test(packageJson.version)) fail(`package.json version is ${packageJson.version}, expected 9.0.0`);
+if (!/^10\.0\.0$/.test(packageJson.version)) fail(`package.json version is ${packageJson.version}, expected 10.0.0`);
 const installers = fs.readdirSync(root).filter((file) => file.endsWith('.ps1'));
 if (installers.length !== 1) fail(`expected exactly one PowerShell installer, found ${installers.join(', ') || 'none'}`);
 console.log(`   workflow is source-only; installer ${installers[0]}`);

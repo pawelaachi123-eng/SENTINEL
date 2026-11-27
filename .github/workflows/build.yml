@@ -62,6 +62,14 @@ jobs:
         run: node test/reasoning.js
       - name: Metacognitive controller
         run: node test/metacognition.js
+      - name: Active metacognitive corrective actions
+        run: node test/active-cognition.js
+      - name: Typed cognitive events and goal arbitration
+        run: node test/cognitive-events.js
+      - name: Advanced reasoning engines
+        run: node test/reasoning-advanced.js
+      - name: TITAN GPT 2.0 and neural operations
+        run: node test/titan-gpt.js
       - name: Deterministic evaluation suite (providers disabled)
         run: node scripts/eval.js
       - name: Tool inventory audit (structure + real executions)

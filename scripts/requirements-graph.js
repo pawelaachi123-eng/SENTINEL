@@ -14,7 +14,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const ROOT = path.resolve(__dirname, '..');
-const GRAPH = path.join(ROOT, 'docs', 'requirements-9.0.json');
+const GRAPH = path.join(ROOT, 'docs', 'requirements-10.0.json');
 const STATUSES = ['NOT_STARTED', 'IMPLEMENTED_UNTESTED', 'PARTIAL', 'VERIFIED', 'BLOCKED'];
 
 function exists(relative) {

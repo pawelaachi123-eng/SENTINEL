@@ -519,4 +519,22 @@ function decide({ options = [], criteria = [], weights = null } = {}) {
   };
 }
 
-module.exports = { forwardChain, abduce, solveCsp, bayesUpdate, causalPaths, intervalRelations, spatialRelations, decide, atomKey, unify };
+// 10.0: induction, structural causal models, exact Bayesian networks,
+// constrained optimisation, hierarchical planning, graph search and
+// propositional verification live in ./advanced.js and are exported here so
+// callers keep one reasoning surface.
+const advanced = require('./advanced');
+
+module.exports = {
+  forwardChain,
+  abduce,
+  solveCsp,
+  bayesUpdate,
+  causalPaths,
+  intervalRelations,
+  spatialRelations,
+  decide,
+  atomKey,
+  unify,
+  ...advanced,
+};

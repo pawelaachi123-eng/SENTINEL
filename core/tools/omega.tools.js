@@ -8,7 +8,7 @@
  * every result carries the epistemic status the solver can justify.
  */
 
-const { forwardChain, abduce, solveCsp, bayesUpdate, causalPaths, intervalRelations, spatialRelations, decide } = require('../reasoning/engines');
+const { forwardChain, abduce, solveCsp, bayesUpdate, causalPaths, intervalRelations, spatialRelations, decide, induce, counterfactual, bayesNetwork, optimizeCsp, hierarchicalPlan, graphSearch, verifyPropositional } = require('../reasoning/engines');
 const { MetacognitiveController } = require('../cognition/metacognition');
 
 const SCOPE = { type: 'string', minLength: 3, maxLength: 128, description: 'global, session:<id>, task:<id> or workspace:<id>' };
@@ -432,4 +432,282 @@ module.exports = [
     },
     format: (data) => `${data.action} (${data.status}, ${data.issues.length} issues)`,
   },
+  {
+    name: 'omega.induce',
+    title: 'Induce classification rules',
+    description: 'Learns deterministic separate-and-conquer rules from labelled examples, reporting support and confidence. The result is explicitly estimated, not proof.',
+    category: 'cognitive',
+    permission: 'read',
+    tags: ['reasoning', 'induction', 'rules', 'learning'],
+    parameters: {
+      type: 'object',
+      properties: {
+        examples: { type: 'array', minItems: 2, maxItems: 5000, items: { type: 'object' } },
+        target: { type: 'string', minLength: 1, maxLength: 80, default: 'class' },
+        attributes: { type: 'array', items: { type: 'string' }, default: [] },
+        minSupport: { type: 'integer', minimum: 1, maximum: 1000, default: 2 },
+        minConfidence: { type: 'number', minimum: 0, maximum: 1, default: 0.6 },
+        maxRules: { type: 'integer', minimum: 1, maximum: 100, default: 20 },
+      },
+      required: ['examples'],
+      additionalProperties: false,
+    },
+    examples: [{
+      args: { examples: [{ shape: 'round', class: 'apple' }, { shape: 'round', class: 'apple' }, { shape: 'long', class: 'pepper' }], target: 'class', minSupport: 2 },
+      expect: { status: 'estimated' },
+    }],
+    async run(args) {
+      return { ok: true, ...induce(args) };
+    },
+    format: (data) => `${data.rules.length} induced rules (${data.status})`,
+  },
+  {
+    name: 'omega.counterfactual',
+    title: 'Evaluate a structural counterfactual',
+    description: 'Applies do() to a linear acyclic structural causal model and compares the factual and counterfactual outcome. Reports that the effect is model-implied, never observed causation.',
+    category: 'cognitive',
+    permission: 'read',
+    tags: ['reasoning', 'causal', 'counterfactual', 'scm'],
+    parameters: {
+      type: 'object',
+      properties: {
+        variables: { type: 'object', description: 'name -> {parents, weights, bias, noise}' },
+        observed: { type: 'object', default: {} },
+        interventions: { type: 'object' },
+        outcome: { type: 'string', maxLength: 120 },
+        treatment: { type: 'string', maxLength: 120 },
+      },
+      required: ['variables', 'interventions'],
+      additionalProperties: false,
+    },
+    examples: [{
+      args: { variables: { rain: { parents: [] }, wet: { parents: ['rain'], weights: { rain: 1 } } }, observed: { rain: 0 }, interventions: { rain: 1 }, outcome: 'wet', treatment: 'rain' },
+      expect: { delta: 1 },
+    }],
+    async run(args) {
+      return { ok: true, ...counterfactual(args) };
+    },
+    format: (data) => `${data.outcome}: ${data.factualOutcome} -> ${data.counterfactualOutcome} (${data.identification})`,
+  },
+  {
+    name: 'omega.bayesnet',
+    title: 'Exact discrete Bayesian inference',
+    description: 'Computes an exact posterior by enumerating a finite discrete Bayesian network. The result is proven relative to the supplied graph and CPTs.',
+    category: 'cognitive',
+    permission: 'read',
+    tags: ['reasoning', 'bayesian', 'graphical-model', 'uncertainty'],
+    parameters: {
+      type: 'object',
+      properties: {
+        nodes: { type: 'array', minItems: 1, maxItems: 200, items: { type: 'object' } },
+        query: { type: 'array', minItems: 1, items: { type: 'string' } },
+        evidence: { type: 'object', default: {} },
+        maxAssignments: { type: 'integer', minimum: 1, maximum: 1000000, default: 200000 },
+      },
+      required: ['nodes', 'query'],
+      additionalProperties: false,
+    },
+    examples: [{
+      args: { nodes: [{ name: 'x', values: ['a', 'b'], cpt: { '': { a: 0.5, b: 0.5 } } }], query: ['x'] },
+      expect: { status: 'proven' },
+    }],
+    async run(args) {
+      return { ok: true, ...bayesNetwork(args) };
+    },
+    format: (data) => `${data.query.join(',')} (${data.assignments} assignments)`,
+  },
+  {
+    name: 'omega.optimize',
+    title: 'Optimise under finite constraints',
+    description: 'Branch-and-bound maximisation of a linear objective over a finite-domain CSP. Optimality is claimed only when the search space was exhausted.',
+    category: 'cognitive',
+    permission: 'read',
+    tags: ['reasoning', 'optimization', 'constraints', 'decision'],
+    parameters: {
+      type: 'object',
+      properties: {
+        variables: { type: 'object' },
+        constraints: { type: 'array', items: { type: 'object' }, default: [] },
+        objective: { type: 'object' },
+        maxNodes: { type: 'integer', minimum: 1, maximum: 1000000, default: 200000 },
+      },
+      required: ['variables', 'objective'],
+      additionalProperties: false,
+    },
+    examples: [{
+      args: { variables: { x: [1, 2], y: [1, 2] }, constraints: [{ vars: ['x', 'y'], op: 'neq' }], objective: { weights: { x: 1, y: 1 } } },
+      expect: { optimal: true },
+    }],
+    async run(args) {
+      return { ok: true, ...optimizeCsp(args) };
+    },
+    format: (data) => data.solution ? `score ${data.score} (${data.status})` : `no solution (${data.status})`,
+  },
+  {
+    name: 'omega.plan',
+    title: 'Hierarchical task-network planning',
+    description: 'Expands methods into actions with preconditions/effects and verifies the goal by deterministic simulation. Failure is proof only when the search was exhausted.',
+    category: 'cognitive',
+    permission: 'read',
+    tags: ['reasoning', 'planning', 'htn', 'goals'],
+    parameters: {
+      type: 'object',
+      properties: {
+        tasks: { type: 'array', minItems: 1, items: { type: 'string' } },
+        methods: { type: 'array', items: { type: 'object' }, default: [] },
+        actions: { type: 'object' },
+        state: { type: 'object', default: {} },
+        goal: { type: 'object' },
+        maxNodes: { type: 'integer', minimum: 1, maximum: 1000000, default: 5000 },
+        maxDepth: { type: 'integer', minimum: 1, maximum: 128, default: 32 },
+      },
+      required: ['tasks', 'actions', 'goal'],
+      additionalProperties: false,
+    },
+    examples: [{
+      args: { tasks: ['a'], actions: { a: { effects: { done: true } } }, goal: { done: true } },
+      expect: { achieved: true },
+    }],
+    async run(args) {
+      return { ok: true, ...hierarchicalPlan(args) };
+    },
+    format: (data) => data.achieved ? data.actions.join(' → ') : `no plan (${data.status})`,
+  },
+  {
+    name: 'omega.graph',
+    title: 'Bounded shortest-path search',
+    description: 'Breadth-first, Dijkstra or A* search over non-negative weighted edges with an expansion budget and an honest optimality label.',
+    category: 'cognitive',
+    permission: 'read',
+    tags: ['reasoning', 'graph', 'search', 'shortest-path'],
+    parameters: {
+      type: 'object',
+      properties: {
+        edges: { type: 'array', minItems: 1, items: {} },
+        start: { type: 'string', maxLength: 200 },
+        goal: { type: 'string', maxLength: 200 },
+        strategy: { type: 'string', enum: ['bfs', 'dijkstra', 'astar'], default: 'dijkstra' },
+        heuristic: { type: 'object', default: {} },
+        maxExpansions: { type: 'integer', minimum: 1, maximum: 1000000, default: 50000 },
+      },
+      required: ['edges', 'start', 'goal'],
+      additionalProperties: false,
+    },
+    examples: [{
+      args: { edges: [['a', 'b', 1], ['b', 'c', 1]], start: 'a', goal: 'c' },
+      expect: { cost: 2 },
+    }],
+    async run(args) {
+      return { ok: true, ...graphSearch(args) };
+    },
+    format: (data) => data.found ? `${data.path.join(' → ')} (${data.cost})` : 'no path',
+  },
+  {
+    name: 'omega.prove',
+    title: 'Prove a propositional formula',
+    description: 'Classifies a formula as tautology, contradiction or contingent by exhaustive truth table over its supplied syntax.',
+    category: 'cognitive',
+    permission: 'read',
+    tags: ['reasoning', 'logic', 'proof', 'verification'],
+    parameters: {
+      type: 'object',
+      properties: {
+        formula: { type: 'object' },
+        maxVariables: { type: 'integer', minimum: 1, maximum: 20, default: 16 },
+      },
+      required: ['formula'],
+      additionalProperties: false,
+    },
+    examples: [{
+      args: { formula: { op: 'or', args: [{ op: 'var', name: 'p' }, { op: 'not', args: [{ op: 'var', name: 'p' }] }] } },
+      expect: { kind: 'tautology' },
+    }],
+    async run(args) {
+      return { ok: true, ...verifyPropositional(args) };
+    },
+    format: (data) => `${data.kind} (${data.assignments} assignments)`,
+  },
+  {
+    name: 'cognitive.events',
+    title: 'Inspect typed cognitive events',
+    requires: ['cognitiveEvents'],
+    description: 'Reads the bounded typed event stream produced by real blackboard mutations and run lifecycle events. Scope-isolated and provenance-preserving.',
+    category: 'cognitive',
+    permission: 'read',
+    tags: ['cognition', 'events', 'observability', 'provenance'],
+    parameters: {
+      type: 'object',
+      properties: {
+        action: { type: 'string', enum: ['query', 'latest', 'stats'], default: 'latest' },
+        scope: { type: 'string', maxLength: 128 },
+        type: { type: 'string', maxLength: 80 },
+        entryType: { type: 'string', maxLength: 40 },
+        since: { type: 'number', minimum: 0 },
+        limit: { type: 'integer', minimum: 1, maximum: 500, default: 20 },
+      },
+      additionalProperties: false,
+    },
+    examples: [{ args: { action: 'latest', limit: 5 }, expect: {} }],
+    async run(args, ctx) {
+      if (!ctx.cognitiveEvents) throw fail('NO_COGNITIVE_EVENTS', 'the cognitive event stream is not available');
+      if (args.action === 'stats') return { ok: true, ...ctx.cognitiveEvents.stats(args.scope || null) };
+      if (args.action === 'query') return { ok: true, events: ctx.cognitiveEvents.query(args) };
+      return { ok: true, events: ctx.cognitiveEvents.latest({ scope: args.scope || null, limit: args.limit }) };
+    },
+    format: (data) => `${data.events ? data.events.length : data.buffered} event(s)`,
+  },
+  {
+    name: 'cognitive.goals',
+    title: 'Arbitrate competing goals',
+    requires: ['goalArbiter'],
+    description: 'Submits, lists, ranks and completes goals with dependencies, deadlines and bounded priority scoring. A dependent goal is never activated early.',
+    category: 'cognitive',
+    permission: 'write',
+    tags: ['cognition', 'goals', 'arbitration', 'planning'],
+    parameters: {
+      type: 'object',
+      properties: {
+        action: { type: 'string', enum: ['submit', 'list', 'arbitrate', 'activation', 'complete', 'fail'], default: 'list' },
+        id: { type: 'string', maxLength: 120 },
+        description: { type: 'string', maxLength: 1000 },
+        scope: { type: 'string', maxLength: 128 },
+        priority: { type: 'number', minimum: 0, maximum: 1, default: 0.5 },
+        deadline: { type: 'number', minimum: 0 },
+        dependencies: { type: 'array', items: { type: 'string' }, default: [] },
+        reason: { type: 'string', maxLength: 500 },
+        limit: { type: 'integer', minimum: 1, maximum: 100, default: 10 },
+      },
+      additionalProperties: false,
+    },
+    examples: [{ args: { action: 'list' }, expect: {} }],
+    async run(args, ctx) {
+      if (!ctx.goalArbiter) throw fail('NO_GOAL_ARBITER', 'goal arbitration is not available');
+      const arbiter = ctx.goalArbiter;
+      switch (args.action) {
+        case 'submit':
+          return { ok: true, goal: arbiter.submit({
+            id: args.id || null,
+            description: args.description,
+            scope: args.scope || 'global',
+            priority: args.priority,
+            deadline: args.deadline === undefined ? null : args.deadline,
+            dependencies: args.dependencies,
+          }) };
+        case 'arbitrate':
+          return { ok: true, ...arbiter.arbitrate({ scope: args.scope || null, limit: args.limit }) };
+        case 'activation':
+          return { ok: true, ...arbiter.activationOrder({ scope: args.scope || null }) };
+        case 'complete':
+          if (!args.id) throw fail('NO_GOAL_ID', 'id is required');
+          return { ok: true, goal: arbiter.complete(args.id) };
+        case 'fail':
+          if (!args.id) throw fail('NO_GOAL_ID', 'id is required');
+          return { ok: true, goal: arbiter.fail(args.id, args.reason || null) };
+        default:
+          return { ok: true, goals: arbiter.list({ scope: args.scope || null }), arbitration: arbiter.arbitrate({ scope: args.scope || null, limit: args.limit }) };
+      }
+    },
+    format: (data) => data.goals ? `${data.goals.length} goal(s)` : data.goal ? `${data.goal.id}:${data.goal.status}` : `${data.ranking.length} ready`,
+  },
+
 ];
