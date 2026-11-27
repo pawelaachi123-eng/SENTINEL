@@ -12,7 +12,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { validate, summarise, STATUSES } = require('../scripts/requirements-graph');
 
-const graph = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'docs', 'requirements-8.1.json'), 'utf8'));
+const graph = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'docs', 'requirements-10.0.json'), 'utf8'));
 const checks = [];
 function check(name, fn) {
   try {

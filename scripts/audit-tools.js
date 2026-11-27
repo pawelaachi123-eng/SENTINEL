@@ -27,6 +27,37 @@ const PERMISSIONS = ['read', 'write', 'system', 'network', 'privileged'];
 const EXTENDED_PURE = new Set(['numext', 'statx', 'txtx', 'datex', 'geom', 'phys', 'unitsx', 'seqx', 'matrix', 'setx', 'bits', 'basex', 'fmtx', 'finx', 'checksumx']);
 
 const SAFE_CALLS = [
+  {
+    name: 'omega.deduce',
+    args: {
+      facts: [{ pred: 'parent', args: ['ann', 'bob'] }],
+      rules: [{ id: 'ancestor', if: [{ pred: 'parent', args: ['?x', '?y'] }], then: { pred: 'ancestor', args: ['?x', '?y'] } }],
+    },
+  },
+  {
+    name: 'omega.abduce',
+    args: {
+      rules: [{ id: 'power', if: [{ pred: 'power_cut', args: ['?x'], assumable: true }], then: { pred: 'down', args: ['?x'] } }],
+      observations: [{ pred: 'down', args: ['server'] }],
+    },
+  },
+  { name: 'omega.csp', args: { variables: { a: [1, 2], b: [1, 2] }, constraints: [{ vars: ['a', 'b'], op: 'neq' }] } },
+  { name: 'omega.bayes', args: { hypotheses: { a: true, b: true }, evidence: [{ id: 'audit', likelihoods: { a: 0.8, b: 0.2 } }] } },
+  { name: 'omega.causal', args: { from: 'a', to: 'c', edges: [{ from: 'a', to: 'b' }, { from: 'b', to: 'c' }] } },
+  { name: 'omega.intervals', args: { a: { start: 1, end: 2 }, b: { start: 3, end: 4 } } },
+  { name: 'omega.spatial', args: { a: { x: 0, y: 0, w: 2, h: 2 }, b: { x: 1, y: 1, w: 2, h: 2 } } },
+  { name: 'omega.metacognize', args: { text: 'A measured answer with enough words.', mode: 'balanced', verification: { ok: true, confidence: 0.9 } } },
+  { name: 'omega.decide', args: { options: [{ id: 'a', speed: 1 }, { id: 'b', speed: 2 }], criteria: [{ id: 'speed' }] } },
+  { name: 'omega.induce', args: { examples: [{ shape: 'round', class: 'apple' }, { shape: 'round', class: 'apple' }, { shape: 'long', class: 'pepper' }], target: 'class', minSupport: 2 } },
+  { name: 'omega.counterfactual', args: { variables: { rain: { parents: [] }, wet: { parents: ['rain'], weights: { rain: 1 } } }, observed: { rain: 0 }, interventions: { rain: 1 }, outcome: 'wet', treatment: 'rain' } },
+  { name: 'omega.bayesnet', args: { nodes: [{ name: 'x', values: ['a', 'b'], cpt: { '': { a: 0.5, b: 0.5 } } }], query: ['x'] } },
+  { name: 'omega.optimize', args: { variables: { x: [1, 2], y: [1, 2] }, constraints: [{ vars: ['x', 'y'], op: 'neq' }], objective: { weights: { x: 1, y: 1 } } } },
+  { name: 'omega.plan', args: { tasks: ['a'], actions: { a: { effects: { done: true } } }, goal: { done: true } } },
+  { name: 'omega.graph', args: { edges: [['a', 'b', 1], ['b', 'c', 1]], start: 'a', goal: 'c' } },
+  { name: 'omega.prove', args: { formula: { op: 'or', args: [{ op: 'var', name: 'p' }, { op: 'not', args: [{ op: 'var', name: 'p' }] }] } } },
+  { name: 'cognitive.events', args: { action: 'latest', limit: 5 } },
+  { name: 'cognitive.goals', args: { action: 'list' } },
+  { name: 'blackboard.stats', args: {} },
   { name: 'system.info', args: {} },
   { name: 'math.eval', args: { expression: '2+3*4' } },
   { name: 'math.percent', args: { mode: 'of', a: 15, b: 200 } },
@@ -403,6 +434,23 @@ async function runFlows(agent, record, workspace) {
   if (workflowId) {
     await exec('executive.workflow_status', { id: workflowId });
     await exec('executive.workflow_cancel', { id: workflowId });
+  }
+
+  const boardOne = await exec('blackboard.add', { type: 'fact', key: 'audit-fact', content: 'The audit fixture fact says twelve days.', scope: 'session:audit', status: 'proven', confidence: 1, source: 'audit' });
+  const boardOneId = boardOne ? findId(boardOne.data) : null;
+  if (boardOneId) {
+    await exec('blackboard.get', { id: boardOneId, scope: 'session:audit' });
+    await exec('blackboard.query', { scope: 'session:audit', text: 'audit fixture', limit: 5 });
+    await exec('blackboard.focus', { scope: 'session:audit', goal: 'audit fact', tokens: 300 });
+    await exec('blackboard.conflicts', { scope: 'session:audit' });
+    await exec('blackboard.stats', { scope: 'session:audit' });
+    const boardTwo = await exec('blackboard.add', { type: 'fact', key: 'audit-fact', content: 'The audit fixture fact says fourteen days.', scope: 'session:audit', status: 'proven', confidence: 0.8, source: 'audit' });
+    const boardTwoId = boardTwo ? findId(boardTwo.data) : null;
+    if (boardTwoId) {
+      await exec('blackboard.conflicts', { scope: 'session:audit' });
+      await exec('blackboard.resolve', { winnerId: boardTwoId, loserId: boardOneId, reason: 'audit fixture', actor: 'audit' });
+      await exec('blackboard.retract', { id: boardTwoId, reason: 'audit cleanup', actor: 'audit' });
+    }
   }
 
   const research = await exec('research.start', { question: 'What is the Atlas orbit period in the audit fixture?', online: false });

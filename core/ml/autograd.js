@@ -302,6 +302,188 @@ function layerNorm(a, gamma, beta, { epsilon = 1e-5 } = {}) {
   });
 }
 
+
+/** Selects a contiguous column block: rows×cols → rows×width. */
+function sliceCols(a, start, width) {
+  if (!Number.isInteger(start) || !Number.isInteger(width) || start < 0 || width < 1 || start + width > a.cols) {
+    throw Object.assign(new Error('sliceCols is out of bounds'), { code: 'BAD_TENSOR' });
+  }
+  const out = new Float64Array(a.rows * width);
+  for (let row = 0; row < a.rows; row += 1) {
+    for (let column = 0; column < width; column += 1) out[row * width + column] = a.data[row * a.cols + start + column];
+  }
+  return new Node(out, a.rows, width, {
+    op: 'sliceCols',
+    parents: [a],
+    backward: (grad) => {
+      const ga = new Float64Array(a.data.length);
+      for (let row = 0; row < a.rows; row += 1) {
+        for (let column = 0; column < width; column += 1) ga[row * a.cols + start + column] += grad[row * width + column];
+      }
+      return [ga];
+    },
+  });
+}
+
+/** Concatenates matrices by columns. All inputs must have the same row count. */
+function concatCols(nodes) {
+  if (!Array.isArray(nodes) || !nodes.length) throw Object.assign(new Error('concatCols needs matrices'), { code: 'BAD_TENSOR' });
+  const rows = nodes[0].rows;
+  const width = nodes.reduce((sum, node) => sum + node.cols, 0);
+  for (const node of nodes) if (node.rows !== rows) throw Object.assign(new Error('concatCols row mismatch'), { code: 'BAD_SHAPE' });
+  const out = new Float64Array(rows * width);
+  for (let row = 0; row < rows; row += 1) {
+    let offset = 0;
+    for (const node of nodes) {
+      for (let column = 0; column < node.cols; column += 1) out[row * width + offset + column] = node.data[row * node.cols + column];
+      offset += node.cols;
+    }
+  }
+  return new Node(out, rows, width, {
+    op: 'concatCols',
+    parents: nodes,
+    backward: (grad) => nodes.map((node, index) => {
+      const before = nodes.slice(0, index).reduce((sum, entry) => sum + entry.cols, 0);
+      const ga = new Float64Array(node.data.length);
+      for (let row = 0; row < rows; row += 1) {
+        for (let column = 0; column < node.cols; column += 1) ga[row * node.cols + column] = grad[row * width + before + column];
+      }
+      return ga;
+    }),
+  });
+}
+
+/** Elementwise multiplication with identical shapes. */
+function mul(a, b) {
+  if (a.rows !== b.rows || a.cols !== b.cols) throw Object.assign(new Error('mul shape mismatch'), { code: 'BAD_SHAPE' });
+  const out = new Float64Array(a.data.length);
+  for (let index = 0; index < out.length; index += 1) out[index] = a.data[index] * b.data[index];
+  return new Node(out, a.rows, a.cols, {
+    op: 'mul',
+    parents: [a, b],
+    backward: (grad) => [
+      Float64Array.from(grad, (value, index) => value * b.data[index]),
+      Float64Array.from(grad, (value, index) => value * a.data[index]),
+    ],
+  });
+}
+
+/** Sigmoid linear unit: x·sigmoid(x). */
+function silu(a) {
+  const out = new Float64Array(a.data.length);
+  const sig = new Float64Array(a.data.length);
+  for (let index = 0; index < out.length; index += 1) {
+    const s = 1 / (1 + Math.exp(-a.data[index]));
+    sig[index] = s;
+    out[index] = a.data[index] * s;
+  }
+  return new Node(out, a.rows, a.cols, {
+    op: 'silu',
+    parents: [a],
+    backward: (grad) => [Float64Array.from(grad, (value, index) => value * (sig[index] * (1 + a.data[index] * (1 - sig[index]))))],
+  });
+}
+
+/**
+ * RMSNorm over each row, followed by a learned per-column scale.
+ * Returns y = x / sqrt(mean(x²)+eps) * gamma.
+ */
+function rmsNorm(a, gamma, epsilon = 1e-6) {
+  if (!(gamma && gamma.rows === 1 && gamma.cols === a.cols)) throw Object.assign(new Error('rmsNorm gamma must be 1×cols'), { code: 'BAD_SHAPE' });
+  const inv = new Float64Array(a.rows);
+  const out = new Float64Array(a.data.length);
+  for (let row = 0; row < a.rows; row += 1) {
+    let sum = 0;
+    for (let column = 0; column < a.cols; column += 1) sum += a.data[row * a.cols + column] ** 2;
+    inv[row] = 1 / Math.sqrt(sum / Math.max(1, a.cols) + epsilon);
+    for (let column = 0; column < a.cols; column += 1) out[row * a.cols + column] = a.data[row * a.cols + column] * inv[row] * gamma.data[column];
+  }
+  return new Node(out, a.rows, a.cols, {
+    op: 'rmsNorm',
+    parents: [a, gamma],
+    backward: (grad) => {
+      const ga = new Float64Array(a.data.length);
+      const dgamma = new Float64Array(a.cols);
+      for (let row = 0; row < a.rows; row += 1) {
+        let dot = 0;
+        for (let column = 0; column < a.cols; column += 1) {
+          const index = row * a.cols + column;
+          dot += grad[index] * gamma.data[column] * a.data[index];
+          dgamma[column] += grad[index] * a.data[index] * inv[row];
+        }
+        const correction = dot * inv[row] ** 3 / Math.max(1, a.cols);
+        for (let column = 0; column < a.cols; column += 1) {
+          const index = row * a.cols + column;
+          ga[index] = grad[index] * gamma.data[column] * inv[row] - correction * a.data[index];
+        }
+      }
+      return [ga, dgamma];
+    },
+  });
+}
+
+/**
+ * Rotary position embedding applied inside each head.
+ * `positions` is one integer per row; `headDim` is even.
+ */
+function rope(a, positions, headDim, { theta = 10000 } = {}) {
+  if (!Array.isArray(positions) || positions.length !== a.rows) throw Object.assign(new Error('rope needs one position per row'), { code: 'BAD_TENSOR' });
+  if (!Number.isInteger(headDim) || headDim < 2 || headDim % 2 !== 0 || a.cols % headDim !== 0) throw Object.assign(new Error('rope headDim must be even and divide the columns'), { code: 'BAD_SHAPE' });
+  const out = new Float64Array(a.data.length);
+  for (let row = 0; row < a.rows; row += 1) {
+    const position = Number(positions[row]);
+    for (let head = 0; head < a.cols / headDim; head += 1) {
+      for (let pair = 0; pair < headDim / 2; pair += 1) {
+        const angle = position * Math.pow(theta, -2 * pair / headDim);
+        const c = Math.cos(angle);
+        const s = Math.sin(angle);
+        const i0 = row * a.cols + head * headDim + pair * 2;
+        const i1 = i0 + 1;
+        out[i0] = a.data[i0] * c - a.data[i1] * s;
+        out[i1] = a.data[i0] * s + a.data[i1] * c;
+      }
+    }
+  }
+  return new Node(out, a.rows, a.cols, {
+    op: 'rope',
+    parents: [a],
+    backward: (grad) => {
+      const ga = new Float64Array(a.data.length);
+      for (let row = 0; row < a.rows; row += 1) {
+        const position = Number(positions[row]);
+        for (let head = 0; head < a.cols / headDim; head += 1) {
+          for (let pair = 0; pair < headDim / 2; pair += 1) {
+            const angle = position * Math.pow(theta, -2 * pair / headDim);
+            const c = Math.cos(angle);
+            const s = Math.sin(angle);
+            const i0 = row * a.cols + head * headDim + pair * 2;
+            const i1 = i0 + 1;
+            // Rotation is orthogonal: backward is the transpose rotation.
+            ga[i0] = grad[i0] * c + grad[i1] * s;
+            ga[i1] = -grad[i0] * s + grad[i1] * c;
+          }
+        }
+      }
+      return [ga];
+    },
+  });
+}
+
+/** Sum of every element as a 1×1 scalar node. */
+function sumAll(a) {
+  let sum = 0;
+  for (let index = 0; index < a.data.length; index += 1) sum += a.data[index];
+  return new Node(Float64Array.from([sum]), 1, 1, {
+    op: 'sumAll',
+    parents: [a],
+    backward: (grad) => {
+      const ga = new Float64Array(a.data.length);
+      ga.fill(grad[0]);
+      return [ga];
+    },
+  });
+}
+
 /** Mean over rows: seq×d → 1×d. */
 function meanRows(a) {
   const out = new Float64Array(a.cols);
@@ -397,7 +579,7 @@ function softCrossEntropy(logits, targets) {
   return { loss: node, probabilities };
 }
 
-function backward(root) {
+function backward(root, { accumulate = false } = {}) {
   if (root.grad.length !== root.data.length) throw Object.assign(new Error('bad root gradient'), { code: 'BAD_GRAD' });
   const order = [];
   const seen = new Set();
@@ -408,7 +590,7 @@ function backward(root) {
     order.push(node);
   };
   visit(root);
-  for (const node of order) node.grad.fill(0);
+  if (!accumulate) for (const node of order) node.grad.fill(0);
   root.grad.fill(1);
   for (let index = order.length - 1; index >= 0; index -= 1) {
     const node = order[index];
@@ -513,6 +695,13 @@ module.exports = {
   layerNorm,
   meanRows,
   gather,
+  sliceCols,
+  concatCols,
+  mul,
+  sumAll,
+  silu,
+  rmsNorm,
+  rope,
   softmaxCrossEntropy,
   softCrossEntropy,
   backward,

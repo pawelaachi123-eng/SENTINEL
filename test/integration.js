@@ -103,6 +103,46 @@ async function check(name, fn) {
       return `${result.ok ? 'ok' : result.code}: ${result.text.slice(0, 60)}`;
     });
 
+    await check('blackboard and reasoning tools are reachable through the real registry', async () => {
+      const added = await agent.tools.execute('blackboard.add', { type: 'fact', content: 'registry fact: orbit is 12 days', scope: 'session:registry', status: 'proven', confidence: 1 }, { source: 'integration' });
+      assert.equal(added.ok, true, added.message);
+      const id = added.data.entry.id;
+      const got = await agent.tools.execute('blackboard.get', { id, scope: 'session:registry' }, { source: 'integration' });
+      assert.equal(got.ok, true, got.message);
+      const deduced = await agent.tools.execute('omega.deduce', {
+        facts: [{ pred: 'parent', args: ['ann', 'bob'] }, { pred: 'parent', args: ['bob', 'cid'] }],
+        rules: [{ id: 'ancestor', if: [{ pred: 'parent', args: ['?x', '?y'] }], then: { pred: 'ancestor', args: ['?x', '?y'] } }],
+      }, { source: 'integration' });
+      assert.equal(deduced.ok, true, deduced.message);
+      assert.ok(deduced.data.facts.some((fact) => fact.pred === 'ancestor' && fact.args[1] === 'cid'));
+      const meta = await agent.tools.execute('omega.metacognize', { text: 'A measured answer with enough words.', mode: 'balanced', verification: { ok: true, confidence: 0.9 } }, { source: 'integration' });
+      assert.equal(meta.ok, true, meta.message);
+      assert.equal(meta.data.action, 'proceed');
+      const induced = await agent.tools.execute('omega.induce', {
+        examples: [
+          { shape: 'round', class: 'apple' },
+          { shape: 'round', class: 'apple' },
+          { shape: 'long', class: 'pepper' },
+        ],
+        target: 'class',
+        minSupport: 2,
+      }, { source: 'integration' });
+      assert.equal(induced.ok, true, induced.message);
+      assert.equal(induced.data.status, 'estimated');
+      assert.ok(induced.data.rules.length >= 1);
+      const events = await agent.tools.execute('cognitive.events', { action: 'stats', scope: 'session:registry' }, { source: 'integration' });
+      assert.equal(events.ok, true, events.message);
+      assert.ok(events.data.totalBuffered >= 1);
+      const goals = await agent.tools.execute('cognitive.goals', { action: 'submit', id: 'integration-goal', description: 'verify the tool path', scope: 'session:registry', priority: 0.8 }, { source: 'integration' });
+      assert.equal(goals.ok, true, goals.message);
+      const arbitration = await agent.tools.execute('cognitive.goals', { action: 'arbitrate', scope: 'session:registry' }, { source: 'integration' });
+      assert.equal(arbitration.ok, true, arbitration.message);
+      assert.ok(arbitration.data.ranking.some((entry) => entry.id === 'integration-goal'));
+      const categories = agent.tools.categories();
+      assert.ok(categories.some((entry) => entry.name === 'cognitive'));
+      return `${agent.tools.list().length} tools in ${categories.length} categories`;
+    });
+
     await check('training and executive services are the same objects the agent exposes', () => {
       assert.equal(agent.services.trainingLab, agent.trainingLab);
       assert.equal(agent.services.executive, agent.executive);
